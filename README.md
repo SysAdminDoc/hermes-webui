@@ -15,7 +15,7 @@ center for chat, right for workspace file browsing.
 ## Quick start
 
 ```bash
-git clone <this-repo> hermes-webui
+git clone https://github.com/nesquena/hermes-webui.git hermes-webui
 cd hermes-webui
 ./start.sh
 ```
