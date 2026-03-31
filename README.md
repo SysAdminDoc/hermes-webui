@@ -10,6 +10,8 @@ center for chat, right for workspace file browsing.
 
 <img width="1392" height="854" alt="image" src="https://github.com/user-attachments/assets/79cd3c0d-3167-42ed-9434-447a742c25c3" />
 
+This gives you near 1:1 parity with Hermes CLI from a convenient web UI you can use securely through an SSH tunnel from your VPS. Single command to start it up, and a single command to SSH tunnel for access on your computer. Every single part of the web UI leverages your existing Hermes agent, existing models, without requiring any setup.
+
 ---
 
 ## Quick start
