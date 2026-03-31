@@ -206,7 +206,6 @@ State lives outside the repo at `~/.hermes/webui-mvp/` by default
 - `ARCHITECTURE.md` -- system design, all API endpoints, implementation notes
 - `TESTING.md` -- manual browser test plan and automated coverage reference
 - `CHANGELOG.md` -- release notes
-- `PORTABILITY.md` -- full portability design spec
 
 ## Repo
 
