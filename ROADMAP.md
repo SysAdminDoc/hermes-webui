@@ -3,7 +3,7 @@
 > Goal: Full 1:1 parity with the Hermes CLI experience via a clean dark web UI.
 > Everything you can do from the CLI terminal, you can do from this UI.
 >
-> Last updated: Sprint 15 / v0.17.1 (April 2, 2026)
+> Last updated: Sprint 16 / v0.18 (April 2, 2026)
 > Tests: 237 passing
 > Source: <repo>/
 
@@ -32,6 +32,7 @@
 | Sprint 13 | Alerts + polish | Cron completion alerts (polling + badge), background error banner, session duplicate, browser tab title | 221 |
 | Sprint 14 | Visual polish + workspace ops | Mermaid diagrams, message timestamps, file rename, folder create, session tags, session archive | 233 |
 | Sprint 15 | Session projects + code copy | Session projects/folders, code block copy button, tool card expand/collapse toggle | 237 |
+| Sprint 16 | Session sidebar visual polish | SVG action icons, overlay hover actions, pin indicator, project border, custom model discovery, GLM-5.1 | 237 |
 
 ---
 
@@ -39,10 +40,10 @@
 
 | Layer | Location | Status |
 |-------|----------|--------|
-| Python server | <repo>/server.py (~76 lines) + api/ modules (~1900 lines) | Thin shell + business logic in api/ |
+| Python server | <repo>/server.py (~76 lines) + api/ modules (~2145 lines) | Thin shell + business logic in api/ |
 | HTML template | <repo>/static/index.html | Served from disk |
-| CSS | <repo>/static/style.css | Served from disk |
-| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot}.js | 6 modules, ~2250 lines total |
+| CSS | <repo>/static/style.css (~560 lines) | Served from disk |
+| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot}.js | 6 modules, ~2750 lines total |
 | Runtime state | ~/.hermes/webui-mvp/sessions/ | Session JSON files |
 | Test server | Port 8788, state dir ~/.hermes/webui-mvp-test/ | Isolated, wiped per run |
 | Production server | Port 8787 | SSH tunnel from Mac |
@@ -55,6 +56,7 @@
 - [x] Send messages, get SSE-streaming responses
 - [x] Switch models per session (10 models, grouped by provider)
 - [x] Multi-provider API support: use any Hermes agent API provider (OpenAI, Anthropic, Google, etc.) directly, not just OpenRouter (Sprint 11)
+- [x] Custom endpoint model discovery: auto-detect models from Ollama, LM Studio, and other local LLM servers via base_url (PR #18)
 - [x] Upload files to workspace (drag-drop, click, clipboard paste)
 - [x] File tray with remove button
 - [x] Tool progress shown in activity bar above composer
@@ -252,8 +254,8 @@ Add more models. Group by provider. Model info tooltip on hover.
 Both sidebar and workspace panel are drag-resizable with localStorage persistence.
 
 ### Sprint 3.3: Workspace File Actions
-- [ ] Rename file (inline, double-click) (Wave 3)
-- [ ] Create folder (Wave 3)
+- [x] Rename file (inline, double-click) (Sprint 14)
+- [x] Create folder (Sprint 14)
 - [x] Syntax highlighted code preview (Prism.js)
 
 ### Sprint 3.4: Conversation Controls
@@ -316,3 +318,17 @@ Collapsible sidebar hamburger. Touch-friendly controls. Swipe gestures.
 
 ### Sprint 7.4: Performance and Scale
 Virtual scroll for session/message lists. Incremental message loading.
+
+---
+
+## User Requested Features
+
+Community-requested enhancements tracked from GitHub issues.
+
+| Feature | Issue | Description | Complexity |
+|---------|-------|-------------|-----------|
+| Workspace tree view | #22 | Accordion/tree view for workspace file browser instead of flat list. Lazy-load subdirectories on expand, no backend changes needed. | Medium |
+| Docker container | #7 | Docker Compose setup with separate hermes-agent and hermes-webui containers, multi-arch (amd64 + arm64), volume mounts for config. | Medium-High |
+| Authentication | #23 | Password gate via `HERMES_WEBUI_PASSWORD` env var, login page, signed cookie. Already planned in Sprint 7.1. | Low-Medium |
+| Send key / personalization | #26 | Toggle send key (Enter vs Ctrl/Cmd+Enter) and queue vs interrupt mode as global settings. | Low |
+| Mobile responsive UI | #21 | Hamburger menu, slide-out sidebar drawer, touch-friendly controls. Already planned in Sprint 7.3. | Medium-High |
