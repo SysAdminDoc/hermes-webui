@@ -263,6 +263,7 @@ _PROVIDER_DISPLAY = {
     'zai': 'Z.AI / GLM', 'kimi-coding': 'Kimi / Moonshot', 'deepseek': 'DeepSeek',
     'minimax': 'MiniMax', 'google': 'Google', 'meta-llama': 'Meta Llama',
     'huggingface': 'HuggingFace', 'alibaba': 'Alibaba',
+    'ollama': 'Ollama', 'lmstudio': 'LM Studio',
 }
 
 # Well-known models per provider (used to populate dropdown for direct API providers)
@@ -363,7 +364,8 @@ def get_available_models() -> dict:
     Discovery order:
       1. Read config.yaml 'model' section for active provider info
       2. Check for known API keys in env or ~/.hermes/.env
-      3. Fall back to hardcoded model list (OpenRouter-style)
+      3. Fetch models from custom endpoint if base_url is configured
+      4. Fall back to hardcoded model list (OpenRouter-style)
 
     Returns: {
         'active_provider': str|None,
@@ -382,6 +384,7 @@ def get_available_models() -> dict:
     elif isinstance(model_cfg, dict):
         active_provider = model_cfg.get('provider')
         cfg_default = model_cfg.get('default', '')
+        cfg_base_url = model_cfg.get('base_url', '')
         if cfg_default:
             default_model = cfg_default
 
@@ -442,6 +445,73 @@ def get_available_models() -> dict:
     if all_env.get('DEEPSEEK_API_KEY'):
         detected_providers.add('deepseek')
 
+    # 3. Fetch models from custom endpoint if base_url is configured
+    auto_detected_models = []
+    if cfg_base_url:
+        try:
+            import ipaddress
+            import urllib.request
+
+            # Normalize the base_url and build models endpoint
+            base_url = cfg_base_url.strip()
+            if base_url.endswith('/v1'):
+                endpoint_url = base_url[:-3] + '/models'
+            else:
+                endpoint_url = base_url + '/v1/models'
+
+            # Detect provider from base_url
+            provider = 'custom'
+            parsed = urlparse(base_url if '://' in base_url else f'http://{base_url}')
+            host = (parsed.netloc or parsed.path).lower()
+
+            if parsed.hostname:
+                try:
+                    addr = ipaddress.ip_address(parsed.hostname)
+                    if addr.is_private or addr.is_loopback or addr.is_link_local:
+                        if 'ollama' in host or '127.0.0.1' in host or 'localhost' in host:
+                            provider = 'ollama'
+                        elif 'lmstudio' in host or 'lm-studio' in host:
+                            provider = 'lmstudio'
+                        else:
+                            provider = 'local'
+                except ValueError:
+                    pass
+
+            # Resolve API key from environment
+            headers = {}
+            api_key_vars = ('HERMES_API_KEY', 'HERMES_OPENAI_API_KEY', 'OPENAI_API_KEY',
+                            'LOCAL_API_KEY', 'OPENROUTER_API_KEY', 'API_KEY')
+            for key in api_key_vars:
+                api_key = os.getenv(key)
+                if api_key:
+                    headers['Authorization'] = f'Bearer {api_key}'
+                    break
+
+            # Fetch model list from endpoint
+            req = urllib.request.Request(endpoint_url, method='GET')
+            for k, v in headers.items():
+                req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            # Handle both OpenAI-compatible and llama.cpp response formats
+            models_list = []
+            if 'data' in data and isinstance(data['data'], list):
+                models_list = data['data']
+            elif 'models' in data and isinstance(data['models'], list):
+                models_list = data['models']
+
+            for model in models_list:
+                if not isinstance(model, dict):
+                    continue
+                model_id = model.get('id', '') or model.get('name', '') or model.get('model', '')
+                model_name = model.get('name', '') or model.get('model', '') or model_id
+                if model_id and model_name:
+                    auto_detected_models.append({'id': model_id, 'label': model_name})
+                    detected_providers.add(provider.lower())
+        except Exception as e:
+            logger.debug(f"Failed to fetch models from custom endpoint: {e}")
+
     # 5. Build model groups
     if detected_providers:
         for pid in sorted(detected_providers):
@@ -458,11 +528,18 @@ def get_available_models() -> dict:
                     'models': _PROVIDER_MODELS[pid],
                 })
             else:
-                # Unknown provider with key -- add a placeholder with the default model
-                groups.append({
-                    'provider': provider_name,
-                    'models': [{'id': default_model, 'label': default_model.split('/')[-1]}],
-                })
+                # Unknown provider -- use auto-detected models if available,
+                # otherwise fall back to default model placeholder
+                if auto_detected_models:
+                    groups.append({
+                        'provider': provider_name,
+                        'models': auto_detected_models,
+                    })
+                else:
+                    groups.append({
+                        'provider': provider_name,
+                        'models': [{'id': default_model, 'label': default_model.split('/')[-1]}],
+                    })
     else:
         # No providers detected -- use fallback grouped list
         by_provider = {}
