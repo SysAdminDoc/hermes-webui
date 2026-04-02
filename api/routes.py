@@ -630,8 +630,9 @@ def _handle_chat_sync(handler, body):
         from run_agent import AIAgent
         with CHAT_LOCK:
             from api.config import resolve_model_provider
-            _model, _provider = resolve_model_provider(s.model)
-            agent = AIAgent(model=_model, provider=_provider, platform='cli', quiet_mode=True,
+            _model, _provider, _base_url = resolve_model_provider(s.model)
+            agent = AIAgent(model=_model, provider=_provider, base_url=_base_url,
+                           platform='cli', quiet_mode=True,
                            enabled_toolsets=CLI_TOOLSETS, session_id=s.session_id)
             workspace_ctx = f"[Workspace: {s.workspace}]\n"
             workspace_system_msg = (
