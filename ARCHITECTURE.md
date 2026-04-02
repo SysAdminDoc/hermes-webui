@@ -31,25 +31,25 @@ This makes the code easy to modify from a terminal or by an agent.
     start.sh               Discovery script: finds agent dir, Python, starts server.
     api/
       __init__.py          Package marker
-      routes.py            All GET + POST route handlers (~802 lines)
-      config.py            Shared configuration, constants, global state, model discovery (~453 lines)
+      routes.py            All GET + POST route handlers (~1016 lines)
+      config.py            Shared configuration, constants, global state, model discovery (~640 lines)
       helpers.py           HTTP helpers: j(), bad(), require(), safe_resolve() (~57 lines)
       models.py            Session model + CRUD (~114 lines)
       workspace.py         File ops: list_dir, read_file_content, workspace helpers (~77 lines)
       upload.py            Multipart parser, file upload handler (~77 lines)
-      streaming.py         SSE engine, run_agent integration, cancel support (~218 lines)
+      streaming.py         SSE engine, run_agent integration, cancel support (~222 lines)
     static/
       index.html           HTML template (served from disk)
       style.css            All CSS
-      ui.js                DOM helpers, renderMd, tool cards, model dropdown (~671 lines)
-      workspace.js         File tree, preview, file ops (~168 lines)
-      sessions.js          Session CRUD, list rendering, search (~206 lines)
-      messages.js          send(), SSE event handlers, approval, transcript (~310 lines)
-      panels.js            Cron, skills, memory, workspace, todo, switchPanel (~600 lines)
-      boot.js              Event wiring + boot IIFE (~154 lines)
+      ui.js                DOM helpers, renderMd, tool cards, model dropdown (~809 lines)
+      workspace.js         File tree, preview, file ops (~169 lines)
+      sessions.js          Session CRUD, list rendering, search, SVG icons, overlay actions (~532 lines)
+      messages.js          send(), SSE event handlers, approval, transcript (~293 lines)
+      panels.js            Cron, skills, memory, workspace, todo, switchPanel (~771 lines)
+      boot.js              Event wiring + boot IIFE (~175 lines)
     tests/
       conftest.py          Isolated test server (port 8788, separate HERMES_HOME) (~240 lines)
-      test_sprint1-11.py   Feature tests per sprint (13 files)
+      test_sprint1-11.py   Feature tests per sprint (13 files, Sprints 1-11)
       test_regressions.py  Permanent regression gate
     AGENTS.md              Instruction file for agents working in this directory.
     ROADMAP.md             Feature and product roadmap document.
@@ -151,10 +151,14 @@ Session is a plain Python class (not a dataclass, not SQLAlchemy):
       session_id    hex string, 12 chars (uuid4().hex[:12])
       title         string, auto-set from first user message
       workspace     absolute path string, resolved at creation
-      model         OpenRouter model ID string (e.g. "anthropic/claude-sonnet-4.6")
+      model         model ID string (e.g. "anthropic/claude-sonnet-4.6")
       messages      list of OpenAI-format message dicts
       created_at    float Unix timestamp
       updated_at    float Unix timestamp, updated on every save()
+      pinned        bool, default False (Sprint 12)
+      archived      bool, default False (Sprint 14)
+      project_id    string or null, FK to projects.json (Sprint 15)
+      tool_calls    list of tool call dicts (Sprint 10)
 
     Key methods:
       path (property)  Returns SESSION_DIR/{session_id}.json
@@ -326,16 +330,20 @@ read_file_content(workspace, rel):
 ### 5.1 Structure
 
 The frontend is served from static/ as separate files: one HTML template, one CSS file,
-and six JavaScript modules (~2,025 lines total). External dependency: Prism.js from CDN
-(syntax highlighting, loaded async/deferred).
+and six JavaScript modules (~2,750 lines total). External dependencies: Prism.js (syntax
+highlighting) and Mermaid.js (diagrams) from CDN, both loaded async/deferred with SRI hashes.
 
 Six JS modules loaded in order at end of <body>:
-  1. ui.js       (~589 lines) DOM helpers, renderMd, tool card rendering, global state
-  2. workspace.js (~168 lines) File tree, preview, file operations
-  3. sessions.js  (~206 lines) Session CRUD, list rendering, search
-  4. messages.js  (~310 lines) send(), SSE event handlers, approval, transcript
-  5. panels.js    (~600 lines) Cron, skills, memory, workspace, todo, switchPanel
-  6. boot.js      (~152 lines) Event wiring + boot IIFE
+  1. ui.js       (~809 lines) DOM helpers, renderMd, tool card rendering, global state
+  2. workspace.js (~169 lines) File tree, preview, file operations
+  3. sessions.js  (~532 lines) Session CRUD, list rendering, search, SVG icons, overlay actions, project picker
+  4. messages.js  (~293 lines) send(), SSE event handlers, approval, transcript
+  5. panels.js    (~771 lines) Cron, skills, memory, workspace, todo, switchPanel
+  6. boot.js      (~175 lines) Event wiring + boot IIFE
+
+sessions.js defines an `ICONS` constant at module level with hardcoded SVG strings for all
+session action buttons (pin, unpin, folder, archive, unarchive, duplicate, trash). All icons
+inherit `currentColor` for consistent theming.
 
 Three-panel layout (in static/index.html):
 
@@ -604,26 +612,27 @@ Split server.py into a proper package. Completed across Sprints 4-10.
 Current structure:
 
     <repo>/
-      server.py               Entry point + HTTP Handler routing (~704 lines)
+      server.py               Entry point + HTTP Handler dispatch (~76 lines)
       api/
         __init__.py
-        config.py             Configuration, constants, global state (~273 lines)
+        routes.py             All GET + POST route handlers (~1016 lines)
+        config.py             Configuration, constants, global state, model discovery (~640 lines)
         helpers.py            HTTP helpers: j(), bad(), require(), safe_resolve() (~57 lines)
-        models.py             Session model + CRUD (~114 lines)
+        models.py             Session model + CRUD (~132 lines)
         workspace.py          File ops, workspace management (~77 lines)
         upload.py             Multipart parser, file upload handler (~77 lines)
-        streaming.py          SSE engine, run_agent, cancel support (~218 lines)
+        streaming.py          SSE engine, run_agent, cancel support (~222 lines)
       static/
         index.html            HTML document (served from disk)
-        style.css             All CSS
+        style.css             All CSS (~560 lines)
         ui.js, workspace.js, sessions.js, messages.js, panels.js, boot.js
       tests/
         conftest.py           Isolated test server on port 8788
-        test_sprint1-10.py    Feature tests per sprint (12 files)
+        test_sprint1-11.py    Feature tests per sprint (13 files)
         test_regressions.py   Permanent regression gate
 
-Remaining: server.py still has all 49 route handlers in one do_GET/do_POST class.
-Sprint 11 plans extracting these to api/routes.py, making server.py a ~50-line shell.
+Route extraction to api/routes.py completed in Sprint 11. server.py is now a ~76-line
+thin shell: Handler class with structured logging, dispatch to routes, and main().
 
 ### Phase B: Thread-Safe Request Context (Priority: Critical, Effort: Medium)
 
@@ -718,10 +727,10 @@ Optional password gate for non-SSH-tunnel deployments.
 
 ### Phase I: Test Infrastructure -- COMPLETE
 
-190 tests across 12 test files + regression gate. Isolated test server on port 8788
+237 tests across 13 test files + regression gate. Isolated test server on port 8788
 with separate HERMES_HOME, wiped per run. Production data never touched.
 
-Test files: `test_sprint1.py` through `test_sprint10.py`, `test_regressions.py`.
+Test files: `test_sprint1.py` through `test_sprint11.py`, `test_regressions.py`.
 Fixtures in `conftest.py`: auto-cleanup, cron isolation, workspace reset.
 
 Remaining: no CI (GitHub Actions), no frontend tests (browser-based).

@@ -5,6 +5,52 @@
 
 ---
 
+## [v0.18] Sprint 16 -- Session Sidebar Visual Polish
+*April 2, 2026 | 237 tests*
+
+### Features
+- **SVG action icons.** Replaced all emoji HTML entities (star, folder, box,
+  duplicate, trash) with monochrome SVG line icons that inherit `currentColor`.
+  Consistent rendering across macOS, Linux, and Windows. Defined in a top-level
+  `ICONS` constant in `sessions.js`.
+- **Action buttons overlay.** All session action buttons (pin, move, archive,
+  duplicate, trash) wrapped in a `.session-actions` container with
+  `position:absolute`. Titles now use full available width instead of being
+  truncated by invisible buttons. Actions appear on hover with a gradient fade
+  from the right edge. Overlay auto-hides during inline rename via
+  `:has(.session-title-input)`.
+- **Pin indicator.** Small gold filled-star icon rendered inline before the
+  title only when pinned. Unpinned sessions get full title width with zero
+  space reservation.
+- **Project border indicator.** Sessions assigned to a project show a colored
+  left border matching the project color, replacing the old always-visible
+  blue folder button.
+
+### Bug Fixes
+- **Session title truncation.** Action icons reserved ~30px of space even when
+  invisible, truncating titles. Fixed by overlay container approach.
+- **Folder button felt sticky.** Replaced `.has-project` persistent blue button
+  with colored left border. Folder button now only appears in hover overlay.
+
+---
+
+## [v0.17.3] Bug Fixes
+*April 2, 2026*
+
+### Bug Fixes
+- **NameError crash in model discovery.** `logger.debug()` was called in the
+  custom endpoint `except` block in `config.py`, but `logger` was never
+  imported. Every failed custom endpoint fetch crashed with `NameError`,
+  returning HTTP 500 for `/api/models`. Replaced with silent `pass` since
+  unreachable endpoints are expected. (PR #24)
+- **Project picker clipping and width.** Picker was clipped by
+  `overflow:hidden` on ancestor elements. Width calculation improved with
+  dynamic sizing (min 160px, max 220px). Event listener `close` handler
+  moved after DOM append to fix reference-before-definition. Reordered
+  `picker.remove()` before `removeEventListener` for correct cleanup. (PR #25)
+
+---
+
 ## [v0.17.2] Model Update
 *April 2, 2026*
 
@@ -509,4 +555,4 @@ Three-panel layout: sessions sidebar, chat area, workspace panel.
 
 ---
 
-*Last updated: v0.16.2, April 1, 2026 | Tests: 247*
+*Last updated: v0.18, April 2, 2026 | Tests: 237*

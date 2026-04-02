@@ -1,6 +1,6 @@
 # Hermes Web UI -- Forward Sprint Plan
 
-> Current state: v0.15 | 221 tests | Daily driver ready
+> Current state: v0.18 | 237 tests | Daily driver ready
 > This document plans the path from here to two targets:
 >
 > Target A: 1:1 feature parity with the Hermes CLI (everything you can do from the
@@ -14,15 +14,17 @@
 
 ---
 
-## Where we are now (v0.12.1)
+## Where we are now (v0.18)
 
-**CLI parity: ~80% complete.** Core agent loop, all tools visible, workspace
-file ops, cron/skills/memory CRUD, session management, streaming, cancel --
-all solid. Gaps are configuration, subagent visibility, and runtime controls.
+**CLI parity: ~85% complete.** Core agent loop, all tools visible, workspace
+file ops, cron/skills/memory CRUD, session management, streaming, cancel,
+multi-provider models, custom endpoint discovery -- all solid. Gaps are
+subagent visibility, toolset control, and code execution.
 
-**Claude parity: ~55% complete.** Chat, streaming, file browser,
-session management, tool cards, syntax highlighting, model switching -- all
-present. Gaps are project organization, artifacts, voice, sharing, mobile.
+**Claude parity: ~65% complete.** Chat, streaming, file browser, session
+management, tool cards, syntax highlighting, model switching, projects,
+settings, Mermaid diagrams, mobile layout -- all present. Gaps are
+artifacts, voice, reasoning display, sharing.
 
 ---
 
@@ -425,7 +427,7 @@ address.
 | Mermaid diagrams | Done (Sprint 14) |
 | Projects / folders | Done (Sprint 15) |
 | Pinned/starred sessions | Done (Sprint 12) |
-| Reasoning display | Sprint 16 |
+| Reasoning display | Sprint 18 |
 | Voice input | Sprint 17 |
 | TTS playback | Sprint 17 |
 | Notifications | Done (Sprint 13) |
@@ -451,4 +453,4 @@ address.
 
 *Last updated: April 2, 2026*
 *Current version: v0.18 | 237 tests*
-*Next sprint: Sprint 17 (Slash Commands + Thinking Display)*
+*Next sprint: Sprint 17 (Voice + Multimodal Input)*
