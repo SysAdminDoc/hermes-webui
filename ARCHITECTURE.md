@@ -34,7 +34,7 @@ This makes the code easy to modify from a terminal or by an agent.
       routes.py            All GET + POST route handlers (~1016 lines)
       config.py            Shared configuration, constants, global state, model discovery (~640 lines)
       helpers.py           HTTP helpers: j(), bad(), require(), safe_resolve() (~57 lines)
-      models.py            Session model + CRUD (~114 lines)
+      models.py            Session model + CRUD (~132 lines)
       workspace.py         File ops: list_dir, read_file_content, workspace helpers (~77 lines)
       upload.py            Multipart parser, file upload handler (~77 lines)
       streaming.py         SSE engine, run_agent integration, cancel support (~222 lines)
