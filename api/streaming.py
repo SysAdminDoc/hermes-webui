@@ -100,10 +100,11 @@ def _run_agent_streaming(session_id, msg_text, model, workspace, stream_id, atta
 
             if AIAgent is None:
                 raise ImportError("AIAgent not available -- check that hermes-agent is on sys.path")
-            resolved_model, resolved_provider = resolve_model_provider(model)
+            resolved_model, resolved_provider, resolved_base_url = resolve_model_provider(model)
             agent = AIAgent(
                 model=resolved_model,
                 provider=resolved_provider,
+                base_url=resolved_base_url,
                 platform='cli',
                 quiet_mode=True,
                 enabled_toolsets=CLI_TOOLSETS,
