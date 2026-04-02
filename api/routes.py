@@ -9,38 +9,8 @@ import sys
 import threading
 import time
 import uuid
-import importlib
-from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
-
-
-@contextmanager
-def _real_hermes_home_env():
-    """Temporarily point Hermes CLI imports at the user-wide Hermes home.
-
-    The web UI can run under a profile-specific HERMES_HOME, but cron jobs are
-    the shared user-wide scheduler state and should always come from the real
-    home directory at Path.home() / '.hermes'.
-    """
-    old = os.environ.get('HERMES_HOME')
-    os.environ['HERMES_HOME'] = str(Path.home() / '.hermes')
-    try:
-        yield
-    finally:
-        if old is None:
-            os.environ.pop('HERMES_HOME', None)
-        else:
-            os.environ['HERMES_HOME'] = old
-
-
-def _cron_module():
-    """Import cron.jobs from the real Hermes agent checkout, even if already cached."""
-    with _real_hermes_home_env():
-        agent_dir = Path.home() / '.hermes' / 'hermes-agent'
-        sys.path.insert(0, str(agent_dir))
-        mod = importlib.import_module('cron.jobs')
-        return importlib.reload(mod)
 
 from api.config import (
     STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE, DEFAULT_MODEL,
@@ -166,8 +136,9 @@ def handle_get(handler, parsed):
 
     # ── Cron API (GET) ──
     if parsed.path == '/api/crons':
-        jobs = _cron_module().list_jobs(include_disabled=True)
-        return j(handler, {'jobs': jobs})
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from cron.jobs import list_jobs
+        return j(handler, {'jobs': list_jobs(include_disabled=True)})
 
     if parsed.path == '/api/crons/output':
         return _handle_cron_output(handler, parsed)
@@ -540,7 +511,7 @@ def _handle_approval_inject(handler, parsed):
 
 
 def _handle_cron_output(handler, parsed):
-    CRON_OUT = _cron_module().OUTPUT_DIR
+    from cron.jobs import OUTPUT_DIR as CRON_OUT
     qs = parse_qs(parsed.query)
     job_id = qs.get('job_id', [''])[0]
     limit = int(qs.get('limit', ['5'])[0])
@@ -564,7 +535,9 @@ def _handle_cron_recent(handler, parsed):
     qs = parse_qs(parsed.query)
     since = float(qs.get('since', ['0'])[0])
     try:
-        jobs = _cron_module().list_jobs(include_disabled=True)
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from cron.jobs import list_jobs
+        jobs = list_jobs(include_disabled=True)
         completions = []
         for job in jobs:
             last_run = job.get('last_run_at')
@@ -667,7 +640,10 @@ def _handle_chat_sync(handler, body):
     try:
         from run_agent import AIAgent
         with CHAT_LOCK:
-            agent = AIAgent(model=s.model, platform='cli', quiet_mode=True,
+            from api.config import resolve_model_provider
+            _model, _provider, _base_url = resolve_model_provider(s.model)
+            agent = AIAgent(model=_model, provider=_provider, base_url=_base_url,
+                           platform='cli', quiet_mode=True,
                            enabled_toolsets=CLI_TOOLSETS, session_id=s.session_id)
             workspace_ctx = f"[Workspace: {s.workspace}]\n"
             workspace_system_msg = (
@@ -709,7 +685,8 @@ def _handle_cron_create(handler, body):
     try: require(body, 'prompt', 'schedule')
     except ValueError as e: return bad(handler, str(e))
     try:
-        job = _cron_module().create_job(
+        from cron.jobs import create_job
+        job = create_job(
             prompt=body['prompt'], schedule=body['schedule'],
             name=body.get('name') or None, deliver=body.get('deliver') or 'local',
             skills=body.get('skills') or [], model=body.get('model') or None,
@@ -722,8 +699,9 @@ def _handle_cron_create(handler, body):
 def _handle_cron_update(handler, body):
     try: require(body, 'job_id')
     except ValueError as e: return bad(handler, str(e))
+    from cron.jobs import update_job
     updates = {k: v for k, v in body.items() if k != 'job_id' and v is not None}
-    job = _cron_module().update_job(body['job_id'], updates)
+    job = update_job(body['job_id'], updates)
     if not job: return bad(handler, 'Job not found', 404)
     return j(handler, {'ok': True, 'job': job})
 
@@ -731,7 +709,8 @@ def _handle_cron_update(handler, body):
 def _handle_cron_delete(handler, body):
     try: require(body, 'job_id')
     except ValueError as e: return bad(handler, str(e))
-    ok = _cron_module().remove_job(body['job_id'])
+    from cron.jobs import remove_job
+    ok = remove_job(body['job_id'])
     if not ok: return bad(handler, 'Job not found', 404)
     return j(handler, {'ok': True, 'job_id': body['job_id']})
 
@@ -739,17 +718,19 @@ def _handle_cron_delete(handler, body):
 def _handle_cron_run(handler, body):
     job_id = body.get('job_id', '')
     if not job_id: return bad(handler, 'job_id required')
-    cron_mod = _cron_module()
-    job = cron_mod.get_job(job_id)
+    from cron.jobs import get_job
+    from cron.scheduler import run_job
+    job = get_job(job_id)
     if not job: return bad(handler, 'Job not found', 404)
-    threading.Thread(target=cron_mod.run_job if hasattr(cron_mod, 'run_job') else __import__('cron.scheduler', fromlist=['run_job']).run_job, args=(job,), daemon=True).start()
+    threading.Thread(target=run_job, args=(job,), daemon=True).start()
     return j(handler, {'ok': True, 'job_id': job_id, 'status': 'triggered'})
 
 
 def _handle_cron_pause(handler, body):
     job_id = body.get('job_id', '')
     if not job_id: return bad(handler, 'job_id required')
-    result = _cron_module().pause_job(job_id, reason=body.get('reason'))
+    from cron.jobs import pause_job
+    result = pause_job(job_id, reason=body.get('reason'))
     if result: return j(handler, {'ok': True, 'job': result})
     return bad(handler, 'Job not found', 404)
 
@@ -757,7 +738,8 @@ def _handle_cron_pause(handler, body):
 def _handle_cron_resume(handler, body):
     job_id = body.get('job_id', '')
     if not job_id: return bad(handler, 'job_id required')
-    result = _cron_module().resume_job(job_id)
+    from cron.jobs import resume_job
+    result = resume_job(job_id)
     if result: return j(handler, {'ok': True, 'job': result})
     return bad(handler, 'Job not found', 404)
 
