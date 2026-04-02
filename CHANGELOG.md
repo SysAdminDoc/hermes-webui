@@ -5,6 +5,47 @@
 
 ---
 
+## [v0.17.1] Security + Bug Fixes
+*April 2, 2026 | 237 tests*
+
+### Security
+- **Path traversal in static file server.** `_serve_static()` now sandboxes
+  resolved paths inside `static/` via `.relative_to()`. Previously
+  `GET /static/../../.hermes/config.yaml` could expose API keys.
+- **XSS in markdown renderer.** All captured groups in bold, italic, headings,
+  blockquotes, list items, table cells, and link labels now run through `esc()`
+  before `innerHTML` insertion.
+- **Skill category path traversal.** Category param validated to reject `/`
+  and `..` to prevent writing outside `~/.hermes/skills/`.
+- **Debug endpoint locked to localhost.** `/api/approval/inject_test` returns
+  404 to any non-loopback client.
+- **CDN resources pinned with SRI hashes.** PrismJS and Mermaid tags now have
+  `integrity` + `crossorigin` attributes. Mermaid pinned to `@10.9.3`.
+- **Project color CSS injection.** Color field validated against
+  `^#[0-9a-fA-F]{3,8}$` to prevent `style.background` injection.
+- **Project name length limit.** Capped at 128 chars, empty-after-strip rejected.
+
+### Bug Fixes
+- **OpenRouter model routing regression.** `resolve_model_provider()` was
+  incorrectly stripping provider prefixes from OpenRouter model IDs (e.g.
+  `openai/gpt-5.4-mini` became `gpt-5.4-mini` with provider `openai`),
+  causing AIAgent to look for OPENAI_API_KEY and crash. Fix: only strip
+  prefix when `config.provider` explicitly matches that direct-API provider.
+- **Project picker invisible.** Dropdown was clipped by `.session-item`
+  `overflow:hidden`. Now appended to `document.body` with `position:fixed`.
+- **Project picker stretched full width.** Added `max-width:220px;
+  width:max-content` to constrain the fixed-positioned picker.
+- **No way to create project from picker.** Added "+ New project" item at
+  the bottom of the picker dropdown.
+- **Folder button undiscoverable.** Now shows persistently (blue, 60%
+  opacity) when session belongs to a project.
+- **Picker event listener leak.** `removeEventListener` added to all picker
+  item onclick handlers.
+- **Redundant sys.path.insert calls removed.** Two cron handler imports no
+  longer prepend the agent dir (already on sys.path via config.py).
+
+---
+
 ## [v0.17] Sprint 15 -- Session Projects + Code Copy + Tool Card Toggle
 *April 1, 2026 | 237 tests*
 
