@@ -88,11 +88,11 @@ def test_cache_control_no_store():
 
 # ── Settings password field ──────────────────────────────────────────────
 
-def test_settings_password_hash_default_null():
-    """Default settings should have password_hash as None."""
+def test_settings_password_hash_not_exposed():
+    """GET /api/settings must never expose the stored password hash."""
     d, status, _ = get("/api/settings")
     assert status == 200
-    assert d.get("password_hash") is None
+    assert "password_hash" not in d  # security: never send hash to client
 
 
 def test_settings_save_preserves_other_fields():
@@ -106,3 +106,13 @@ def test_settings_save_preserves_other_fields():
     updated, _, _ = get("/api/settings")
     assert "default_model" in updated
     assert "default_workspace" in updated
+
+
+def test_settings_password_hash_not_directly_settable():
+    """POST /api/settings with password_hash must not overwrite the stored hash."""
+    # Attempt to set a raw hash directly (attack vector)
+    post("/api/settings", {"password_hash": "deadbeef" * 8})
+    # Settings response must not expose it regardless
+    updated, status, _ = get("/api/settings")
+    assert status == 200
+    assert "password_hash" not in updated

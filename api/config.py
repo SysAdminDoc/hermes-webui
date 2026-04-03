@@ -610,7 +610,7 @@ def load_settings() -> dict:
             pass
     return settings
 
-_SETTINGS_ALLOWED_KEYS = set(_SETTINGS_DEFAULTS.keys())
+_SETTINGS_ALLOWED_KEYS = set(_SETTINGS_DEFAULTS.keys()) - {'password_hash'}
 _SETTINGS_ENUM_VALUES = {
     'send_key': {'enter', 'ctrl+enter'},
 }

@@ -19,7 +19,7 @@ from api.config import (
     IMAGE_EXTS, MD_EXTS, MIME_MAP, MAX_FILE_BYTES, MAX_UPLOAD_BYTES,
     CHAT_LOCK, load_settings, save_settings,
 )
-from api.helpers import require, bad, safe_resolve, j, t, read_body
+from api.helpers import require, bad, safe_resolve, j, t, read_body, _security_headers
 from api.models import (
     Session, get_session, new_session, all_sessions, title_from,
     _write_session_index, SESSION_INDEX_FILE,
@@ -139,7 +139,10 @@ def handle_get(handler, parsed):
         return j(handler, get_available_models())
 
     if parsed.path == '/api/settings':
-        return j(handler, load_settings())
+        settings = load_settings()
+        # Never expose the stored password hash to clients
+        settings.pop('password_hash', None)
+        return j(handler, settings)
 
     if parsed.path.startswith('/static/'):
         return _serve_static(handler, parsed)
@@ -475,6 +478,7 @@ def handle_post(handler, parsed):
         handler.send_response(200)
         handler.send_header('Content-Type', 'application/json')
         handler.send_header('Cache-Control', 'no-store')
+        _security_headers(handler)
         set_auth_cookie(handler, cookie_val)
         handler.end_headers()
         handler.wfile.write(json.dumps({'ok': True}).encode())
@@ -488,6 +492,7 @@ def handle_post(handler, parsed):
         handler.send_response(200)
         handler.send_header('Content-Type', 'application/json')
         handler.send_header('Cache-Control', 'no-store')
+        _security_headers(handler)
         clear_auth_cookie(handler)
         handler.end_headers()
         handler.wfile.write(json.dumps({'ok': True}).encode())
