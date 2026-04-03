@@ -1,6 +1,6 @@
 # Hermes Web UI -- Forward Sprint Plan
 
-> Current state: v0.19 | 294 tests | Daily driver ready
+> Current state: v0.19 | 318 tests | Daily driver ready
 > This document plans the path from here to two targets:
 >
 > Target A: 1:1 feature parity with the Hermes CLI (everything you can do from the
@@ -317,7 +317,7 @@ handler for slash command autocomplete.
 - Voice input via Whisper
 - Workspace tree/accordion view (full implementation of Issue #22)
 
-**Tests:** 5 new. Total: 294.
+**Tests:** 6 new (test_sprint17.py). Total: 318.
 **Hermes CLI parity impact:** Low (slash commands add convenience)
 **Claude parity impact:** Medium (workspace nav, slash commands match Claude UX)
 
@@ -504,5 +504,5 @@ address.
 ---
 
 *Last updated: April 3, 2026*
-*Current version: v0.19 | 294 tests*
+*Current version: v0.19 | 318 tests*
 *Next sprint: Sprint 18 (Voice + Multimodal Input)*
