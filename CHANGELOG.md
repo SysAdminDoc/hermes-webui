@@ -829,4 +829,4 @@ Three-panel layout: sessions sidebar, chat area, workspace panel.
 
 ---
 
-*Last updated: v0.24, April 3, 2026 | Tests: 415*
+*Last updated: v0.25, April 3, 2026 | Tests: 423*
