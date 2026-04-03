@@ -14,7 +14,7 @@ from api.config import STATE_DIR, load_settings
 
 # ── Public paths (no auth required) ─────────────────────────────────────────
 PUBLIC_PATHS = frozenset({
-    '/', '/index.html', '/login', '/health', '/favicon.ico',
+    '/login', '/health', '/favicon.ico',
     '/api/auth/login', '/api/auth/status',
 })
 
