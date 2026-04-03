@@ -335,6 +335,66 @@ def test_boot_js_autoresize_called():
     assert 'autoResize()' in js
 
 
+# ── Append behaviour (fix: mic appends to existing text, not replace) ────
+
+
+def test_boot_js_prefix_variable_declared():
+    """boot.js must declare _prefix variable to snapshot pre-existing textarea content."""
+    js, _ = get_text("/static/boot.js")
+    assert "_prefix" in js
+
+
+def test_boot_js_prefix_captured_on_start():
+    """_prefix must be set from ta.value when the user starts recording."""
+    js, _ = get_text("/static/boot.js")
+    # _prefix assignment must happen in the btn.onclick else branch (before recognition.start)
+    btn_onclick_idx = js.find("btn.onclick")
+    btn_onclick_end = js.find("};", btn_onclick_idx)
+    onclick_body = js[btn_onclick_idx:btn_onclick_end]
+    assert "_prefix=ta.value" in onclick_body or "_prefix = ta.value" in onclick_body
+
+
+def test_boot_js_onresult_prepends_prefix():
+    """onresult must include _prefix when writing to textarea (append, not replace)."""
+    js, _ = get_text("/static/boot.js")
+    onresult_idx = js.find("recognition.onresult")
+    onresult_end = js.find("};", onresult_idx)
+    onresult_body = js[onresult_idx:onresult_end]
+    # ta.value must be set to _prefix + something, not just the transcript alone
+    assert "_prefix" in onresult_body
+
+
+def test_boot_js_onend_commits_with_prefix():
+    """onend must commit _prefix + _finalText so appended text survives after recognition ends."""
+    js, _ = get_text("/static/boot.js")
+    onend_idx = js.find("recognition.onend")
+    onend_end = js.find("};", onend_idx)
+    onend_body = js[onend_idx:onend_end]
+    assert "_prefix" in onend_body
+
+
+def test_boot_js_prefix_reset_on_stop():
+    """_prefix must be reset when recording stops so next session starts clean."""
+    js, _ = get_text("/static/boot.js")
+    # _setRecording(false) clears both _finalText and _prefix
+    set_rec_idx = js.find("function _setRecording")
+    set_rec_end = js.find("}", set_rec_idx) + 1
+    fn_body = js[set_rec_idx:set_rec_end]
+    assert "_prefix" in fn_body
+
+
+def test_boot_js_auto_space_between_prefix_and_transcript():
+    """onend must insert a space between existing text and new transcript when needed."""
+    js, _ = get_text("/static/boot.js")
+    onend_idx = js.find("recognition.onend")
+    onend_end = js.find("};", onend_idx)
+    onend_body = js[onend_idx:onend_end]
+    # Should handle spacing — look for trimStart or endsWith(' ') check
+    has_spacing = ("trimStart" in onend_body or "endsWith(' ')" in onend_body
+                   or "endsWith(\" \")" in onend_body or "endsWith('\\n')" in onend_body)
+    assert has_spacing, "onend should handle spacing between prefix and new transcript"
+
+
 # ── Regression: existing behaviour unchanged ──────────────────────────────
 
 

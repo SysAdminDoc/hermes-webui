@@ -27,12 +27,13 @@ $('btnAttach').onclick=()=>$('fileInput').click();
   recognition.lang='en-US';
 
   let _finalText='';
+  let _prefix='';
 
   function _setRecording(on){
     window._micActive=on;
     btn.classList.toggle('recording',on);
     status.style.display=on?'':'none';
-    if(!on) _finalText='';
+    if(!on){ _finalText=''; _prefix=''; }
   }
 
   recognition.onstart=()=>{ _finalText=''; };
@@ -45,14 +46,20 @@ $('btnAttach').onclick=()=>$('fileInput').click();
       if(event.results[i].isFinal){ final+=t; _finalText=final; }
       else{ interim+=t; }
     }
-    ta.value=final||interim;
+    // Append to whatever was already in the textarea before mic started
+    ta.value=_prefix+(final||interim);
     autoResize();
   };
 
   recognition.onend=()=>{
+    // Commit: prefix + final transcription; trim trailing space if prefix was non-empty
+    const committed=_finalText
+      ? (_prefix&&!_prefix.endsWith(' ')&&!_prefix.endsWith('\n')
+          ? _prefix+' '+_finalText.trimStart()
+          : _prefix+_finalText)
+      : ta.value; // no speech detected — leave whatever is there
     _setRecording(false);
-    // Ensure textarea has the committed final text (handles auto-stop on silence)
-    if(_finalText) ta.value=_finalText;
+    ta.value=committed;
     autoResize();
   };
 
@@ -77,6 +84,8 @@ $('btnAttach').onclick=()=>$('fileInput').click();
       // _setRecording(false) will be called by onend
     } else {
       _finalText='';
+      // Snapshot existing textarea content so we append rather than replace
+      _prefix=ta.value;
       recognition.start();
       _setRecording(true);
     }
