@@ -4,7 +4,7 @@ services:
   hermes-webui:
     build: .
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     volumes:
       # Persist session data, settings, and projects across restarts
       - hermes-data:/data

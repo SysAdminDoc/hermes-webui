@@ -60,6 +60,10 @@ docker run -d -p 8787:8787 -e HERMES_WEBUI_PASSWORD=your-secret -v ~/.hermes:/ro
 
 Session data persists in a named volume (`hermes-data`) across restarts.
 
+> **Note:** By default, Docker Compose binds to `127.0.0.1` (localhost only).
+> To expose on a network, change the port to `"8787:8787"` in `docker-compose.yml`
+> and set `HERMES_WEBUI_PASSWORD` to enable authentication.
+
 ---
 
 ## What start.sh discovers automatically
