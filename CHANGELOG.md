@@ -6,7 +6,7 @@
 ---
 
 ## [v0.19] Sprint 17 -- Workspace Polish + Slash Commands + Settings
-*April 3, 2026 | 294 tests*
+*April 3, 2026 | 318 tests*
 
 ### Features
 - **Workspace breadcrumb navigation.** Clicking into subdirectories now shows a
@@ -28,8 +28,14 @@
 ### Architecture
 - New `static/commands.js` module (7th JS module): command registry, parser,
   autocomplete dropdown, and built-in command handlers.
-- `send_key` added to `_SETTINGS_DEFAULTS` in `api/config.py` with enum validation.
+- `send_key` added to `_SETTINGS_DEFAULTS` in `api/config.py` with enum validation
+  (`_SETTINGS_ENUM_VALUES` rejects unknown values server-side).
 - `S.currentDir` state tracking added to `ui.js` for workspace navigation.
+
+### Tests
+- 6 new tests in `test_sprint17.py`: send_key default, round-trip save with
+  cleanup, invalid value rejection, unknown key ignored, commands.js served,
+  workspace root listing. Total: **318 passed**.
 
 ---
 
