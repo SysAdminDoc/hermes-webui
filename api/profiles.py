@@ -10,8 +10,18 @@ HERMES_HOME at import time.
 """
 import json
 import os
+import re
+import shutil
 import threading
 from pathlib import Path
+
+# ── Constants (match hermes_cli.profiles upstream) ─────────────────────────
+_PROFILE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
+_PROFILE_DIRS = [
+    'memories', 'sessions', 'skills', 'skins',
+    'logs', 'plans', 'workspace', 'cron',
+]
+_CLONE_CONFIG_FILES = ['config.yaml', '.env', 'SOUL.md']
 
 # ── Module state ────────────────────────────────────────────────────────────
 _active_profile = 'default'
@@ -245,28 +255,85 @@ def _default_profile_dict() -> dict:
     }
 
 
+def _validate_profile_name(name: str):
+    """Validate profile name format (matches hermes_cli.profiles upstream)."""
+    if name == 'default':
+        raise ValueError("Cannot create a profile named 'default' -- it is the built-in profile.")
+    # Use fullmatch (not match) so a trailing newline can't sneak past the $ anchor
+    if not _PROFILE_ID_RE.fullmatch(name):
+        raise ValueError(
+            f"Invalid profile name {name!r}. "
+            "Must match [a-z0-9][a-z0-9_-]{0,63}"
+        )
+
+
+def _create_profile_fallback(name: str, clone_from: str = None,
+                              clone_config: bool = False) -> Path:
+    """Create a profile directory without hermes_cli (Docker/standalone fallback)."""
+    profile_dir = _DEFAULT_HERMES_HOME / 'profiles' / name
+    if profile_dir.exists():
+        raise FileExistsError(f"Profile '{name}' already exists.")
+
+    # Bootstrap directory structure (exist_ok=False so a concurrent create raises)
+    profile_dir.mkdir(parents=True, exist_ok=False)
+    for subdir in _PROFILE_DIRS:
+        (profile_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Clone config files from source profile if requested
+    if clone_config and clone_from:
+        if clone_from == 'default':
+            source_dir = _DEFAULT_HERMES_HOME
+        else:
+            source_dir = _DEFAULT_HERMES_HOME / 'profiles' / clone_from
+        if source_dir.is_dir():
+            for filename in _CLONE_CONFIG_FILES:
+                src = source_dir / filename
+                if src.exists():
+                    shutil.copy2(src, profile_dir / filename)
+
+    return profile_dir
+
+
 def create_profile_api(name: str, clone_from: str = None,
                        clone_config: bool = False) -> dict:
     """Create a new profile. Returns the new profile info dict."""
+    _validate_profile_name(name)
+    # Defense-in-depth: validate clone_from here too, even though routes.py
+    # also validates it. Any caller that bypasses the HTTP layer gets protection.
+    if clone_from is not None and clone_from != 'default':
+        _validate_profile_name(clone_from)
+
     try:
-        from hermes_cli.profiles import create_profile, validate_profile_name
+        from hermes_cli.profiles import create_profile
+        create_profile(
+            name,
+            clone_from=clone_from,
+            clone_config=clone_config,
+            clone_all=False,
+            no_alias=True,
+        )
     except ImportError:
-        raise RuntimeError('Profile management requires hermes-agent to be installed.')
+        _create_profile_fallback(name, clone_from, clone_config)
 
-    validate_profile_name(name)
-    create_profile(
-        name,
-        clone_from=clone_from,
-        clone_config=clone_config,
-        clone_all=False,
-        no_alias=True,
-    )
-
-    # Find and return the newly created profile info
+    # Find and return the newly created profile info.
+    # When hermes_cli is not importable, list_profiles_api() also falls back
+    # to the stub default-only list and won't find the new profile by name.
+    # In that case, return a complete profile dict directly.
+    profile_path = _DEFAULT_HERMES_HOME / 'profiles' / name
     for p in list_profiles_api():
         if p['name'] == name:
             return p
-    return {'name': name, 'path': str(_DEFAULT_HERMES_HOME / 'profiles' / name)}
+    return {
+        'name': name,
+        'path': str(profile_path),
+        'is_default': False,
+        'is_active': _active_profile == name,
+        'gateway_running': False,
+        'model': None,
+        'provider': None,
+        'has_env': (profile_path / '.env').exists(),
+        'skill_count': 0,
+    }
 
 
 def delete_profile_api(name: str) -> dict:

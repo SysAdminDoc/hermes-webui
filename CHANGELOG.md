@@ -5,6 +5,33 @@
 
 ---
 
+## [v0.27] Profile Creation Fallback for Docker (Issue #44)
+*April 3, 2026 | 426 tests*
+
+### Bug Fixes
+- **Profile creation works without hermes-agent.** In Docker containers where
+  `hermes_cli` is not importable, profile creation now falls back to a local
+  implementation that creates the directory structure and optionally clones
+  config files. Previously returned `RuntimeError` with "hermes-agent required".
+- **Name validation uses `fullmatch()`.** Prevents trailing-newline bypass of
+  the `$` anchor in `re.match()`. Not reachable from the web UI (name is
+  stripped), but fixed for defense-in-depth.
+- **`clone_from` validated in `create_profile_api()`.** Defense-in-depth:
+  prevents path traversal if called by a non-HTTP client.
+- **Fallback return uses full 9-key schema.** Previously returned only 2 keys
+  (`name`, `path`), inconsistent with the normal response shape.
+- **Atomic directory creation.** `mkdir(exist_ok=False)` prevents TOCTOU race
+  on concurrent profile creates.
+
+### Architecture
+- `api/profiles.py`: `_validate_profile_name()`, `_create_profile_fallback()`,
+  `_PROFILE_ID_RE`, `_PROFILE_DIRS`, `_CLONE_CONFIG_FILES` constants matching
+  upstream `hermes_cli.profiles`.
+- `docker-compose.yml`: Removed `:ro` from `~/.hermes` mount (required for
+  profile writes). Localhost-only binding preserved.
+
+---
+
 ## [v0.26] Profile System Polish -- 10 Post-Sprint-23 Fixes
 *April 3, 2026 | 426 tests*
 
@@ -877,4 +904,4 @@ Three-panel layout: sessions sidebar, chat area, workspace panel.
 
 ---
 
-*Last updated: v0.26, April 3, 2026 | Tests: 426*
+*Last updated: v0.27, April 3, 2026 | Tests: 426*
