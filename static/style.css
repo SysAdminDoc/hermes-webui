@@ -525,9 +525,14 @@
   transition:background .15s;
 }
 .resize-handle:hover,.resize-handle.dragging{background:rgba(124,185,255,.35);}
-.sidebar{position:relative;}
+/* Desktop-only: position:relative for sidebar/rightpanel resize handles.
+   Must be scoped to min-width:641px so it doesn't override the mobile
+   position:fixed slide-in overlay set in the max-width:640px @media block above. */
+@media(min-width:641px){
+  .sidebar{position:relative;}
+  .rightpanel{position:relative;}
+}
 .sidebar .resize-handle{right:-2px;}
-.rightpanel{position:relative;}
 .rightpanel .resize-handle{left:-2px;}
 /* Prevent text selection during drag */
 body.resizing{user-select:none;cursor:col-resize;}

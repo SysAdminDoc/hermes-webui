@@ -8,6 +8,9 @@ WORKDIR /app
 # Copy source
 COPY . /app
 
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Default to binding all interfaces (required for container networking)
 ENV HERMES_WEBUI_HOST=0.0.0.0
 ENV HERMES_WEBUI_PORT=8787

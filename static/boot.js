@@ -29,16 +29,21 @@ function toggleMobileFiles(){
   panel.classList.toggle('mobile-open');
 }
 function mobileSwitchPanel(name){
-  // Close sidebar if open, then switch panel
-  closeMobileSidebar();
-  // Open sidebar for the selected panel, then close after a moment
-  const sidebar=document.querySelector('.sidebar');
-  const overlay=$('mobileOverlay');
-  if(sidebar){
-    sidebar.classList.add('mobile-open');
-    if(overlay)overlay.classList.add('visible');
-  }
+  // Switch the panel content view
   switchPanel(name);
+  // For non-chat panels (tasks, skills, memory, spaces), open the sidebar
+  // so the panel is visible. For 'chat', the content is in the main area —
+  // just close the sidebar so the chat view is unobstructed.
+  if(name==='chat'){
+    closeMobileSidebar();
+  } else {
+    const sidebar=document.querySelector('.sidebar');
+    const overlay=$('mobileOverlay');
+    if(sidebar){
+      sidebar.classList.add('mobile-open');
+      if(overlay)overlay.classList.add('visible');
+    }
+  }
   // Update bottom nav active state
   document.querySelectorAll('.mobile-nav-btn').forEach(btn=>{
     btn.classList.toggle('active',btn.dataset.panel===name);

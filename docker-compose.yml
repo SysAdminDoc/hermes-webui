@@ -9,7 +9,7 @@ services:
       # Persist session data, settings, and projects across restarts
       - hermes-data:/data
       # Mount hermes-agent for full agent features (optional)
-      - ${HERMES_HOME:-~/.hermes}:/root/.hermes:ro
+      - ${HERMES_HOME:-${HOME}/.hermes}:/root/.hermes:ro
     environment:
       - HERMES_WEBUI_HOST=0.0.0.0
       - HERMES_WEBUI_PORT=8787
