@@ -9,10 +9,17 @@ async function api(path,opts={}){
 async function loadDir(path){
   if(!S.session)return;
   try{
+    if(!path||path==='.'){ S._dirCache={}; if(S._expandedDirs)S._expandedDirs=new Set(); }
     S.currentDir=path||'.';
     const data=await api(`/api/list?session_id=${encodeURIComponent(S.session.session_id)}&path=${encodeURIComponent(path)}`);
     S.entries=data.entries||[];renderBreadcrumb();renderFileTree();
-    if(typeof clearPreview==='function')clearPreview();
+    if(typeof clearPreview==='function'){
+      if(typeof _previewDirty!=='undefined'&&_previewDirty){
+        if(confirm('You have unsaved changes in the preview. Discard and navigate?'))clearPreview();
+      }else{
+        clearPreview();
+      }
+    }
   }catch(e){console.warn('loadDir',e);}
 }
 
