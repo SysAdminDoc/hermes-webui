@@ -624,6 +624,9 @@ def save_settings(settings: dict) -> dict:
     if raw_pw and isinstance(raw_pw, str) and raw_pw.strip():
         salt = str(STATE_DIR).encode()
         current['password_hash'] = _hl.sha256(salt + raw_pw.strip().encode()).hexdigest()
+    # Handle _clear_password: explicitly disable auth
+    if settings.pop('_clear_password', False):
+        current['password_hash'] = None
     for k, v in settings.items():
         if k in _SETTINGS_ALLOWED_KEYS:
             # Validate enum-constrained keys

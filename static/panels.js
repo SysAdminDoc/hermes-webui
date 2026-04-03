@@ -652,11 +652,14 @@ async function loadSettingsPanel(){
     // Password field: always blank (we don't send hash back)
     const pwField=$('settingsPassword');
     if(pwField) pwField.value='';
-    // Show sign-out button if auth is active
+    // Show auth buttons only when auth is active
     try{
       const authStatus=await api('/api/auth/status');
+      const active=authStatus.auth_enabled;
       const signOutBtn=$('btnSignOut');
-      if(signOutBtn) signOutBtn.style.display=authStatus.auth_enabled?'':'none';
+      if(signOutBtn) signOutBtn.style.display=active?'':'none';
+      const disableBtn=$('btnDisableAuth');
+      if(disableBtn) disableBtn.style.display=active?'':'none';
     }catch(e){}
   }catch(e){
     showToast('Failed to load settings: '+e.message);
@@ -672,22 +675,15 @@ async function saveSettings(){
   if(model) body.default_model=model;
   if(workspace) body.default_workspace=workspace;
   if(sendKey) body.send_key=sendKey;
-  // Password: if field has content, hash and save; if blank, clear auth
-  if(pw!==undefined&&pw!==null){
-    if(pw.trim()){
-      // Hash client-side using the same algo as server (SHA-256 with state-dir salt)
-      // We send the raw password to the server's dedicated endpoint instead
-      try{
-        await api('/api/settings',{method:'POST',body:JSON.stringify({...body,_set_password:pw.trim()})});
-        window._sendKey=sendKey||'enter';
-        showToast('Settings saved (password set — login now required)');
-        toggleSettings();
-        return;
-      }catch(e){showToast('Save failed: '+e.message);return;}
-    }else{
-      // Blank = clear password (disable auth)
-      body.password_hash=null;
-    }
+  // Password: only act if the field has content; blank = leave auth unchanged
+  if(pw && pw.trim()){
+    try{
+      await api('/api/settings',{method:'POST',body:JSON.stringify({...body,_set_password:pw.trim()})});
+      window._sendKey=sendKey||'enter';
+      showToast('Settings saved (password set — login now required)');
+      toggleSettings();
+      return;
+    }catch(e){showToast('Save failed: '+e.message);return;}
   }
   try{
     await api('/api/settings',{method:'POST',body:JSON.stringify(body)});
@@ -705,6 +701,21 @@ async function signOut(){
     window.location.href='/login';
   }catch(e){
     showToast('Sign out failed: '+e.message);
+  }
+}
+
+async function disableAuth(){
+  if(!confirm('Disable password protection? Anyone will be able to access this instance.')) return;
+  try{
+    await api('/api/settings',{method:'POST',body:JSON.stringify({_clear_password:true})});
+    showToast('Auth disabled — password protection removed');
+    // Hide both auth buttons since auth is now off
+    const disableBtn=$('btnDisableAuth');
+    if(disableBtn) disableBtn.style.display='none';
+    const signOutBtn=$('btnSignOut');
+    if(signOutBtn) signOutBtn.style.display='none';
+  }catch(e){
+    showToast('Failed to disable auth: '+e.message);
   }
 }
 

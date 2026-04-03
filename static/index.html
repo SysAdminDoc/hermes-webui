@@ -284,10 +284,11 @@
       </div>
       <div class="settings-field" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
         <label for="settingsPassword">Access Password</label>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Set a password to require login. Leave blank to disable auth.</div>
-        <input type="password" id="settingsPassword" placeholder="Enter new password (or blank to disable)" style="width:100%;padding:8px;background:var(--code-bg);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:13px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Enter a new password to set or change it. Leave blank to keep current setting.</div>
+        <input type="password" id="settingsPassword" placeholder="Enter new password…" style="width:100%;padding:8px;background:var(--code-bg);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:13px">
       </div>
       <button class="sm-btn" onclick="saveSettings()" style="margin-top:12px;width:100%;padding:8px;font-weight:600">Save Settings</button>
+      <button class="sm-btn" id="btnDisableAuth" onclick="disableAuth()" style="margin-top:6px;width:100%;padding:8px;font-weight:600;color:#e8a030;border-color:rgba(232,160,48,.3);display:none">Disable Auth</button>
       <button class="sm-btn" id="btnSignOut" onclick="signOut()" style="margin-top:6px;width:100%;padding:8px;font-weight:600;color:var(--accent);border-color:rgba(233,69,96,.3);display:none">Sign Out</button>
     </div>
   </div>

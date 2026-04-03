@@ -374,7 +374,9 @@ def handle_post(handler, parsed):
 
     # ── Settings (POST) ──
     if parsed.path == '/api/settings':
-        return j(handler, save_settings(body))
+        saved = save_settings(body)
+        saved.pop('password_hash', None)  # never expose hash to client
+        return j(handler, saved)
 
     # ── Session pin (POST) ──
     if parsed.path == '/api/session/pin':
