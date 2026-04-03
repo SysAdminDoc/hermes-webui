@@ -41,7 +41,7 @@ This makes the code easy to modify from a terminal or by an agent.
     static/
       index.html           HTML template (served from disk)
       style.css            All CSS
-      ui.js                DOM helpers, renderMd, tool cards, model dropdown (~809 lines)
+      ui.js                DOM helpers, renderMd, tool cards, model dropdown (~846 lines)
       workspace.js         File tree, preview, file ops (~169 lines)
       sessions.js          Session CRUD, list rendering, search, SVG icons, overlay actions (~532 lines)
       messages.js          send(), SSE event handlers, approval, transcript (~293 lines)
@@ -49,7 +49,7 @@ This makes the code easy to modify from a terminal or by an agent.
       boot.js              Event wiring + boot IIFE (~175 lines)
     tests/
       conftest.py          Isolated test server (port 8788, separate HERMES_HOME) (~240 lines)
-      test_sprint1-11.py   Feature tests per sprint (13 files, Sprints 1-11)
+      test_sprint1-16.py   Feature tests per sprint (14 files, Sprints 1-11 + 16)
       test_regressions.py  Permanent regression gate
     AGENTS.md              Instruction file for agents working in this directory.
     ROADMAP.md             Feature and product roadmap document.
@@ -330,11 +330,11 @@ read_file_content(workspace, rel):
 ### 5.1 Structure
 
 The frontend is served from static/ as separate files: one HTML template, one CSS file,
-and six JavaScript modules (~2,750 lines total). External dependencies: Prism.js (syntax
+and six JavaScript modules (~2,786 lines total). External dependencies: Prism.js (syntax
 highlighting) and Mermaid.js (diagrams) from CDN, both loaded async/deferred with SRI hashes.
 
 Six JS modules loaded in order at end of <body>:
-  1. ui.js       (~809 lines) DOM helpers, renderMd, tool card rendering, global state
+  1. ui.js       (~846 lines) DOM helpers, renderMd, tool card rendering, global state
   2. workspace.js (~169 lines) File tree, preview, file operations
   3. sessions.js  (~532 lines) Session CRUD, list rendering, search, SVG icons, overlay actions, project picker
   4. messages.js  (~293 lines) send(), SSE event handlers, approval, transcript
@@ -414,25 +414,43 @@ Boot IIFE:
 
 ### 5.4 Markdown Renderer (renderMd)
 
-A hand-rolled regex chain. Processes in this order:
-1. Code blocks (``` lang ... ```) -> <pre><code> with language header
-2. Inline code (`...`) -> <code>
-3. Bold+italic (***..***) -> <strong><em>
-4. Bold (**...**) -> <strong>
-5. Italic (*...*) -> <em>
-6. Headings (# ## ###) -> <h1> <h2> <h3>
-7. Horizontal rules (---+) -> <hr>
-8. Blockquotes (> ...) -> <blockquote>
-9. Unordered lists (- or * or + at line start) -> <ul><li>
-10. Ordered lists (N. at line start) -> <ol><li>
-11. Links ([text](https://...)) -> <a href target=_blank>
-12. Paragraph wrapping: remaining double-newline-separated blocks -> <p>
+A hand-rolled regex chain with HTML safety. Processes in this order:
+
+Pre-pass (v0.18.1):
+0a. Stash fenced code blocks and backtick spans (fence_stash array)
+0b. Convert safe HTML tags to markdown equivalents:
+    <strong>/<b> -> **text**, <em>/<i> -> *text*, <code> -> `text`, <br> -> newline
+0c. Restore stashed code blocks
+
+Pipeline:
+1. Mermaid blocks (```mermaid ... ```) -> <div class="mermaid-block">
+2. Code blocks (``` lang ... ```) -> <pre><code> with language header
+3. Inline code (`...`) -> <code>
+4. Bold+italic (***..***) -> <strong><em>
+5. Bold (**...**) -> <strong>
+6. Italic (*...*) -> <em>
+7. Headings (# ## ###) -> <h1> <h2> <h3> (uses inlineMd() for content)
+8. Horizontal rules (---+) -> <hr>
+9. Blockquotes (> ...) -> <blockquote> (uses inlineMd() for content)
+10. Unordered lists (- or * or + at line start) -> <ul><li> (uses inlineMd())
+11. Ordered lists (N. at line start) -> <ol><li> (uses inlineMd())
+12. Links ([text](https://...)) -> <a href target=_blank>
+13. Tables (| col | col |) -> <table>
+14. Safety net: escape any HTML tag not in SAFE_TAGS allowlist via esc()
+15. Paragraph wrapping: remaining double-newline-separated blocks -> <p>
+
+inlineMd() helper (v0.18.1):
+    Processes inline bold/italic/code/links within list items, blockquotes,
+    and headings. Escapes unknown tags via SAFE_INLINE allowlist. Replaces
+    the old direct esc() calls which would double-escape pre-pass output.
+
+SAFE_TAGS allowlist:
+    strong, em, code, pre, h1-6, ul, ol, li, table, thead, tbody, tr, th,
+    td, hr, blockquote, p, br, a, div. Everything else is escaped.
 
 Known gaps:
-- Tables: not supported, render as plain text
 - Nested lists: single regex pass, multi-level indentation not handled
 - Mixed bold+link in same line: may produce garbled output
-- Inline HTML: not sanitized (esc() only runs on code content)
 
 ### 5.5 Model Chip Label (Fixed in Sprint 1)
 
@@ -628,7 +646,7 @@ Current structure:
         ui.js, workspace.js, sessions.js, messages.js, panels.js, boot.js
       tests/
         conftest.py           Isolated test server on port 8788
-        test_sprint1-11.py    Feature tests per sprint (13 files)
+        test_sprint1-16.py    Feature tests per sprint (14 files)
         test_regressions.py   Permanent regression gate
 
 Route extraction to api/routes.py completed in Sprint 11. server.py is now a ~76-line
@@ -727,10 +745,10 @@ Optional password gate for non-SSH-tunnel deployments.
 
 ### Phase I: Test Infrastructure -- COMPLETE
 
-237 tests across 13 test files + regression gate. Isolated test server on port 8788
+289 tests across 14 test files + regression gate. Isolated test server on port 8788
 with separate HERMES_HOME, wiped per run. Production data never touched.
 
-Test files: `test_sprint1.py` through `test_sprint11.py`, `test_regressions.py`.
+Test files: `test_sprint1.py` through `test_sprint11.py`, `test_sprint16.py`, `test_regressions.py`.
 Fixtures in `conftest.py`: auto-cleanup, cron isolation, workspace reset.
 
 Remaining: no CI (GitHub Actions), no frontend tests (browser-based).
