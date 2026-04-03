@@ -12,6 +12,7 @@ async function loadDir(path){
     S.currentDir=path||'.';
     const data=await api(`/api/list?session_id=${encodeURIComponent(S.session.session_id)}&path=${encodeURIComponent(path)}`);
     S.entries=data.entries||[];renderBreadcrumb();renderFileTree();
+    if(typeof clearPreview==='function')clearPreview();
   }catch(e){console.warn('loadDir',e);}
 }
 
