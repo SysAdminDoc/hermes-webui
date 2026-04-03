@@ -5,6 +5,41 @@
 
 ---
 
+## [v0.20] Sprint 18 -- File Preview Auto-Close + Thinking Display + Workspace Tree
+*April 3, 2026 | 318 tests*
+
+### Features
+- **File preview auto-close on directory navigation.** When viewing a file in
+  the right panel and navigating directories (breadcrumbs, up button, folder
+  clicks), the preview now automatically closes instead of showing stale
+  content. `clearPreview()` extracted as named function and called from
+  `loadDir()`. Unsaved preview edits prompt for confirmation before discarding.
+- **Thinking/reasoning display.** Assistant messages with structured content
+  arrays containing `type:'thinking'` or `type:'reasoning'` blocks (Claude
+  extended thinking, o3 reasoning) now render as collapsible gold-themed cards
+  above the response text. Collapsed by default. Click the header to expand and
+  see the model's reasoning process. Uses `esc()` on all content for XSS safety.
+- **Workspace tree view (Issue #22).** Directories expand/collapse in-place
+  with toggle arrows. Single-click toggles a directory open/closed. Double-click
+  navigates into it (breadcrumb view). Subdirectory contents fetched lazily from
+  the API and cached in `S._dirCache`. Nesting depth shown via indentation.
+  Empty directories show "(empty)" placeholder. Breadcrumb navigation still
+  works alongside the tree view.
+
+### Bug Fixes
+- **Stale tree cache on session switch.** `S._dirCache` and `S._expandedDirs`
+  are now cleared when navigating to the root directory, preventing session B
+  from showing session A's cached file listings.
+- **clearPreview() discards unsaved edits.** Navigation now checks
+  `_previewDirty` and prompts before discarding unsaved preview changes.
+
+### Architecture
+- `clearPreview()` extracted from inline handler to named function in `boot.js`.
+- Thinking card styles added to `style.css` (gold-themed, collapsible).
+- Tree toggle and empty-directory styles added to `style.css`.
+
+---
+
 ## [v0.19] Sprint 17 -- Workspace Polish + Slash Commands + Settings
 *April 3, 2026 | 318 tests*
 
@@ -614,4 +649,4 @@ Three-panel layout: sessions sidebar, chat area, workspace panel.
 
 ---
 
-*Last updated: v0.18.1, April 2, 2026 | Tests: 289*
+*Last updated: v0.20, April 3, 2026 | Tests: 318*

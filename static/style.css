@@ -216,6 +216,9 @@
   .file-item{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;cursor:pointer;font-size:12px;color:var(--muted);transition:all .12s;min-width:0;}
   .file-item:hover{background:rgba(255,255,255,.07);color:var(--text);}
   .file-item.active{background:rgba(124,185,255,.12);color:var(--blue);}
+  .file-tree-toggle{font-size:10px;color:var(--muted);flex-shrink:0;width:10px;text-align:center;line-height:1;}
+  .file-item.file-empty{color:var(--muted);opacity:.5;font-style:italic;cursor:default;font-size:11px;}
+  .file-item.file-empty:hover{background:none;color:var(--muted);}
   .preview-area{flex:1;overflow:auto;padding:14px;flex-direction:column;gap:8px;display:none;opacity:0;transition:opacity .15s;}
   .preview-area.visible{display:flex;opacity:1;}
   .preview-path{font-size:11px;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -571,5 +574,17 @@ body.resizing{user-select:none;cursor:col-resize;}
 .tool-cards-toggle{margin:4px 0 2px 40px;display:flex;gap:8px;}
 .tool-cards-toggle button{background:none;border:none;color:var(--blue);font-size:10px;cursor:pointer;opacity:.6;padding:0;}
 .tool-cards-toggle button:hover{opacity:1;text-decoration:underline;}
+
+/* ── Thinking/reasoning card ── */
+.thinking-card{background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2);border-radius:10px;margin:4px 0 2px 40px;overflow:hidden;transition:border-color .15s;}
+.thinking-card:hover{border-color:rgba(201,168,76,.35);}
+.thinking-card-header{display:flex;align-items:center;gap:6px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--gold);user-select:none;}
+.thinking-card-icon{font-size:14px;}
+.thinking-card-label{font-weight:600;letter-spacing:.02em;}
+.thinking-card-toggle{margin-left:auto;font-size:10px;transition:transform .15s;}
+.thinking-card.open .thinking-card-toggle{transform:rotate(90deg);}
+.thinking-card-body{display:none;padding:0 12px 10px;max-height:300px;overflow-y:auto;}
+.thinking-card.open .thinking-card-body{display:block;}
+.thinking-card-body pre{font-family:'SF Mono',ui-monospace,monospace;font-size:11px;line-height:1.5;color:var(--muted);white-space:pre-wrap;word-break:break-word;margin:0;}
 
 .bg-error-banner{background:rgba(229,62,62,.15);border:1px solid rgba(229,62,62,.3);color:#fca5a5;padding:8px 16px;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:0;}

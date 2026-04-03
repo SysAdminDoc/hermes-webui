@@ -365,9 +365,20 @@ function renderMessages(){
   for(let vi=0;vi<visWithIdx.length;vi++){
     const {m,rawIdx}=visWithIdx[vi];
     let content=m.content||'';
-    if(Array.isArray(content))content=content.filter(p=>p&&p.type==='text').map(p=>p.text||p.content||'').join('\n');
+    // Extract thinking/reasoning blocks from structured content (Claude extended thinking, o3)
+    let thinkingText='';
+    if(Array.isArray(content)){
+      thinkingText=content.filter(p=>p&&(p.type==='thinking'||p.type==='reasoning')).map(p=>p.thinking||p.reasoning||p.text||'').join('\n');
+      content=content.filter(p=>p&&p.type==='text').map(p=>p.text||p.content||'').join('\n');
+    }
     const isUser=m.role==='user';
     const isLastAssistant=!isUser&&vi===visWithIdx.length-1;
+    // Render thinking card before the assistant message (collapsed by default)
+    if(thinkingText&&!isUser){
+      const thinkRow=document.createElement('div');thinkRow.className='msg-row thinking-card-row';
+      thinkRow.innerHTML=`<div class="thinking-card"><div class="thinking-card-header" onclick="this.parentElement.classList.toggle('open')"><span class="thinking-card-icon">&#128161;</span><span class="thinking-card-label">Thinking</span><span class="thinking-card-toggle">&#9656;</span></div><div class="thinking-card-body"><pre>${esc(thinkingText)}</pre></div></div>`;
+      inner.appendChild(thinkRow);
+    }
     const row=document.createElement('div');row.className='msg-row';
     row.dataset.msgIdx=rawIdx;
     let filesHtml='';
@@ -744,27 +755,49 @@ function renderBreadcrumb(){
   }
 }
 
+// Track expanded directories for tree view
+if(!S._expandedDirs) S._expandedDirs=new Set();
+// Cache of fetched directory contents: path -> entries[]
+if(!S._dirCache) S._dirCache={};
+
 function renderFileTree(){
   const box=$('fileTree');box.innerHTML='';
-  for(const item of S.entries){
+  // Cache current dir entries
+  S._dirCache[S.currentDir||'.']=S.entries;
+  _renderTreeItems(box, S.entries, 0);
+}
+
+function _renderTreeItems(container, entries, depth){
+  for(const item of entries){
     const el=document.createElement('div');el.className='file-item';
+    el.style.paddingLeft=(8+depth*16)+'px';
+
+    if(item.type==='dir'){
+      // Toggle arrow for directories
+      const arrow=document.createElement('span');
+      arrow.className='file-tree-toggle';
+      const isExpanded=S._expandedDirs.has(item.path);
+      arrow.textContent=isExpanded?'\u25BE':'\u25B8';
+      el.appendChild(arrow);
+    }
 
     // Icon
     const iconEl=document.createElement('span');
     iconEl.className='file-icon';iconEl.textContent=fileIcon(item.name,item.type);
     el.appendChild(iconEl);
 
-    // Name -- takes all remaining space, truncates with ellipsis
+    // Name
     const nameEl=document.createElement('span');
     nameEl.className='file-name';nameEl.textContent=item.name;nameEl.title='Double-click to rename';
-    // Inline rename on double-click
     nameEl.ondblclick=(e)=>{
       e.stopPropagation();
+      // For directories, double-click navigates (breadcrumb view)
+      if(item.type==='dir'){loadDir(item.path);return;}
       const inp=document.createElement('input');
       inp.className='file-rename-input';inp.value=item.name;
       inp.onclick=(e2)=>e2.stopPropagation();
       const finish=async(save)=>{
-        inp.onblur=null;  // prevent double-call: Enter triggers blur after replaceWith
+        inp.onblur=null;
         if(save){
           const newName=inp.value.trim();
           if(newName&&newName!==item.name){
@@ -773,6 +806,8 @@ function renderFileTree(){
                 session_id:S.session.session_id,path:item.path,new_name:newName
               })});
               showToast(`Renamed to ${newName}`);
+              // Invalidate cache and re-render
+              delete S._dirCache[S.currentDir];
               await loadDir(S.currentDir);
             }catch(err){showToast('Rename failed: '+err.message);}
           }
@@ -789,7 +824,7 @@ function renderFileTree(){
     };
     el.appendChild(nameEl);
 
-    // Size -- only for files, right-aligned, shrinks but never wraps
+    // Size -- only for files
     if(item.type==='file'&&item.size){
       const sizeEl=document.createElement('span');
       sizeEl.className='file-size';
@@ -797,16 +832,52 @@ function renderFileTree(){
       el.appendChild(sizeEl);
     }
 
-    // Delete button -- for files, shown on hover
+    // Delete button -- for files
     if(item.type==='file'){
       const del=document.createElement('button');
-      del.className='file-del-btn';del.title='Delete';del.textContent='×';
+      del.className='file-del-btn';del.title='Delete';del.textContent='\u00d7';
       del.onclick=async(e)=>{e.stopPropagation();await deleteWorkspaceFile(item.path,item.name);};
       el.appendChild(del);
     }
 
-    el.onclick=async()=>item.type==='dir'?loadDir(item.path):openFile(item.path);
-    box.appendChild(el);
+    if(item.type==='dir'){
+      // Single-click toggles expand/collapse
+      el.onclick=async(e)=>{
+        e.stopPropagation();
+        if(S._expandedDirs.has(item.path)){
+          S._expandedDirs.delete(item.path);
+          renderFileTree();
+        }else{
+          S._expandedDirs.add(item.path);
+          // Fetch children if not cached
+          if(!S._dirCache[item.path]){
+            try{
+              const data=await api(`/api/list?session_id=${encodeURIComponent(S.session.session_id)}&path=${encodeURIComponent(item.path)}`);
+              S._dirCache[item.path]=data.entries||[];
+            }catch(e2){S._dirCache[item.path]=[];}
+          }
+          renderFileTree();
+        }
+      };
+    }else{
+      el.onclick=async()=>openFile(item.path);
+    }
+
+    container.appendChild(el);
+
+    // Render children if directory is expanded
+    if(item.type==='dir'&&S._expandedDirs.has(item.path)){
+      const children=S._dirCache[item.path]||[];
+      if(children.length){
+        _renderTreeItems(container, children, depth+1);
+      }else{
+        const empty=document.createElement('div');
+        empty.className='file-item file-empty';
+        empty.style.paddingLeft=(8+(depth+1)*16)+'px';
+        empty.textContent='(empty)';
+        container.appendChild(empty);
+      }
+    }
   }
 }
 

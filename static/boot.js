@@ -43,14 +43,16 @@ $('importFileInput').onchange=async(e)=>{
   }
 };
 // btnRefreshFiles is now panel-icon-btn in header (see HTML)
-$('btnClearPreview').onclick=()=>{
-  $('previewArea').classList.remove('visible');
-  $('previewImg').src='';
-  $('previewMd').innerHTML='';
-  $('previewCode').textContent='';
-  $('previewPathText').textContent='';
-  $('fileTree').style.display='';
-};
+function clearPreview(){
+  const pa=$('previewArea');if(pa)pa.classList.remove('visible');
+  const pi=$('previewImg');if(pi)pi.src='';
+  const pm=$('previewMd');if(pm)pm.innerHTML='';
+  const pc=$('previewCode');if(pc)pc.textContent='';
+  const pp=$('previewPathText');if(pp)pp.textContent='';
+  const ft=$('fileTree');if(ft)ft.style.display='';
+  _previewCurrentPath='';_previewCurrentMode='';_previewDirty=false;
+}
+$('btnClearPreview').onclick=clearPreview;
 // workspacePath click handler removed -- use topbar workspace chip dropdown instead
 $('modelSelect').onchange=async()=>{
   if(!S.session)return;
