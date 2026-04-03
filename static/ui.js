@@ -336,13 +336,6 @@ function syncTopbar(){
   const displayModel=$('modelSelect').value||m;
   $('modelChip').textContent=getModelLabel(displayModel);
   const ws=S.session.workspace||'';
-  $('wsChip').textContent=ws.split('/').slice(-2).join('/')||ws;
-  // Update workspace chip in topbar with friendly name from workspace list
-  const wsChipEl=$('wsChip');
-  if(wsChipEl){
-    const wsFriendly=getWorkspaceFriendlyName(ws);
-    wsChipEl.textContent='\u{1F4C1} '+wsFriendly+' \u25BE';
-  }
   // Update sidebar workspace display
   const sidebarName=$('sidebarWsName');
   const sidebarPath=$('sidebarWsPath');

@@ -490,7 +490,7 @@ function closeWsDropdown(){
   if(dd)dd.classList.remove('open');
 }
 document.addEventListener('click',e=>{
-  if(!e.target.closest('#wsChipWrap'))closeWsDropdown();
+  if(!e.target.closest('#sidebarWsDisplay') && !e.target.closest('#wsDropdown'))closeWsDropdown();
 });
 
 async function loadWorkspacesPanel(){
@@ -683,6 +683,24 @@ async function switchToProfile(name) {
     // Refresh workspace list (now profile-local)
     _workspaceList = null;
     await loadWorkspaceList();
+
+    // Apply the profile's default workspace to the current session
+    if (data.default_workspace) {
+      if (S.session) {
+        // Update existing session's workspace to the profile default
+        try {
+          await api('/api/session/update', { method: 'POST', body: JSON.stringify({
+            session_id: S.session.session_id,
+            workspace: data.default_workspace,
+            model: S.session.model,
+          })});
+          S.session.workspace = data.default_workspace;
+        } catch (_) {}
+      }
+      // Store as the profile default so the next new session picks it up
+      S._profileDefaultWorkspace = data.default_workspace;
+    }
+
     // Reset profile filter and refresh session list
     _showAllProfiles = false;
     await renderSessionList();
