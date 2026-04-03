@@ -10,8 +10,18 @@ HERMES_HOME at import time.
 """
 import json
 import os
+import re
+import shutil
 import threading
 from pathlib import Path
+
+# ── Constants (match hermes_cli.profiles upstream) ─────────────────────────
+_PROFILE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
+_PROFILE_DIRS = [
+    'memories', 'sessions', 'skills', 'skins',
+    'logs', 'plans', 'workspace', 'cron',
+]
+_CLONE_CONFIG_FILES = ['config.yaml', '.env', 'SOUL.md']
 
 # ── Module state ────────────────────────────────────────────────────────────
 _active_profile = 'default'
@@ -245,22 +255,60 @@ def _default_profile_dict() -> dict:
     }
 
 
+def _validate_profile_name(name: str):
+    """Validate profile name format (matches hermes_cli.profiles upstream)."""
+    if name == 'default':
+        raise ValueError("Cannot create a profile named 'default' -- it is the built-in profile.")
+    if not _PROFILE_ID_RE.match(name):
+        raise ValueError(
+            f"Invalid profile name {name!r}. "
+            "Must match [a-z0-9][a-z0-9_-]{0,63}"
+        )
+
+
+def _create_profile_fallback(name: str, clone_from: str = None,
+                              clone_config: bool = False) -> Path:
+    """Create a profile directory without hermes_cli (Docker/standalone fallback)."""
+    profile_dir = _DEFAULT_HERMES_HOME / 'profiles' / name
+    if profile_dir.exists():
+        raise FileExistsError(f"Profile '{name}' already exists.")
+
+    # Bootstrap directory structure
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    for subdir in _PROFILE_DIRS:
+        (profile_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Clone config files from source profile if requested
+    if clone_config and clone_from:
+        if clone_from == 'default':
+            source_dir = _DEFAULT_HERMES_HOME
+        else:
+            source_dir = _DEFAULT_HERMES_HOME / 'profiles' / clone_from
+        if source_dir.is_dir():
+            for filename in _CLONE_CONFIG_FILES:
+                src = source_dir / filename
+                if src.exists():
+                    shutil.copy2(src, profile_dir / filename)
+
+    return profile_dir
+
+
 def create_profile_api(name: str, clone_from: str = None,
                        clone_config: bool = False) -> dict:
     """Create a new profile. Returns the new profile info dict."""
-    try:
-        from hermes_cli.profiles import create_profile, validate_profile_name
-    except ImportError:
-        raise RuntimeError('Profile management requires hermes-agent to be installed.')
+    _validate_profile_name(name)
 
-    validate_profile_name(name)
-    create_profile(
-        name,
-        clone_from=clone_from,
-        clone_config=clone_config,
-        clone_all=False,
-        no_alias=True,
-    )
+    try:
+        from hermes_cli.profiles import create_profile
+        create_profile(
+            name,
+            clone_from=clone_from,
+            clone_config=clone_config,
+            clone_all=False,
+            no_alias=True,
+        )
+    except ImportError:
+        _create_profile_fallback(name, clone_from, clone_config)
 
     # Find and return the newly created profile info
     for p in list_profiles_api():
