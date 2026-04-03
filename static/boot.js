@@ -59,8 +59,37 @@ $('modelSelect').onchange=async()=>{
   await api('/api/session/update',{method:'POST',body:JSON.stringify({session_id:S.session.session_id,workspace:S.session.workspace,model:selectedModel})});
   S.session.model=selectedModel;syncTopbar();
 };
-$('msg').addEventListener('input',autoResize);
-$('msg').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+$('msg').addEventListener('input',()=>{
+  autoResize();
+  const text=$('msg').value;
+  if(text.startsWith('/')&&text.indexOf('\n')===-1){
+    const prefix=text.slice(1);
+    const matches=getMatchingCommands(prefix);
+    if(matches.length)showCmdDropdown(matches); else hideCmdDropdown();
+  } else {
+    hideCmdDropdown();
+  }
+});
+$('msg').addEventListener('keydown',e=>{
+  // Autocomplete navigation when dropdown is open
+  const dd=$('cmdDropdown');
+  const dropdownOpen=dd&&dd.classList.contains('open');
+  if(dropdownOpen){
+    if(e.key==='ArrowUp'){e.preventDefault();navigateCmdDropdown(-1);return;}
+    if(e.key==='ArrowDown'){e.preventDefault();navigateCmdDropdown(1);return;}
+    if(e.key==='Tab'){e.preventDefault();selectCmdDropdownItem();return;}
+    if(e.key==='Escape'){e.preventDefault();hideCmdDropdown();return;}
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();selectCmdDropdownItem();return;}
+  }
+  // Send key: respect user preference
+  if(e.key==='Enter'){
+    if(window._sendKey==='ctrl+enter'){
+      if(e.ctrlKey||e.metaKey){e.preventDefault();send();}
+    } else {
+      if(!e.shiftKey){e.preventDefault();send();}
+    }
+  }
+});
 // B14: Cmd/Ctrl+K creates a new chat from anywhere
 document.addEventListener('keydown',async e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){
@@ -151,6 +180,8 @@ document.querySelectorAll('.suggestion').forEach(btn=>{
 })();
 
 (async()=>{
+  // Load send key preference
+  try{const s=await api('/api/settings');window._sendKey=s.send_key||'enter';}catch(e){window._sendKey='enter';}
   // Fetch available models from server and populate dropdown dynamically
   await populateModelDropdown();
   // Restore last-used model preference

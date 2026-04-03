@@ -9,9 +9,17 @@ async function api(path,opts={}){
 async function loadDir(path){
   if(!S.session)return;
   try{
+    S.currentDir=path||'.';
     const data=await api(`/api/list?session_id=${encodeURIComponent(S.session.session_id)}&path=${encodeURIComponent(path)}`);
-    S.entries=data.entries||[];renderFileTree();
+    S.entries=data.entries||[];renderBreadcrumb();renderFileTree();
   }catch(e){console.warn('loadDir',e);}
+}
+
+function navigateUp(){
+  if(!S.session||S.currentDir==='.')return;
+  const parts=S.currentDir.split('/');
+  parts.pop();
+  loadDir(parts.length?parts.join('/'):'.');
 }
 
 // File extension sets for preview routing (must match server-side sets)

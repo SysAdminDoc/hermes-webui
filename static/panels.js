@@ -646,6 +646,9 @@ async function loadSettingsPanel(){
       }catch(e){}
       wsSel.value=settings.default_workspace||'';
     }
+    // Send key preference
+    const sendKeySel=$('settingsSendKey');
+    if(sendKeySel) sendKeySel.value=settings.send_key||'enter';
   }catch(e){
     showToast('Failed to load settings: '+e.message);
   }
@@ -654,11 +657,14 @@ async function loadSettingsPanel(){
 async function saveSettings(){
   const model=($('settingsModel')||{}).value;
   const workspace=($('settingsWorkspace')||{}).value;
+  const sendKey=($('settingsSendKey')||{}).value;
   const body={};
   if(model) body.default_model=model;
   if(workspace) body.default_workspace=workspace;
+  if(sendKey) body.send_key=sendKey;
   try{
     await api('/api/settings',{method:'POST',body:JSON.stringify(body)});
+    window._sendKey=sendKey||'enter';
     showToast('Settings saved');
     toggleSettings();
   }catch(e){

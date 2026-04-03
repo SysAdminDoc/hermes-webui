@@ -594,6 +594,7 @@ def _get_session_agent_lock(session_id: str) -> threading.Lock:
 _SETTINGS_DEFAULTS = {
     'default_model': DEFAULT_MODEL,
     'default_workspace': str(DEFAULT_WORKSPACE),
+    'send_key': 'enter',  # 'enter' or 'ctrl+enter'
 }
 
 def load_settings() -> dict:
@@ -609,12 +610,18 @@ def load_settings() -> dict:
     return settings
 
 _SETTINGS_ALLOWED_KEYS = set(_SETTINGS_DEFAULTS.keys())
+_SETTINGS_ENUM_VALUES = {
+    'send_key': {'enter', 'ctrl+enter'},
+}
 
 def save_settings(settings: dict) -> dict:
     """Save settings to disk. Returns the merged settings. Ignores unknown keys."""
     current = load_settings()
     for k, v in settings.items():
         if k in _SETTINGS_ALLOWED_KEYS:
+            # Validate enum-constrained keys
+            if k in _SETTINGS_ENUM_VALUES and v not in _SETTINGS_ENUM_VALUES[k]:
+                continue
             current[k] = v
     SETTINGS_FILE.write_text(
         json.dumps(current, ensure_ascii=False, indent=2),

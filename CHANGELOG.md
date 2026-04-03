@@ -5,6 +5,34 @@
 
 ---
 
+## [v0.19] Sprint 17 -- Workspace Polish + Slash Commands + Settings
+*April 3, 2026 | 294 tests*
+
+### Features
+- **Workspace breadcrumb navigation.** Clicking into subdirectories now shows a
+  breadcrumb path bar (e.g. `~ / src / components`) with clickable segments to
+  navigate back. An "up" button appears in the panel header when inside a
+  subdirectory. File operations (rename, delete, new file/folder) stay in the
+  current directory instead of jumping back to root. Foundation for Issue #22
+  (tree view).
+- **Slash commands.** Type `/` in the composer to see an autocomplete dropdown
+  of built-in commands. New `commands.js` module with command registry. Built-in
+  commands: `/help`, `/clear`, `/model <name>`, `/workspace <name>`, `/new`.
+  Arrow keys navigate, Tab/Enter select, Escape closes. Unrecognized commands
+  pass through to the agent normally.
+- **Send key setting (Issue #26).** New setting in Settings panel to choose
+  between Enter (default) and Ctrl/Cmd+Enter as the send key. Persisted to
+  `settings.json` via the existing settings API. Setting loads on boot.
+  Server-side validation ensures only valid values (`enter`, `ctrl+enter`).
+
+### Architecture
+- New `static/commands.js` module (7th JS module): command registry, parser,
+  autocomplete dropdown, and built-in command handlers.
+- `send_key` added to `_SETTINGS_DEFAULTS` in `api/config.py` with enum validation.
+- `S.currentDir` state tracking added to `ui.js` for workspace navigation.
+
+---
+
 ## [v0.18.1] Safe HTML Rendering + Sprint 16 Tests
 *April 2, 2026 | 289 tests*
 
