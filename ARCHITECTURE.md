@@ -18,7 +18,7 @@ a central chat area, and a right panel for workspace file browsing.
 
 The design philosophy is deliberately minimal. There is no build step, no bundler, no
 frontend framework. The Python server is split into a routing shell (server.py) and
-business logic modules (api/). The frontend is six vanilla JS modules loaded from static/.
+business logic modules (api/). The frontend is seven vanilla JS modules loaded from static/.
 This makes the code easy to modify from a terminal or by an agent.
 
 ---
@@ -26,38 +26,40 @@ This makes the code easy to modify from a terminal or by an agent.
 ## 2. File Inventory
 
     <repo>/
-    server.py              Thin routing shell + HTTP Handler. ~76 lines. Pure Python.
+    server.py              Thin routing shell + HTTP Handler + auth middleware. ~79 lines.
                            Delegates all route handling to api/routes.py.
     start.sh               Discovery script: finds agent dir, Python, starts server.
     api/
       __init__.py          Package marker
-      routes.py            All GET + POST route handlers (~1016 lines)
-      config.py            Shared configuration, constants, global state, model discovery (~640 lines)
-      helpers.py           HTTP helpers: j(), bad(), require(), safe_resolve() (~57 lines)
+      auth.py              Optional password authentication, signed cookies (~149 lines)
+      routes.py            All GET + POST route handlers (~1109 lines)
+      config.py            Shared configuration, constants, global state, model discovery (~654 lines)
+      helpers.py           HTTP helpers: j(), bad(), require(), safe_resolve(), security headers (~71 lines)
       models.py            Session model + CRUD (~132 lines)
       workspace.py         File ops: list_dir, read_file_content, workspace helpers (~77 lines)
       upload.py            Multipart parser, file upload handler (~77 lines)
       streaming.py         SSE engine, run_agent integration, cancel support (~222 lines)
     static/
       index.html           HTML template (served from disk)
-      style.css            All CSS
-      ui.js                DOM helpers, renderMd, tool cards, model dropdown (~846 lines)
-      workspace.js         File tree, preview, file ops (~169 lines)
+      style.css            All CSS (~590 lines)
+      ui.js                DOM helpers, renderMd, tool cards, model dropdown, file tree (~957 lines)
+      workspace.js         File preview, file ops, loadDir, clearPreview (~185 lines)
       sessions.js          Session CRUD, list rendering, search, SVG icons, overlay actions (~532 lines)
-      messages.js          send(), SSE event handlers, approval, transcript (~293 lines)
-      panels.js            Cron, skills, memory, workspace, todo, switchPanel (~771 lines)
-      boot.js              Event wiring + boot IIFE (~175 lines)
+      messages.js          send(), SSE event handlers, approval, transcript (~297 lines)
+      panels.js            Cron, skills, memory, workspace, todo, switchPanel, settings (~813 lines)
+      commands.js          Slash command registry, parser, autocomplete dropdown (~156 lines)
+      boot.js              Event wiring, keydown handlers, boot IIFE (~208 lines)
     tests/
       conftest.py          Isolated test server (port 8788, separate HERMES_HOME) (~240 lines)
-      test_sprint1-16.py   Feature tests per sprint (14 files, Sprints 1-11 + 16)
-      test_regressions.py  Permanent regression gate
+      test_sprint{1-19}.py Feature tests per sprint (17 files, 327 test functions)
+      test_regressions.py  Permanent regression gate (23 tests)
     AGENTS.md              Instruction file for agents working in this directory.
     ROADMAP.md             Feature and product roadmap document.
     SPRINTS.md             Forward sprint plan with CLI + Claude parity targets.
     ARCHITECTURE.md        THIS FILE.
     TESTING.md             Manual browser test plan and automated coverage reference.
     CHANGELOG.md           Release notes per sprint.
-    PORTABILITY.md         Portability design spec for download-and-run installs.
+    BUGS.md                Bug backlog and fixed items tracker.
     requirements.txt       Python dependencies.
     .env.example           Sample environment variable overrides.
 
@@ -67,7 +69,8 @@ State directory (runtime data, separate from source):
     sessions/          One JSON file per session: {session_id}.json
     workspaces.json    Registered workspaces list
     last_workspace.txt Last-used workspace path
-    settings.json      (future) User settings
+    settings.json      User settings (default model, workspace, send key, password hash)
+    projects.json      Session project groups (name, color, id)
 
 Log file:
 
@@ -91,6 +94,7 @@ Environment variables controlling behavior:
     HERMES_WEBUI_STATE_DIR         Where sessions/ folder lives
     HERMES_CONFIG_PATH             Path to ~/.hermes/config.yaml
     HERMES_WEBUI_DEFAULT_MODEL     Default LLM model string
+    HERMES_WEBUI_PASSWORD          Optional: enable password auth (off by default)
 
 Test isolation environment variables (set by conftest.py):
 

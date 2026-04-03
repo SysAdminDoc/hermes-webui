@@ -1,12 +1,15 @@
 # Hermes Web UI: Browser Testing Plan
 
 > This document is for manual browser testing by you or by a Claude browser agent.
-> It covers every user-facing feature of the UI through Sprint 2.
+> It covers user-facing features of the UI through Sprint 19 (v0.21).
 > Each section is written as a step-by-step test procedure with expected outcomes.
 > A browser agent (e.g. Claude with Chrome access) can execute this plan directly.
 >
 > Prerequisites: SSH tunnel is active on port 8787. Open http://localhost:8787 in browser.
 > Server health check: curl http://127.0.0.1:8787/health should return {"status":"ok"}.
+>
+> Automated tests: 327 total (304 passing, 23 pre-existing failures).
+> Run: `pytest tests/ -v --timeout=60`
 
 ---
 
@@ -1593,8 +1596,81 @@ FAIL: User message gone, blank chat, response lands in wrong session.
 
 ---
 
-*Last updated: Post-Sprint 10 concurrency sweeps, March 31, 2026*
-*Total automated tests: 190/190*
-*Regression gate: tests/test_regressions.py (23 tests, one per introduced bug)*
-*Run: python -m pytest tests/ -v*
+---
+
+## Sections Added Post-Sprint 10 (Sprints 11-19)
+
+The following features were added in Sprints 11-19 and need manual browser testing.
+Each has automated API-level tests in `tests/test_sprint{N}.py`.
+
+### Sprint 11: Multi-Provider Models
+- Open model dropdown. Verify models grouped by provider (OpenAI, Anthropic, Google, etc.)
+- If custom `base_url` configured in config.yaml, verify local models appear in dropdown.
+- Switch model. Send a message. Verify response uses selected model.
+
+### Sprint 12: Settings + Pin + Import
+- Click gear icon. Settings overlay opens.
+- Change default model, save. Restart server. Verify setting persisted.
+- Pin a session (star icon in hover overlay). Verify it floats to top of list.
+- Export session as JSON. Import it back. Verify messages restored.
+
+### Sprint 13: Alerts + Session QoL
+- Duplicate a session (copy icon in hover overlay). Verify "(copy)" title.
+- Browser tab title updates to active session name. Switch sessions — title changes.
+
+### Sprint 14: Visual Polish + Workspace Ops
+- Create a mermaid code block in a response. Verify diagram renders inline.
+- Message timestamps visible next to role labels (hover for full date).
+- Double-click a file in workspace panel to rename. Enter saves, Escape cancels.
+- Create a folder via folder icon in workspace header.
+- Add `#tag` to session title. Verify tag chip appears in sidebar. Click to filter.
+- Archive a session. Verify it disappears. Toggle "Show archived" to see it.
+
+### Sprint 15: Session Projects
+- Click "+" in project bar to create a project. Type name, Enter.
+- Click a project chip to filter sessions.
+- Hover a session → click folder icon → assign to project via picker.
+- Verify colored left border appears on assigned session.
+- Double-click project chip to rename. Right-click to delete.
+- Code blocks have a "Copy" button. Click → "Copied!" feedback.
+- Messages with 2+ tool cards show "Expand all / Collapse all" toggle.
+
+### Sprint 16: Sidebar Visual Polish
+- Session titles use full sidebar width (no truncated space for hidden icons).
+- Hover a session → action buttons appear from right with gradient fade.
+- All icons are monochrome SVGs (not emoji). Consistent across platforms.
+- Pinned sessions show small gold star inline. Unpinned = no star, full title width.
+- Active session has gold highlight (not blue). Overlay gradient matches.
+- Double-click to rename → overlay hides during rename.
+
+### Sprint 17: Workspace + Slash Commands + Send Key
+- Navigate into a subdirectory. Breadcrumb bar appears with clickable segments.
+- Up button in panel header navigates to parent. Hidden at root.
+- Type `/` in composer → autocomplete dropdown appears. Arrow keys navigate.
+- Type `/help` → lists all commands. `/clear` clears conversation. `/model` switches.
+- Settings panel: change send key to Ctrl+Enter. Verify Enter inserts newline.
+
+### Sprint 18: Thinking + Tree View + Preview Fix
+- View a file in workspace. Click a breadcrumb or folder → preview closes automatically.
+- Click a directory toggle arrow (▸) → expands in-place showing children.
+- Click again (▾) → collapses. Double-click navigates into it (breadcrumb view).
+- If model returns thinking blocks (Claude extended thinking), verify collapsible gold card appears above response.
+
+### Sprint 19: Auth + Security
+- No password set: everything works as normal. No login page.
+- Set `HERMES_WEBUI_PASSWORD=test` env var. Restart. All pages redirect to `/login`.
+- Login page: minimal card, password field, "Sign in" button.
+- Enter correct password → redirected to `/`. Cookie set (24h).
+- Enter wrong password → error message, stay on login page.
+- Settings panel: set password via "Access Password" field. Auth activates.
+- "Sign Out" button visible when auth active. Click → redirected to /login.
+- API calls without auth cookie → 401 JSON response.
+- Check response headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`.
+
+---
+
+*Last updated: Sprint 19 / v0.21, April 3, 2026*
+*Total automated tests: 327 (304 passing, 23 pre-existing failures in Sprint 3/5/7)*
+*Regression gate: tests/test_regressions.py (23 tests)*
+*Run: pytest tests/ -v --timeout=60*
 *Source: <repo>/*

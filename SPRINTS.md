@@ -1,6 +1,6 @@
 # Hermes Web UI -- Forward Sprint Plan
 
-> Current state: v0.20 | 318 tests | Daily driver ready
+> Current state: v0.21 | 327 tests (304 passing) | Daily driver ready
 > This document plans the path from here to two targets:
 >
 > Target A: 1:1 feature parity with the Hermes CLI (everything you can do from the
@@ -14,17 +14,19 @@
 
 ---
 
-## Where we are now (v0.18)
+## Where we are now (v0.21)
 
-**CLI parity: ~85% complete.** Core agent loop, all tools visible, workspace
-file ops, cron/skills/memory CRUD, session management, streaming, cancel,
-multi-provider models, custom endpoint discovery -- all solid. Gaps are
-subagent visibility, toolset control, and code execution.
+**CLI parity: ~90% complete.** Core agent loop, all tools visible, workspace
+file ops with tree view, cron/skills/memory CRUD, session management, streaming,
+cancel, multi-provider models, custom endpoint discovery, slash commands,
+thinking/reasoning display, password auth -- all solid. Gaps are subagent
+visibility, toolset control, and code execution.
 
-**Claude parity: ~65% complete.** Chat, streaming, file browser, session
+**Claude parity: ~70% complete.** Chat, streaming, file browser, session
 management, tool cards, syntax highlighting, model switching, projects,
-settings, Mermaid diagrams, mobile layout -- all present. Gaps are
-artifacts, voice, reasoning display, sharing.
+settings, Mermaid diagrams, mobile layout, breadcrumb workspace nav, slash
+commands, thinking display, auth -- all present. Gaps are artifacts, voice,
+TTS, sharing, mobile-optimized layout.
 
 ---
 
@@ -323,122 +325,136 @@ handler for slash command autocomplete.
 
 ---
 
-## Sprint 18 -- Voice + Multimodal Input
+## Sprint 18 -- Thinking Display + Workspace Tree + Preview Fix (COMPLETED)
 
-**Theme:** Input beyond the keyboard.
+**Theme:** Show the model's reasoning, improve workspace navigation, fix UX bug.
 
-**Why now:** Voice is a meaningful quality-of-life feature for longer sessions
-and is achievable with Whisper. Image input closes the last modality gap with
-Claude (Claude accepts image paste natively -- we do too, but only as
-file uploads, not clipboard screenshots into the conversation directly).
+**Why now:** Thinking/reasoning display was deferred twice (Sprint 16 → 17 → 18).
+Workspace tree view was the #1 community request (Issue #22). File preview
+staying open on directory navigation was a daily-driver annoyance.
 
 ### Track A: Bugs
-- Image paste currently requires a click-to-attach flow. Direct paste into the
-  message textarea should embed the image inline (as a preview chip) and queue
-  it for upload on Send. (Partially works -- clean up edge cases.)
-- Large image uploads (>5MB) time out the upload step silently.
+- **File preview auto-close.** When viewing a file in the right panel and
+  navigating directories (breadcrumbs, up button, folder clicks), the preview
+  stayed visible with stale content. Fix: extracted `clearPreview()` as a named
+  function in boot.js and call it from `loadDir()` in workspace.js.
 
 ### Track B: Features
-- **Voice input (Whisper):** A microphone icon in the composer. Hold to record,
-  release to transcribe via `POST /api/transcribe` (calls local Whisper or
-  OpenAI Whisper API). Transcribed text appears in the message input, editable
-  before send. Supports the full "voice -> text -> Hermes response" loop.
-- **TTS playback:** A speaker icon on assistant messages. Calls a TTS endpoint
-  (ElevenLabs or OpenAI TTS) and plays the audio. Toggle per-message. Optional
-  auto-play mode in settings.
-- **Vision input improvements:** Paste a screenshot directly from clipboard into
-  the conversation (not just the tray). Shows as an inline preview chip with
-  the image thumbnail. On Send, uploads and includes in the message.
+- **Thinking/reasoning display.** Assistant messages with structured content
+  arrays containing `type:'thinking'` or `type:'reasoning'` blocks now render
+  as collapsible gold-themed cards above the response text. Collapsed by
+  default, click header to expand. Works with Claude extended thinking and
+  o3 reasoning tokens when preserved in the message array.
+- **Workspace tree view (Issue #22).** Directories expand/collapse in-place
+  with toggle arrows. Single-click toggles, double-click navigates (breadcrumb
+  view). Subdirectory contents fetched lazily and cached in `S._dirCache`.
+  Nesting depth shown via indentation. Empty directories show "(empty)".
 
-### Track C: Architecture
-- Audio pipeline: `POST /api/transcribe` streams audio bytes, returns transcript.
-  `GET /api/tts?text=...` returns audio/mpeg. Both use lazy import of Whisper
-  and TTS libraries to keep cold start fast.
-
-**Tests:** ~12 new. Total: ~271.
-**Hermes CLI parity impact:** Medium (voice not in CLI, but adds capability)
-**Claude parity impact:** High (Claude has native voice mode)
+**Tests:** 0 new (pure CSS/DOM changes). Total: 318.
+**Hermes CLI parity impact:** Low
+**Claude parity impact:** High (reasoning display matches Claude's UI)
 
 ---
 
-## Sprint 18 -- Subagent Visibility + Agentic Transparency
+## Sprint 19 -- Auth + Security Hardening (COMPLETED)
 
-**Theme:** Watch Hermes think, not just respond.
+**Theme:** Make this safe to leave running beyond localhost.
 
-**Why now:** When Hermes delegates to subagents (delegate_task, spawns parallel
-workstreams), the UI shows nothing. On long multi-agent tasks you have no idea
-what's happening. This is the last major "CLI feels better" gap for power users.
+**Why now:** Issue #23 requested authentication. Auth is the last production
+hardening feature before the app is safe to expose to a network.
 
 ### Track A: Bugs
-- Tool cards for delegate_task show no information about what the subagent was
-  asked to do or what it returned.
-- The activity bar text truncates at 55 chars -- tool previews for long terminal
-  commands show nothing useful.
+- **No request size limit.** POST bodies were unbounded (DoS risk). Added 20MB
+  cap in `read_body()`.
 
 ### Track B: Features
-- **Subagent delegation cards:** When `delegate_task` fires, show an expandable
-  card with the subagent's goal, status (pending/running/done), and result
-  summary. Multiple subagents from one call appear as a card group. Uses the
-  existing tool card infrastructure.
-- **Background task monitor:** A "Tasks" indicator in the topbar (separate from
-  the cron Tasks panel). Shows count of active agent threads. Click opens a
-  popover listing all in-flight streams with session names and elapsed times.
-  Cancel any individual thread. This is the full job queue visibility the CLI
-  implicitly has via `ps aux`.
-- **Thinking/reasoning display:** When the model emits reasoning tokens (o3,
-  Claude extended thinking), show them in a collapsible "Reasoning" card above
-  the response. Collapsed by default. This matches Claude's reasoning display.
+- **Password authentication (Issue #23).** Off by default — zero friction for
+  localhost. Enable via `HERMES_WEBUI_PASSWORD` env var or Settings panel.
+  Password-only (no username — single-user app). Signed HMAC HTTP-only cookie
+  with 24h TTL. Minimal dark-themed login page at `/login`. API calls without
+  auth return 401; page loads redirect to `/login`. Settings panel gains
+  "Access Password" field and "Sign Out" button.
+- **Security headers.** All responses now include `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
 
 ### Track C: Architecture
-- Task registry: extend STREAMS to include session name, start time, and task
-  description. New `GET /api/tasks/active` endpoint returns all running streams
-  with metadata.
+- New `api/auth.py` module: password hashing (SHA-256 + STATE_DIR salt), signed
+  session cookies, auth middleware, public path allowlist.
+- Auth check in `server.py` do_GET/do_POST before routing.
+- `password_hash` added to `_SETTINGS_DEFAULTS` in config.py.
+- `_set_password` special field in save_settings for secure password updates.
 
-**Tests:** ~14 new. Total: ~285.
-**Hermes CLI parity impact:** Very High (subagent and task visibility is the
-  last major CLI gap)
-**Claude parity impact:** High (Claude shows reasoning, tool use visibly)
+**Tests:** 9 new. Total: 327.
+**Hermes CLI parity impact:** Low (CLI has no auth concerns)
+**Claude parity impact:** High (Claude is authenticated)
 
 ---
 
-## Sprint 19 -- Auth, HTTPS, and Production Hardening
+## Sprint 20 -- Voice + TTS (PLANNED)
 
-**Theme:** Make this safe to leave running.
+**Theme:** Input and output beyond the keyboard.
 
-**Why now:** Everything else is done. This is the sprint you run when you want
-to expose the UI beyond localhost -- to a team, a mobile device, or a public
-address.
-
-### Track A: Bugs
-- Server has no request size limit on non-upload endpoints (potential DoS).
-- Session JSON files have no size cap (a runaway agent could write GBs).
+**Why now:** Voice works in the Hermes CLI. Mirror that capability in the web UI.
+TTS playback makes long responses more accessible. Both are achievable with
+existing Whisper and TTS APIs.
 
 ### Track B: Features
-- **Password authentication:** A login page with a configurable password
-  (HERMES_WEBUI_PASSWORD env var). Signed cookie session (24h expiry).
-  Single-user model -- no accounts, no registration.
-- **HTTPS / reverse proxy guide:** A one-page `DEPLOY.md` with instructions
-  for running behind nginx + Let's Encrypt on a VPS. Configuration snippets
-  for systemd service, nginx config, certbot.
-- **Mobile responsive layout:** Collapsible sidebar (hamburger). Touch-friendly
-  session list (swipe to delete, tap to navigate). Composer expands on focus.
-  Right panel hidden by default on mobile, accessible via a Files tab.
-- **Rate limiting:** Simple per-IP token bucket on the chat/start endpoint
-  (configurable, default 10 req/min) to prevent accidental hammering.
+- **Voice input (Whisper).** Microphone icon in composer. Hold to record,
+  release to transcribe. Transcribed text editable before send.
+- **TTS playback.** Speaker icon on assistant messages. Audio playback via
+  OpenAI TTS or ElevenLabs API. Optional auto-play in settings.
 
-### Track C: Architecture
-- Helmet headers: X-Content-Type-Options, X-Frame-Options, HSTS (when served
-  over HTTPS). Simple middleware in the Handler.
+---
 
-**Tests:** ~12 new. Total: ~297.
-**Hermes CLI parity impact:** Low (CLI has no auth/HTTPS concerns)
-**Claude parity impact:** Very High (Claude is authenticated, HTTPS only)
+## Sprint 21 -- Mobile Responsive (PLANNED)
+
+**Theme:** A genuinely good mobile experience, not just responsive CSS.
+
+### Track B: Features
+- **Collapsible sidebar.** Hamburger menu replaces the always-visible sidebar.
+- **Touch-friendly session list.** Tap to navigate, swipe gestures.
+- **Right panel as tab.** Files panel hidden by default, accessible via tab.
+- **Composer focus behavior.** Expands on focus, keyboard-aware.
+- Consider a separate mobile-optimized layout rather than just media queries.
+
+---
+
+## Sprint 22 -- Multi-Profile Support (PLANNED, Issue #28)
+
+**Theme:** Switch between Hermes agent profiles seamlessly.
+
+### Track B: Features
+- **Profile picker.** Sidebar or topbar dropdown to switch profiles.
+- **Per-profile config.** Each profile has its own skills, memory, config.yaml.
+- **Seamless switching.** No restart required.
+
+---
+
+## Sprint 23 -- Desktop Application (PLANNED)
+
+**Theme:** Native desktop experience.
+
+### Track B: Features
+- **Electron or Tauri wrapper.** Native window, menu bar, notifications.
+- **Auto-start option.** Launch on login.
+- **Packaged distribution.** .dmg (macOS), .exe (Windows).
+
+---
+
+## Sprint 24 -- Extended Command Support (PLANNED)
+
+**Theme:** Deeper slash command and skill integration.
+
+### Track B: Features
+- **Skill-aware autocomplete.** `/skill-name` triggers installed skills.
+- **Command chaining.** Compose multi-step commands.
+- **Agent tool exposure.** Surface agent capabilities as slash commands.
 
 ---
 
 ## Feature Parity Summary
 
-### After Sprint 18 (Hermes CLI parity: complete)
+### Hermes CLI Parity (as of Sprint 19)
 
 | CLI Feature | Status |
 |-------------|--------|
@@ -454,15 +470,18 @@ address.
 | Workspace switching | Done (v0.7) |
 | Model selection | Done (v0.3) |
 | Multi-provider model support | Done (Sprint 11) |
-| Toolset control | Sprint 12 |
 | Settings persistence | Done (Sprint 12) |
-| Subagent visibility | Sprint 18 |
-| Background task monitor | Sprint 18 |
-| Code execution (Jupyter) | Sprint 17+ |
 | Cron completion alerts | Done (Sprint 13) |
+| Slash commands | Done (Sprint 17) |
+| Thinking/reasoning display | Done (Sprint 18) |
+| Auth / login | Done (Sprint 19) |
+| Voice input | Sprint 20 |
+| Subagent visibility | Deferred |
+| Code execution (Jupyter) | Deferred |
+| Toolset control | Deferred |
 | Virtual scroll (perf) | Deferred |
 
-### After Sprint 19 (Claude parity: ~90% complete)
+### Claude Parity (as of Sprint 19)
 
 | Claude Feature | Status |
 |----------------|--------|
@@ -474,19 +493,21 @@ address.
 | Tool use visibility | Done (v0.11) |
 | Edit/regenerate messages | Done (v0.10) |
 | Session management | Done (v0.6) |
-| Artifacts (HTML/SVG preview) | Sprint 17+ |
-| Code execution inline | Sprint 17+ |
 | Mermaid diagrams | Done (Sprint 14) |
 | Projects / folders | Done (Sprint 15) |
 | Pinned/starred sessions | Done (Sprint 12) |
-| Reasoning display | Sprint 18 |
-| Voice input | Sprint 17 |
-| TTS playback | Sprint 17 |
 | Notifications | Done (Sprint 13) |
 | Settings panel | Done (Sprint 12) |
-| Auth / login | Sprint 19 |
-| HTTPS | Sprint 19 |
-| Mobile layout | Done (v0.16.1) |
+| Reasoning display | Done (Sprint 18) |
+| Auth / login | Done (Sprint 19) |
+| Mobile layout (basic) | Done (v0.16.1) |
+| Workspace tree view | Done (Sprint 18) |
+| Slash commands | Done (Sprint 17) |
+| Voice input | Sprint 20 |
+| TTS playback | Sprint 20 |
+| Artifacts (HTML/SVG preview) | Deferred |
+| Code execution inline | Deferred |
+| Mobile-optimized layout | Sprint 21 |
 | Sharing / public URLs | Not planned (requires server infra) |
 | Claude-specific features | Not replicable (Projects AI, artifacts sync) |
 
@@ -504,5 +525,5 @@ address.
 ---
 
 *Last updated: April 3, 2026*
-*Current version: v0.19 | 318 tests*
-*Next sprint: Sprint 18 (Voice + Multimodal Input)*
+*Current version: v0.21 | 327 tests (304 passing)*
+*Next sprint: Sprint 20 (Voice + TTS)*
