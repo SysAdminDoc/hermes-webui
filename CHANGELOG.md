@@ -5,6 +5,31 @@
 
 ---
 
+## [v0.18.1] Safe HTML Rendering + Sprint 16 Tests
+*April 2, 2026 | 289 tests*
+
+### Features
+- **Safe HTML rendering in AI responses.** AI models sometimes emit HTML tags
+  (`<strong>`, `<em>`, `<code>`, `<br>`) in their responses. Previously these
+  showed as literal escaped text. A new pre-pass in `renderMd()` converts safe
+  HTML tags to markdown equivalents before the pipeline runs. Code blocks and
+  backtick spans are stashed first so their content is never touched.
+- **`inlineMd()` helper.** New function for processing inline formatting inside
+  list items, blockquotes, and headings. The old code called `esc()` directly,
+  which escaped tags that had already been converted by the pre-pass.
+- **Safety net.** After the full pipeline, any HTML tags not in the output
+  allowlist (`SAFE_TAGS`) are escaped via `esc()`. XSS fully blocked -- 7
+  attack vectors tested.
+- **Active session gold style.** Active session uses gold/amber (`#e8a030`)
+  instead of blue, matching the logo gradient. Project border-left skipped
+  when active (gold always wins).
+
+### Tests
+- **74 new tests** in `test_sprint16.py`: static analysis (6), behavioral (10),
+  exact regression (1), XSS security (7), edge cases (51). Total: 289 passed.
+
+---
+
 ## [v0.18] Sprint 16 -- Session Sidebar Visual Polish
 *April 2, 2026 | 237 tests*
 
@@ -555,4 +580,4 @@ Three-panel layout: sessions sidebar, chat area, workspace panel.
 
 ---
 
-*Last updated: v0.18, April 2, 2026 | Tests: 237*
+*Last updated: v0.18.1, April 2, 2026 | Tests: 289*

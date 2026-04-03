@@ -1,6 +1,6 @@
 # Hermes Web UI -- Forward Sprint Plan
 
-> Current state: v0.18 | 237 tests | Daily driver ready
+> Current state: v0.18.1 | 289 tests | Daily driver ready
 > This document plans the path from here to two targets:
 >
 > Target A: 1:1 feature parity with the Hermes CLI (everything you can do from the
@@ -265,7 +265,7 @@ inconsistently across platforms. These were the most common visual complaints.
 - Thinking/reasoning display for extended-thinking models
 - Slash command autocomplete popup
 
-**Tests:** 0 new (pure CSS/DOM changes). Total: 237.
+**Tests:** 74 new (test_sprint16.py: safe HTML rendering, XSS security, sidebar polish). Total: 289.
 **Hermes CLI parity impact:** Low
 **Claude parity impact:** Medium (sidebar polish matches Claude's quality bar)
 
@@ -452,5 +452,5 @@ address.
 ---
 
 *Last updated: April 2, 2026*
-*Current version: v0.18 | 237 tests*
+*Current version: v0.18.1 | 289 tests*
 *Next sprint: Sprint 17 (Voice + Multimodal Input)*

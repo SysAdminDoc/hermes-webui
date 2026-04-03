@@ -3,8 +3,8 @@
 > Goal: Full 1:1 parity with the Hermes CLI experience via a clean dark web UI.
 > Everything you can do from the CLI terminal, you can do from this UI.
 >
-> Last updated: Sprint 16 / v0.18 (April 2, 2026)
-> Tests: 237 passing
+> Last updated: Sprint 16 / v0.18.1 (April 2, 2026)
+> Tests: 289 passing
 > Source: <repo>/
 
 ---
@@ -43,7 +43,7 @@
 | Python server | <repo>/server.py (~76 lines) + api/ modules (~2145 lines) | Thin shell + business logic in api/ |
 | HTML template | <repo>/static/index.html | Served from disk |
 | CSS | <repo>/static/style.css (~560 lines) | Served from disk |
-| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot}.js | 6 modules, ~2750 lines total |
+| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot}.js | 6 modules, ~2786 lines total |
 | Runtime state | ~/.hermes/webui-mvp/sessions/ | Session JSON files |
 | Test server | Port 8788, state dir ~/.hermes/webui-mvp-test/ | Isolated, wiped per run |
 | Production server | Port 8787 | SSH tunnel from Mac |
