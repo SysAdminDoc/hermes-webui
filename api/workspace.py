@@ -53,17 +53,31 @@ def _last_workspace_file() -> Path:
 def _profile_default_workspace() -> str:
     """Read the profile's default workspace from its config.yaml.
 
+    Checks keys in priority order:
+      1. 'workspace'         — explicit webui workspace key
+      2. 'default_workspace' — alternate explicit key
+      3. 'terminal.cwd'      — hermes-agent terminal working dir (most common)
+
     Falls back to the boot-time DEFAULT_WORKSPACE constant.
     """
     try:
-        from api.profiles import get_active_hermes_home
         from api.config import get_config
         cfg = get_config()
-        ws = cfg.get('default_workspace')
-        if ws:
-            p = Path(ws).expanduser().resolve()
-            if p.is_dir():
-                return str(p)
+        # Explicit webui workspace keys first
+        for key in ('workspace', 'default_workspace'):
+            ws = cfg.get(key)
+            if ws:
+                p = Path(str(ws)).expanduser().resolve()
+                if p.is_dir():
+                    return str(p)
+        # Fall through to terminal.cwd — the agent's configured working directory
+        terminal_cfg = cfg.get('terminal', {})
+        if isinstance(terminal_cfg, dict):
+            cwd = terminal_cfg.get('cwd', '')
+            if cwd and str(cwd) not in ('.', ''):
+                p = Path(str(cwd)).expanduser().resolve()
+                if p.is_dir():
+                    return str(p)
     except (ImportError, Exception):
         pass
     return str(_BOOT_DEFAULT_WORKSPACE)
