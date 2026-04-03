@@ -1,6 +1,6 @@
 # Hermes Web UI -- Forward Sprint Plan
 
-> Current state: v0.18.1 | 289 tests | Daily driver ready
+> Current state: v0.19 | 294 tests | Daily driver ready
 > This document plans the path from here to two targets:
 >
 > Target A: 1:1 feature parity with the Hermes CLI (everything you can do from the
@@ -271,7 +271,59 @@ inconsistently across platforms. These were the most common visual complaints.
 
 ---
 
-## Sprint 17 -- Voice + Multimodal Input
+## Sprint 17 -- Workspace Polish + Slash Commands + Settings (COMPLETED)
+
+**Theme:** Workspace polish, slash commands, and composer settings.
+
+**Why now:** Three things converge: @nothingmn filed Issue #22 requesting a
+tree/accordion workspace view (breadcrumb navigation is the foundation for
+that), slash commands were deferred from Sprint 16, and Issue #26 (send key
+personalization) fits naturally since we are already touching the keydown
+handler for slash command autocomplete.
+
+### Track A: Workspace Breadcrumb Navigation
+- **Breadcrumb path bar.** When users click into subdirectories, a breadcrumb
+  bar appears showing the path (e.g. `~ / src / components`) with clickable
+  segments to navigate back. Hidden at root level for a clean UI.
+- **Up button.** Arrow-up button in the panel header navigates to the parent
+  directory. Hidden when already at workspace root.
+- **Current directory tracking.** `S.currentDir` state property tracks the
+  active directory. File operations (rename, delete, new file, new folder)
+  stay in the current directory instead of jumping back to root.
+- **New file/folder in subdirectories.** Creating files or folders now respects
+  the current directory, creating them in the viewed subdirectory.
+
+### Track B: Slash Commands Foundation
+- **commands.js module.** New 7th JS module with command registry, parser,
+  autocomplete dropdown, and built-in command handlers.
+- **Built-in commands:** `/help` (list commands), `/clear` (clear conversation),
+  `/model <name>` (switch model with fuzzy match), `/workspace <name>` (switch
+  workspace), `/new` (start new session).
+- **Autocomplete dropdown.** Typing `/` in the composer shows a filtered
+  dropdown. Arrow keys navigate, Tab/Enter select, Escape closes. Positioned
+  above the composer using the workspace dropdown CSS pattern.
+- **Transparent pass-through.** Unrecognized `/` commands pass through to the
+  agent normally (not intercepted).
+
+### Track C: Send Key Setting (Issue #26)
+- **`send_key` setting.** New setting in Settings panel: "Enter" (default) or
+  "Ctrl+Enter". Persisted to `settings.json`. Loaded on boot.
+- **Keydown handler rewrite.** Combined handler for autocomplete navigation
+  and send key preference. When `ctrl+enter` is selected, plain Enter inserts
+  a newline and Ctrl/Cmd+Enter sends.
+
+### Deferred to Sprint 18
+- Thinking/reasoning display for extended-thinking models
+- Voice input via Whisper
+- Workspace tree/accordion view (full implementation of Issue #22)
+
+**Tests:** 5 new. Total: 294.
+**Hermes CLI parity impact:** Low (slash commands add convenience)
+**Claude parity impact:** Medium (workspace nav, slash commands match Claude UX)
+
+---
+
+## Sprint 18 -- Voice + Multimodal Input
 
 **Theme:** Input beyond the keyboard.
 
@@ -451,6 +503,6 @@ address.
 
 ---
 
-*Last updated: April 2, 2026*
-*Current version: v0.18.1 | 289 tests*
-*Next sprint: Sprint 17 (Voice + Multimodal Input)*
+*Last updated: April 3, 2026*
+*Current version: v0.19 | 294 tests*
+*Next sprint: Sprint 18 (Voice + Multimodal Input)*

@@ -1,4 +1,4 @@
-const S={session:null,messages:[],entries:[],busy:false,pendingFiles:[],toolCalls:[],activeStreamId:null};
+const S={session:null,messages:[],entries:[],busy:false,pendingFiles:[],toolCalls:[],activeStreamId:null,currentDir:'.'};
 const INFLIGHT={};  // keyed by session_id while request in-flight
 const MSG_QUEUE=[];  // messages queued while a request is in-flight
 const $=id=>document.getElementById(id);
@@ -705,6 +705,45 @@ function fileIcon(name, type){
   return '📄';
 }
 
+function renderBreadcrumb(){
+  const bar=$('breadcrumbBar');
+  const upBtn=$('btnUpDir');
+  if(!bar)return;
+  if(S.currentDir==='.'){
+    bar.style.display='none';
+    if(upBtn)upBtn.style.display='none';
+    return;
+  }
+  bar.style.display='flex';
+  if(upBtn)upBtn.style.display='';
+  bar.innerHTML='';
+  // Root segment
+  const root=document.createElement('span');
+  root.className='breadcrumb-seg breadcrumb-link';
+  root.textContent='~';
+  root.onclick=()=>loadDir('.');
+  bar.appendChild(root);
+  // Path segments
+  const parts=S.currentDir.split('/');
+  let accumulated='';
+  for(let i=0;i<parts.length;i++){
+    const sep=document.createElement('span');
+    sep.className='breadcrumb-sep';sep.textContent='/';
+    bar.appendChild(sep);
+    accumulated+=(accumulated?'/':'')+parts[i];
+    const seg=document.createElement('span');
+    seg.textContent=parts[i];
+    if(i<parts.length-1){
+      seg.className='breadcrumb-seg breadcrumb-link';
+      const target=accumulated;
+      seg.onclick=()=>loadDir(target);
+    } else {
+      seg.className='breadcrumb-seg breadcrumb-current';
+    }
+    bar.appendChild(seg);
+  }
+}
+
 function renderFileTree(){
   const box=$('fileTree');box.innerHTML='';
   for(const item of S.entries){
@@ -734,7 +773,7 @@ function renderFileTree(){
                 session_id:S.session.session_id,path:item.path,new_name:newName
               })});
               showToast(`Renamed to ${newName}`);
-              await loadDir('.');
+              await loadDir(S.currentDir);
             }catch(err){showToast('Rename failed: '+err.message);}
           }
         }
@@ -779,7 +818,7 @@ async function deleteWorkspaceFile(relPath, name){
     showToast(`Deleted ${name}`);
     // Close preview if we just deleted the viewed file
     if($('previewPathText').textContent===relPath)$('btnClearPreview').onclick();
-    await loadDir('.');
+    await loadDir(S.currentDir);
   }catch(e){setStatus('Delete failed: '+e.message);}
 }
 
@@ -787,12 +826,12 @@ async function promptNewFile(){
   if(!S.session)return;
   const name=prompt('New file name (e.g. notes.md):','');
   if(!name||!name.trim())return;
+  const relPath=S.currentDir==='.'?name.trim():(S.currentDir+'/'+name.trim());
   try{
-    await api('/api/file/create',{method:'POST',body:JSON.stringify({session_id:S.session.session_id,path:name.trim(),content:''})});
+    await api('/api/file/create',{method:'POST',body:JSON.stringify({session_id:S.session.session_id,path:relPath,content:''})});
     showToast(`Created ${name.trim()}`);
-    await loadDir('.');
-    // Open the new file immediately
-    openFile(name.trim());
+    await loadDir(S.currentDir);
+    openFile(relPath);
   }catch(e){setStatus('Create failed: '+e.message);}
 }
 
@@ -800,10 +839,11 @@ async function promptNewFolder(){
   if(!S.session)return;
   const name=prompt('New folder name:','');
   if(!name||!name.trim())return;
+  const relPath=S.currentDir==='.'?name.trim():(S.currentDir+'/'+name.trim());
   try{
-    await api('/api/file/create-dir',{method:'POST',body:JSON.stringify({session_id:S.session.session_id,path:name.trim()})});
+    await api('/api/file/create-dir',{method:'POST',body:JSON.stringify({session_id:S.session.session_id,path:relPath})});
     showToast(`Created folder ${name.trim()}`);
-    await loadDir('.');
+    await loadDir(S.currentDir);
   }catch(e){setStatus('Create folder failed: '+e.message);}
 }
 

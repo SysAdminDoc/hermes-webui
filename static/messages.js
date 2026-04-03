@@ -1,6 +1,10 @@
 async function send(){
   const text=$('msg').value.trim();
   if(!text&&!S.pendingFiles.length)return;
+  // Slash command intercept -- local commands handled without agent round-trip
+  if(text.startsWith('/')&&!S.pendingFiles.length&&executeCommand(text)){
+    $('msg').value='';autoResize();hideCmdDropdown();return;
+  }
   // Don't send while an inline message edit is active
   if(document.querySelector('.msg-edit-area'))return;
   // If busy, queue the message instead of dropping it

@@ -206,6 +206,7 @@
       </div>
     </div>
     <div class="composer-wrap" id="composerWrap">
+      <div class="cmd-dropdown" id="cmdDropdown"></div>
       <div class="composer-box" id="composerBox">
         <div class="drop-hint" id="dropHint">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -236,12 +237,14 @@
     <div class="panel-header">
       <span>Workspace</span>
       <div class="panel-actions">
+        <button class="panel-icon-btn" id="btnUpDir" title="Parent directory" onclick="navigateUp()" style="display:none">&#8593;</button>
         <button class="panel-icon-btn" id="btnNewFile" title="New file" onclick="promptNewFile()">&#43;</button>
         <button class="panel-icon-btn" id="btnNewFolder" title="New folder" onclick="promptNewFolder()">&#128193;</button>
-        <button class="panel-icon-btn" id="btnRefreshPanel" title="Refresh" onclick="if(S.session)loadDir('.')">&#8635;</button>
+        <button class="panel-icon-btn" id="btnRefreshPanel" title="Refresh" onclick="if(S.session)loadDir(S.currentDir)">&#8635;</button>
         <button class="panel-icon-btn close-preview" id="btnClearPreview" title="Close preview">&#10005;</button>
       </div>
     </div>
+    <div class="breadcrumb-bar" id="breadcrumbBar" style="display:none"></div>
     <div class="file-tree" id="fileTree"></div>
     <div class="preview-area" id="previewArea">
       <div class="preview-path" id="previewPath">
@@ -272,6 +275,13 @@
         <label for="settingsWorkspace">Default Workspace</label>
         <select id="settingsWorkspace" style="width:100%;padding:8px;background:var(--code-bg);color:var(--text);border:1px solid var(--border2);border-radius:6px"></select>
       </div>
+      <div class="settings-field">
+        <label for="settingsSendKey">Send Key</label>
+        <select id="settingsSendKey" style="width:100%;padding:8px;background:var(--code-bg);color:var(--text);border:1px solid var(--border2);border-radius:6px">
+          <option value="enter">Enter (Shift+Enter for newline)</option>
+          <option value="ctrl+enter">Ctrl+Enter (Enter for newline)</option>
+        </select>
+      </div>
       <button class="sm-btn" onclick="saveSettings()" style="margin-top:12px;width:100%;padding:8px;font-weight:600">Save Settings</button>
     </div>
   </div>
@@ -280,6 +290,7 @@
 <script src="/static/ui.js"></script>
 <script src="/static/workspace.js"></script>
 <script src="/static/sessions.js"></script>
+<script src="/static/commands.js"></script>
 <script src="/static/messages.js"></script>
 <script src="/static/panels.js"></script>
 <script src="/static/boot.js"></script>

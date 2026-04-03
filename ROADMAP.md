@@ -3,8 +3,8 @@
 > Goal: Full 1:1 parity with the Hermes CLI experience via a clean dark web UI.
 > Everything you can do from the CLI terminal, you can do from this UI.
 >
-> Last updated: Sprint 16 / v0.18.1 (April 2, 2026)
-> Tests: 289 passing
+> Last updated: Sprint 17 / v0.19 (April 3, 2026)
+> Tests: 294 passing
 > Source: <repo>/
 
 ---
@@ -33,6 +33,7 @@
 | Sprint 14 | Visual polish + workspace ops | Mermaid diagrams, message timestamps, file rename, folder create, session tags, session archive | 233 |
 | Sprint 15 | Session projects + code copy | Session projects/folders, code block copy button, tool card expand/collapse toggle | 237 |
 | Sprint 16 | Session sidebar visual polish | SVG action icons, overlay hover actions, pin indicator, project border, custom model discovery, GLM-5.1 | 237 |
+| Sprint 17 | Workspace polish + slash commands + settings | Breadcrumb navigation, slash command autocomplete, send key setting (#26) | 294 |
 
 ---
 
@@ -43,7 +44,7 @@
 | Python server | <repo>/server.py (~76 lines) + api/ modules (~2145 lines) | Thin shell + business logic in api/ |
 | HTML template | <repo>/static/index.html | Served from disk |
 | CSS | <repo>/static/style.css (~560 lines) | Served from disk |
-| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot}.js | 6 modules, ~2786 lines total |
+| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot,commands}.js | 7 modules, ~2990 lines total |
 | Runtime state | ~/.hermes/webui-mvp/sessions/ | Session JSON files |
 | Test server | Port 8788, state dir ~/.hermes/webui-mvp-test/ | Isolated, wiped per run |
 | Production server | Port 8787 | SSH tunnel from Mac |
@@ -331,4 +332,5 @@ Community-requested enhancements tracked from GitHub issues.
 | Docker container | #7 | Docker Compose setup with separate hermes-agent and hermes-webui containers, multi-arch (amd64 + arm64), volume mounts for config. | Medium-High |
 | Authentication | #23 | Password gate via `HERMES_WEBUI_PASSWORD` env var, login page, signed cookie. Already planned in Sprint 7.1. | Low-Medium |
 | Send key / personalization | #26 | Toggle send key (Enter vs Ctrl/Cmd+Enter) and queue vs interrupt mode as global settings. | Low |
+| Multi-profile support | #28 | Profile management UI: create, delete, switch, configure agent profiles. | Medium |
 | Mobile responsive UI | #21 | Hamburger menu, slide-out sidebar drawer, touch-friendly controls. Already planned in Sprint 7.3. | Medium-High |
