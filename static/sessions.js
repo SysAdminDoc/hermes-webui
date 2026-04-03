@@ -69,6 +69,7 @@ let _renamingSid = null;  // session_id currently being renamed (blocks list re-
 let _showArchived = false;  // toggle to show archived sessions
 let _allProjects = [];  // cached project list
 let _activeProject = null;  // project_id filter (null = show all)
+let _showAllProfiles = false;  // false = filter to active profile only
 
 async function renderSessionList(){
   try{
@@ -111,8 +112,10 @@ function renderSessionListFromCache(){
   // Merge content matches (deduped): content matches appended after title matches
   const titleIds=new Set(titleMatches.map(s=>s.session_id));
   const allMatched=q?[...titleMatches,..._contentSearchResults.filter(s=>!titleIds.has(s.session_id))]:titleMatches;
+  // Filter by active profile (unless "All profiles" is toggled on)
+  const profileFiltered=_showAllProfiles?allMatched:allMatched.filter(s=>!s.profile||s.profile===S.activeProfile);
   // Filter by active project
-  const projectFiltered=_activeProject?allMatched.filter(s=>s.project_id===_activeProject):allMatched;
+  const projectFiltered=_activeProject?profileFiltered.filter(s=>s.project_id===_activeProject):profileFiltered;
   // Filter archived unless toggle is on
   const sessions=_showArchived?projectFiltered:projectFiltered.filter(s=>!s.archived);
   const archivedCount=projectFiltered.filter(s=>s.archived).length;
@@ -153,6 +156,21 @@ function renderSessionListFromCache(){
     addBtn.onclick=(e)=>{e.stopPropagation();_startProjectCreate(bar,addBtn);};
     bar.appendChild(addBtn);
     list.appendChild(bar);
+  }
+  // Profile filter toggle (show sessions from other profiles)
+  const otherProfileCount=allMatched.filter(s=>s.profile&&s.profile!==S.activeProfile).length;
+  if(otherProfileCount>0&&!_showAllProfiles){
+    const pfToggle=document.createElement('div');
+    pfToggle.style.cssText='font-size:10px;padding:4px 10px;color:var(--muted);cursor:pointer;text-align:center;opacity:.7;';
+    pfToggle.textContent='Show '+otherProfileCount+' from other profiles';
+    pfToggle.onclick=()=>{_showAllProfiles=true;renderSessionListFromCache();};
+    list.appendChild(pfToggle);
+  } else if(_showAllProfiles&&otherProfileCount>0){
+    const pfToggle=document.createElement('div');
+    pfToggle.style.cssText='font-size:10px;padding:4px 10px;color:var(--muted);cursor:pointer;text-align:center;opacity:.7;';
+    pfToggle.textContent='Show active profile only';
+    pfToggle.onclick=()=>{_showAllProfiles=false;renderSessionListFromCache();};
+    list.appendChild(pfToggle);
   }
   // Show/hide archived toggle if there are archived sessions
   if(archivedCount>0){
