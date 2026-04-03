@@ -148,7 +148,23 @@ def switch_profile(name: str) -> dict:
     # Reload config.yaml from the new profile
     reload_config()
 
-    return {'profiles': list_profiles_api(), 'active': name}
+    # Return profile-specific defaults so frontend can apply them
+    from api.workspace import get_last_workspace, _profile_default_workspace
+    from api.config import get_config
+    cfg = get_config()
+    model_cfg = cfg.get('model', {})
+    default_model = None
+    if isinstance(model_cfg, str):
+        default_model = model_cfg
+    elif isinstance(model_cfg, dict):
+        default_model = model_cfg.get('default')
+
+    return {
+        'profiles': list_profiles_api(),
+        'active': name,
+        'default_model': default_model,
+        'default_workspace': get_last_workspace(),
+    }
 
 
 def list_profiles_api() -> list:

@@ -5,6 +5,42 @@
 
 ---
 
+## [v0.25] Sprint 23 -- Profile/Workspace/Model Coherence
+*April 3, 2026 | 423 tests*
+
+### Features
+- **Profile-local workspace storage.** Each named profile now stores its own
+  `workspaces.json` and `last_workspace.txt` under `{profile_home}/webui_state/`.
+  Default profile continues using the global STATE_DIR for backward compat.
+- **Profile switch returns defaults.** `POST /api/profile/switch` response now
+  includes `default_model` and `default_workspace` from the new profile's
+  config.yaml, enabling one-round-trip state sync.
+- **Session profile filter.** Session sidebar filters to the active profile by
+  default. "Show N from other profiles" toggle reveals sessions from all
+  profiles, modeled on the existing archived toggle. Resets on profile switch.
+
+### Bug Fixes
+- **Model picker ignores profile on switch.** `switchToProfile()` now clears
+  the `hermes-webui-model` localStorage key so the profile's default model
+  applies instead of a stale preference from another profile.
+- **Workspace list was global.** Switching profiles no longer shows the wrong
+  profile's workspaces.
+- **`DEFAULT_WORKSPACE` was a boot-time singleton.** Now resolved dynamically
+  through `_profile_default_workspace()`.
+- **Session list showed all profiles.** Now filtered to active profile.
+- **`switchToProfile()` didn't refresh workspaces or sessions.** Now refreshes
+  workspace list, session list, and resets profile filter on switch.
+
+### Architecture
+- `api/workspace.py` rewritten with profile-aware path resolution.
+- `api/profiles.py`: `switch_profile()` returns `default_model` and
+  `default_workspace`.
+- `static/sessions.js`: Profile filter with toggle UI.
+- `static/panels.js`: Full cascade refresh on profile switch.
+- 8 new tests in `test_sprint23.py`.
+
+---
+
 ## [v0.24] Sprint 22 -- Multi-Profile Support (Issue #28)
 *April 3, 2026 | 415 tests*
 

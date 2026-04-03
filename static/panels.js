@@ -663,14 +663,36 @@ async function switchToProfile(name) {
   try {
     const data = await api('/api/profile/switch', { method: 'POST', body: JSON.stringify({ name }) });
     S.activeProfile = data.active || name;
-    syncTopbar();
-    // Refresh dependent panels
+    // Clear stale model pref so profile default applies
+    localStorage.removeItem('hermes-webui-model');
+    // Refresh model dropdown (profile may have different provider/models)
     _skillsData = null;
     await populateModelDropdown();
+    // Apply profile's default model if provided
+    if (data.default_model && $('modelSelect')) {
+      $('modelSelect').value = data.default_model;
+      if ($('modelSelect').value !== data.default_model) {
+        // Model not in list — add it
+        const opt = document.createElement('option');
+        opt.value = data.default_model;
+        opt.textContent = data.default_model.split('/').pop();
+        $('modelSelect').insertBefore(opt, $('modelSelect').firstChild);
+        $('modelSelect').value = data.default_model;
+      }
+    }
+    // Refresh workspace list (now profile-local)
+    _workspaceList = null;
+    await loadWorkspaceList();
+    // Reset profile filter and refresh session list
+    _showAllProfiles = false;
+    await renderSessionList();
+    syncTopbar();
+    // Refresh visible sidebar panels
     if (_currentPanel === 'skills') await loadSkills();
     if (_currentPanel === 'memory') await loadMemory();
     if (_currentPanel === 'tasks') await loadCrons();
     if (_currentPanel === 'profiles') await loadProfilesPanel();
+    if (_currentPanel === 'workspaces') await loadWorkspacesPanel();
     showToast('Switched to profile: ' + name);
   } catch (e) { showToast('Switch failed: ' + e.message); }
 }

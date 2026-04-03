@@ -511,7 +511,63 @@ single default profile, blocking multi-persona workflows.
 
 ---
 
-## Sprint 23 -- Desktop Application (PLANNED)
+## Sprint 23 -- Profile/Workspace/Model Coherence (COMPLETED)
+
+**Theme:** Make profiles, workspaces, models, and sessions coherent across
+profile switches.
+
+**Why now:** Sprint 22 added profile switching but five coherence bugs remained:
+the model picker ignored the profile's default, workspaces were a global file,
+DEFAULT_WORKSPACE was a startup singleton, the session list showed all profiles,
+and switchToProfile() didn't refresh workspaces or sessions.
+
+### Track A: Bugs
+- **Model picker ignores profile on switch.** `populateModelDropdown()` skipped
+  the profile's default model if `localStorage` had a saved preference. Fixed:
+  `switchToProfile()` now clears `hermes-webui-model` from localStorage and
+  applies the profile's default model from the switch response.
+- **Workspace list is a global file.** `workspaces.json` was process-global.
+  Fixed: workspace storage is now profile-local at `{profile_home}/webui_state/`.
+  Default profile uses global STATE_DIR for backward compatibility.
+- **`DEFAULT_WORKSPACE` is a startup singleton.** Frozen at boot. Fixed:
+  `get_last_workspace()` and `_profile_default_workspace()` now resolve
+  dynamically through the active profile's config.
+- **Session list shows all profiles.** Fixed: `renderSessionListFromCache()`
+  filters to `S.activeProfile` by default, with "Show N from other profiles"
+  toggle (modeled on the archived toggle).
+- **`switchToProfile()` doesn't refresh workspace list or sessions.** Fixed:
+  now calls `loadWorkspaceList()`, `renderSessionList()`, resets profile filter.
+
+### Track B: Features
+- **Profile-local workspace storage.** Each named profile stores its own
+  `workspaces.json` and `last_workspace.txt` under `{profile_home}/webui_state/`.
+  Falls back to global STATE_DIR for the default profile (preserves test
+  isolation and backward compat).
+- **Profile switch returns defaults.** `POST /api/profile/switch` response now
+  includes `default_model` and `default_workspace` so the frontend can apply
+  both in one round-trip.
+- **Session profile filter.** Session sidebar filters to active profile by
+  default. "Show N from other profiles" toggle reveals sessions from all
+  profiles. Resets on profile switch.
+
+### Track C: Architecture
+- `api/workspace.py`: Rewritten with `_profile_state_dir()`, `_workspaces_file()`,
+  `_last_workspace_file()`, `_profile_default_workspace()`. All lazy imports to
+  avoid circular deps.
+- `api/profiles.py`: `switch_profile()` returns `default_model` and
+  `default_workspace` from the new profile's config.yaml.
+- `static/panels.js`: `switchToProfile()` clears localStorage model key,
+  refreshes workspace list and session list, resets profile filter.
+- `static/sessions.js`: `_showAllProfiles` state variable, profile filter in
+  `renderSessionListFromCache()`, toggle UI.
+
+**Tests:** 8 new (test_sprint23.py). Total: 423.
+**Hermes CLI parity impact:** High (coherent profile behavior)
+**Claude parity impact:** Low
+
+---
+
+## Sprint 24 -- Desktop Application (PLANNED)
 
 **Theme:** Native desktop experience.
 
@@ -607,5 +663,5 @@ single default profile, blocking multi-persona workflows.
 ---
 
 *Last updated: April 3, 2026*
-*Current version: v0.24 | 415 tests*
-*Next sprint: Sprint 23 (Desktop Application)*
+*Current version: v0.25 | 423 tests*
+*Next sprint: Sprint 24 (Desktop Application)*
