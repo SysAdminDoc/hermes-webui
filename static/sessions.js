@@ -115,7 +115,9 @@ function renderSessionListFromCache(){
   const titleIds=new Set(titleMatches.map(s=>s.session_id));
   const allMatched=q?[...titleMatches,..._contentSearchResults.filter(s=>!titleIds.has(s.session_id))]:titleMatches;
   // Filter by active profile (unless "All profiles" is toggled on)
-  const profileFiltered=_showAllProfiles?allMatched:allMatched.filter(s=>!s.profile||s.profile===S.activeProfile);
+  // Server backfills profile='default' for legacy sessions, so every session has a profile.
+  // Show only sessions tagged to the active profile; 'All profiles' toggle overrides.
+  const profileFiltered=_showAllProfiles?allMatched:allMatched.filter(s=>s.profile===S.activeProfile);
   // Filter by active project
   const projectFiltered=_activeProject?profileFiltered.filter(s=>s.project_id===_activeProject):profileFiltered;
   // Filter archived unless toggle is on
