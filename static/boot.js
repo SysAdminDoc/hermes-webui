@@ -8,8 +8,81 @@ async function cancelStream(){
   }catch(e){setStatus('Cancel failed: '+e.message);}
 }
 
-$('btnSend').onclick=send;
+$('btnSend').onclick=()=>{if(window._micActive)_stopMic();send();};
 $('btnAttach').onclick=()=>$('fileInput').click();
+
+// ── Voice input (Web Speech API) ─────────────────────────────────────────
+(function(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition) return; // Browser unsupported — mic button stays hidden
+
+  const btn=$('btnMic');
+  const status=$('micStatus');
+  const ta=$('msg');
+  btn.style.display=''; // Show button — browser supports speech
+
+  const recognition=new SpeechRecognition();
+  recognition.continuous=false;
+  recognition.interimResults=true;
+  recognition.lang='en-US';
+
+  let _finalText='';
+
+  function _setRecording(on){
+    window._micActive=on;
+    btn.classList.toggle('recording',on);
+    status.style.display=on?'':'none';
+    if(!on) _finalText='';
+  }
+
+  recognition.onstart=()=>{ _finalText=''; };
+
+  recognition.onresult=(event)=>{
+    let interim='';
+    let final=_finalText;
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      const t=event.results[i][0].transcript;
+      if(event.results[i].isFinal){ final+=t; _finalText=final; }
+      else{ interim+=t; }
+    }
+    ta.value=final||interim;
+    autoResize();
+  };
+
+  recognition.onend=()=>{
+    _setRecording(false);
+    // Ensure textarea has the committed final text (handles auto-stop on silence)
+    if(_finalText) ta.value=_finalText;
+    autoResize();
+  };
+
+  recognition.onerror=(event)=>{
+    _setRecording(false);
+    const msgs={
+      'not-allowed':'Microphone access denied. Check browser permissions.',
+      'no-speech':'No speech detected. Try again.',
+      'network':'Speech recognition unavailable.',
+    };
+    showToast(msgs[event.error]||'Voice input error: '+event.error);
+  };
+
+  function _stopMic(){
+    if(window._micActive){ recognition.stop(); }
+  }
+  window._stopMic=_stopMic; // expose for send-guard above
+
+  btn.onclick=()=>{
+    if(window._micActive){
+      recognition.stop();
+      // _setRecording(false) will be called by onend
+    } else {
+      _finalText='';
+      recognition.start();
+      _setRecording(true);
+    }
+  };
+})();
+window._micActive=window._micActive||false;
 $('fileInput').onchange=e=>{addFiles(Array.from(e.target.files));e.target.value='';};
 $('btnNewChat').onclick=async()=>{await newSession();await renderSessionList();$('msg').focus();};
 $('btnDownload').onclick=()=>{
