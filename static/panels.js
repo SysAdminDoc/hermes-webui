@@ -660,35 +660,40 @@ document.addEventListener('click', e => {
 
 async function switchToProfile(name) {
   if (S.busy) { showToast('Cannot switch profiles while agent is running'); return; }
+
+  // Determine whether the current session has any messages.
+  // A session with messages is "in progress" and belongs to the current profile —
+  // we must not retag it.  We'll start a fresh session for the new profile instead.
+  const sessionInProgress = S.session && S.messages && S.messages.length > 0;
+
   try {
     const data = await api('/api/profile/switch', { method: 'POST', body: JSON.stringify({ name }) });
     S.activeProfile = data.active || name;
-    // Clear stale model pref so profile default applies
+
+    // ── Model ──────────────────────────────────────────────────────────────
     localStorage.removeItem('hermes-webui-model');
-    // Refresh model dropdown (profile may have different provider/models)
     _skillsData = null;
     await populateModelDropdown();
-    // Apply profile's default model using the smart resolver (handles id mismatches
-    // like 'claude-sonnet-4-6' vs 'anthropic/claude-sonnet-4.6' in the dropdown)
     if (data.default_model) {
       const sel = $('modelSelect');
       const resolved = _applyModelToDropdown(data.default_model, sel);
       const modelToUse = resolved || data.default_model;
-      // Also update the current session's model so syncTopbar() doesn't fight us
-      if (S.session) {
+      S._pendingProfileModel = modelToUse;
+      // Only patch the in-memory session model if we're NOT about to replace the session
+      if (S.session && !sessionInProgress) {
         S.session.model = modelToUse;
       }
-      // Store as pending so syncTopbar skips its model override on the next call
-      S._pendingProfileModel = modelToUse;
     }
-    // Refresh workspace list (now profile-local)
+
+    // ── Workspace ──────────────────────────────────────────────────────────
     _workspaceList = null;
     await loadWorkspaceList();
-
-    // Apply the profile's default workspace to the current session
     if (data.default_workspace) {
-      if (S.session) {
-        // Update existing session's workspace to the profile default
+      // Always store the profile default for new sessions
+      S._profileDefaultWorkspace = data.default_workspace;
+
+      if (S.session && !sessionInProgress) {
+        // Empty session (no messages yet) — safe to update it in place
         try {
           await api('/api/session/update', { method: 'POST', body: JSON.stringify({
             session_id: S.session.session_id,
@@ -698,21 +703,31 @@ async function switchToProfile(name) {
           S.session.workspace = data.default_workspace;
         } catch (_) {}
       }
-      // Store as the profile default so the next new session picks it up
-      S._profileDefaultWorkspace = data.default_workspace;
     }
 
-    // Reset profile filter and refresh session list
+    // ── Session ────────────────────────────────────────────────────────────
     _showAllProfiles = false;
-    await renderSessionList();
-    syncTopbar();
-    // Refresh visible sidebar panels
+
+    if (sessionInProgress) {
+      // The current session has messages and belongs to the previous profile.
+      // Start a new session for the new profile so nothing gets cross-tagged.
+      await newSession(false);
+      await renderSessionList();
+      showToast('Switched to profile: ' + name + ' — new conversation started');
+    } else {
+      // No messages yet — just refresh the list and topbar in place
+      await renderSessionList();
+      syncTopbar();
+      showToast('Switched to profile: ' + name);
+    }
+
+    // ── Sidebar panels ─────────────────────────────────────────────────────
     if (_currentPanel === 'skills') await loadSkills();
     if (_currentPanel === 'memory') await loadMemory();
     if (_currentPanel === 'tasks') await loadCrons();
     if (_currentPanel === 'profiles') await loadProfilesPanel();
     if (_currentPanel === 'workspaces') await loadWorkspacesPanel();
-    showToast('Switched to profile: ' + name);
+
   } catch (e) { showToast('Switch failed: ' + e.message); }
 }
 

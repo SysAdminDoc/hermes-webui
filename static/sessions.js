@@ -13,9 +13,10 @@ async function newSession(flash){
   MSG_QUEUE.length=0;updateQueueBadge();
   S.toolCalls=[];
   clearLiveToolCards();
-  // Use profile default workspace for new sessions after a profile switch,
+  // Use profile default workspace for new sessions after a profile switch (one-shot),
   // otherwise inherit from the current session (or let server pick the default)
-  const inheritWs=S._profileDefaultWorkspace||( S.session?S.session.workspace:null);
+  const inheritWs=S._profileDefaultWorkspace||(S.session?S.session.workspace:null);
+  S._profileDefaultWorkspace=null; // consume — only applies to the first new session after switch
   const data=await api('/api/session/new',{method:'POST',body:JSON.stringify({model:$('modelSelect').value,workspace:inheritWs})});
   S.session=data.session;S.messages=data.session.messages||[];
   if(flash)S.session._flash=true;
