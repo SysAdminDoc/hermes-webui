@@ -3,8 +3,8 @@
 > Goal: Full 1:1 parity with the Hermes CLI experience via a clean dark web UI.
 > Everything you can do from the CLI terminal, you can do from this UI.
 >
-> Last updated: Sprint 17 / v0.19 (April 3, 2026)
-> Tests: 294 passing
+> Last updated: Sprint 19 / v0.21 (April 3, 2026)
+> Tests: 327 total (304 passing, 23 pre-existing failures)
 > Source: <repo>/
 
 ---
@@ -32,8 +32,10 @@
 | Sprint 13 | Alerts + polish | Cron completion alerts (polling + badge), background error banner, session duplicate, browser tab title | 221 |
 | Sprint 14 | Visual polish + workspace ops | Mermaid diagrams, message timestamps, file rename, folder create, session tags, session archive | 233 |
 | Sprint 15 | Session projects + code copy | Session projects/folders, code block copy button, tool card expand/collapse toggle | 237 |
-| Sprint 16 | Session sidebar visual polish | SVG action icons, overlay hover actions, pin indicator, project border, custom model discovery, GLM-5.1 | 237 |
-| Sprint 17 | Workspace polish + slash commands + settings | Breadcrumb navigation, slash command autocomplete, send key setting (#26) | 294 |
+| Sprint 16 | Session sidebar visual polish | SVG action icons, overlay hover actions, pin indicator, project border, safe HTML rendering | 289 |
+| Sprint 17 | Workspace polish + slash commands + settings | Breadcrumb navigation, slash command autocomplete, send key setting (#26) | 318 |
+| Sprint 18 | Thinking display + workspace tree | File preview auto-close, thinking/reasoning cards, expandable directory tree (#22) | 318 |
+| Sprint 19 | Auth + security hardening | Password auth (off by default), login page, security headers, 20MB body limit (#23) | 327 |
 
 ---
 
@@ -41,10 +43,10 @@
 
 | Layer | Location | Status |
 |-------|----------|--------|
-| Python server | <repo>/server.py (~76 lines) + api/ modules (~2145 lines) | Thin shell + business logic in api/ |
+| Python server | <repo>/server.py (~79 lines) + api/ modules (~2491 lines) | Thin shell + auth middleware + business logic in api/ |
 | HTML template | <repo>/static/index.html | Served from disk |
-| CSS | <repo>/static/style.css (~560 lines) | Served from disk |
-| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot,commands}.js | 7 modules, ~2990 lines total |
+| CSS | <repo>/static/style.css (~590 lines) | Served from disk |
+| JavaScript | <repo>/static/{ui,workspace,sessions,messages,panels,boot,commands}.js | 7 modules, ~3148 lines total |
 | Runtime state | ~/.hermes/webui-mvp/sessions/ | Session JSON files |
 | Test server | Port 8788, state dir ~/.hermes/webui-mvp-test/ | Isolated, wiped per run |
 | Production server | Port 8787 | SSH tunnel from Mac |
@@ -149,22 +151,42 @@
 
 ### Configuration
 - [x] Settings panel (default model, default workspace) (Sprint 12)
+- [x] Send key preference (Enter or Ctrl+Enter) (Sprint 17)
+- [x] Password authentication (Sprint 19)
 - [ ] Enable/disable toolsets per session (deferred)
 
 ### Notifications
 - [x] Cron job completion alerts (Sprint 13)
 - [x] Background agent error alerts (Sprint 13)
 
+### Workspace
+- [x] Breadcrumb navigation in subdirectories (Sprint 17)
+- [x] Workspace tree view with expand/collapse (Sprint 18, Issue #22)
+- [x] File preview auto-close on directory navigation (Sprint 18)
+
+### Slash Commands
+- [x] Command registry + autocomplete dropdown (Sprint 17)
+- [x] Built-in: /help, /clear, /model, /workspace, /new (Sprint 17)
+
+### Security
+- [x] Password auth with signed cookies (Sprint 19, Issue #23)
+- [x] Security headers (X-Content-Type-Options, X-Frame-Options) (Sprint 19)
+- [x] POST body size limit (20MB) (Sprint 19)
+
+### Thinking / Reasoning
+- [x] Collapsible thinking cards for extended-thinking models (Sprint 18)
+
 ### Advanced / Future
-- [ ] Voice input via Whisper (Wave 6)
-- [ ] TTS playback of responses (Wave 6)
-- [ ] Subagent delegation cards (Wave 6)
+- [ ] Voice input via Whisper (Sprint 20)
+- [ ] TTS playback of responses (Sprint 20)
+- [ ] Subagent delegation cards (deferred)
 - [x] Background task cancel (activity bar Cancel button)
-- [ ] Code execution cell (Wave 6)
-- [ ] Password authentication (Wave 7)
-- [ ] HTTPS / reverse proxy (Wave 7)
-- [ ] Mobile responsive layout (Wave 7)
-- [ ] Virtual scroll for large lists (Wave 7)
+- [ ] Code execution cell (deferred)
+- [ ] Mobile responsive layout (Sprint 21)
+- [ ] Multi-profile support (Sprint 22, Issue #28)
+- [ ] Desktop application (Sprint 23)
+- [ ] Extended slash command / skill integration (Sprint 24)
+- [ ] Virtual scroll for large lists (deferred)
 
 ---
 

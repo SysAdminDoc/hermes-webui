@@ -649,6 +649,18 @@ async function loadSettingsPanel(){
     // Send key preference
     const sendKeySel=$('settingsSendKey');
     if(sendKeySel) sendKeySel.value=settings.send_key||'enter';
+    // Password field: always blank (we don't send hash back)
+    const pwField=$('settingsPassword');
+    if(pwField) pwField.value='';
+    // Show auth buttons only when auth is active
+    try{
+      const authStatus=await api('/api/auth/status');
+      const active=authStatus.auth_enabled;
+      const signOutBtn=$('btnSignOut');
+      if(signOutBtn) signOutBtn.style.display=active?'':'none';
+      const disableBtn=$('btnDisableAuth');
+      if(disableBtn) disableBtn.style.display=active?'':'none';
+    }catch(e){}
   }catch(e){
     showToast('Failed to load settings: '+e.message);
   }
@@ -658,10 +670,21 @@ async function saveSettings(){
   const model=($('settingsModel')||{}).value;
   const workspace=($('settingsWorkspace')||{}).value;
   const sendKey=($('settingsSendKey')||{}).value;
+  const pw=($('settingsPassword')||{}).value;
   const body={};
   if(model) body.default_model=model;
   if(workspace) body.default_workspace=workspace;
   if(sendKey) body.send_key=sendKey;
+  // Password: only act if the field has content; blank = leave auth unchanged
+  if(pw && pw.trim()){
+    try{
+      await api('/api/settings',{method:'POST',body:JSON.stringify({...body,_set_password:pw.trim()})});
+      window._sendKey=sendKey||'enter';
+      showToast('Settings saved (password set — login now required)');
+      toggleSettings();
+      return;
+    }catch(e){showToast('Save failed: '+e.message);return;}
+  }
   try{
     await api('/api/settings',{method:'POST',body:JSON.stringify(body)});
     window._sendKey=sendKey||'enter';
@@ -669,6 +692,30 @@ async function saveSettings(){
     toggleSettings();
   }catch(e){
     showToast('Save failed: '+e.message);
+  }
+}
+
+async function signOut(){
+  try{
+    await api('/api/auth/logout',{method:'POST',body:'{}'});
+    window.location.href='/login';
+  }catch(e){
+    showToast('Sign out failed: '+e.message);
+  }
+}
+
+async function disableAuth(){
+  if(!confirm('Disable password protection? Anyone will be able to access this instance.')) return;
+  try{
+    await api('/api/settings',{method:'POST',body:JSON.stringify({_clear_password:true})});
+    showToast('Auth disabled — password protection removed');
+    // Hide both auth buttons since auth is now off
+    const disableBtn=$('btnDisableAuth');
+    if(disableBtn) disableBtn.style.display='none';
+    const signOutBtn=$('btnSignOut');
+    if(signOutBtn) signOutBtn.style.display='none';
+  }catch(e){
+    showToast('Failed to disable auth: '+e.message);
   }
 }
 

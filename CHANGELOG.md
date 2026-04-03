@@ -5,6 +5,33 @@
 
 ---
 
+## [v0.21] Sprint 19 -- Auth + Security Hardening
+*April 3, 2026 | 327 tests*
+
+### Features
+- **Password authentication (Issue #23).** Optional password auth, off by default.
+  Enable via `HERMES_WEBUI_PASSWORD` env var or Settings panel. Password-only
+  (single-user app). Signed HMAC HTTP-only cookie with 24h TTL. Minimal dark-themed
+  login page at `/login`. API calls without auth return 401; page loads redirect.
+  New `api/auth.py` module with hashing, verification, session management.
+- **Security headers.** All responses now include `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
+- **POST body size limit.** Non-upload POST bodies capped at 20MB via `read_body()`.
+- **Settings panel additions.** "Access Password" field and "Sign Out" button
+  (only visible when auth is active).
+
+### Architecture
+- New `api/auth.py`: password hashing (SHA-256 + STATE_DIR salt), signed cookies,
+  auth middleware, public path allowlist.
+- Auth check in `server.py` do_GET/do_POST before routing.
+- `password_hash` added to `_SETTINGS_DEFAULTS`.
+
+### Tests
+- 9 new tests in `test_sprint19.py`: auth status, login flow, security headers,
+  cache-control, settings password field. Total: **327 tests (304 passing)**.
+
+---
+
 ## [v0.20] Sprint 18 -- File Preview Auto-Close + Thinking Display + Workspace Tree
 *April 3, 2026 | 318 tests*
 
@@ -649,4 +676,4 @@ Three-panel layout: sessions sidebar, chat area, workspace panel.
 
 ---
 
-*Last updated: v0.20, April 3, 2026 | Tests: 318*
+*Last updated: v0.21, April 3, 2026 | Tests: 327*
