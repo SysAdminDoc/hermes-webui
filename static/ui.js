@@ -919,9 +919,11 @@ function _renderTreeItems(container, entries, depth){
         e.stopPropagation();
         if(S._expandedDirs.has(item.path)){
           S._expandedDirs.delete(item.path);
+          if(typeof _saveExpandedDirs==='function')_saveExpandedDirs();
           renderFileTree();
         }else{
           S._expandedDirs.add(item.path);
+          if(typeof _saveExpandedDirs==='function')_saveExpandedDirs();
           // Fetch children if not cached
           if(!S._dirCache[item.path]){
             try{
