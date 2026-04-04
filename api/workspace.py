@@ -9,6 +9,7 @@ paths are used as fallback when no profile module is available.
 """
 import json
 import os
+import subprocess
 from pathlib import Path
 
 from api.config import (
@@ -243,3 +244,45 @@ def read_file_content(workspace: Path, rel: str):
         raise ValueError(f"File too large ({size} bytes, max {MAX_FILE_BYTES})")
     content = target.read_text(encoding='utf-8', errors='replace')
     return {'path': rel, 'content': content, 'size': size, 'lines': content.count('\n') + 1}
+
+
+# ── Git detection ──────────────────────────────────────────────────────────
+
+def _run_git(args, cwd, timeout=3):
+    """Run a git command and return stdout, or None on failure."""
+    try:
+        r = subprocess.run(
+            ['git'] + args, cwd=str(cwd), capture_output=True,
+            text=True, timeout=timeout,
+        )
+        return r.stdout.strip() if r.returncode == 0 else None
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+
+def git_info_for_workspace(workspace: Path) -> dict:
+    """Return git info for a workspace directory, or None if not a git repo."""
+    if not (workspace / '.git').exists():
+        return None
+    branch = _run_git(['rev-parse', '--abbrev-ref', 'HEAD'], workspace)
+    if branch is None:
+        return None
+    # Status counts
+    status_out = _run_git(['status', '--porcelain'], workspace) or ''
+    lines = [l for l in status_out.splitlines() if l]
+    # git status --porcelain: XY format where X=index, Y=worktree
+    modified = sum(1 for l in lines if len(l) >= 2 and (l[0] in 'MAR' or l[1] in 'MAR'))
+    untracked = sum(1 for l in lines if l.startswith('??'))
+    dirty = len(lines)
+    # Ahead/behind
+    ahead = _run_git(['rev-list', '--count', '@{u}..HEAD'], workspace)
+    behind = _run_git(['rev-list', '--count', 'HEAD..@{u}'], workspace)
+    return {
+        'branch': branch,
+        'dirty': dirty,
+        'modified': modified,
+        'untracked': untracked,
+        'ahead': int(ahead) if ahead and ahead.isdigit() else 0,
+        'behind': int(behind) if behind and behind.isdigit() else 0,
+        'is_git': True,
+    }

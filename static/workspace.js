@@ -59,7 +59,30 @@ async function loadDir(path){
         clearPreview();
       }
     }
+    // Fetch git info for workspace root (non-blocking)
+    if(!path||path==='.') _refreshGitBadge();
   }catch(e){console.warn('loadDir',e);}
+}
+
+async function _refreshGitBadge(){
+  const badge=$('gitBadge');
+  if(!badge||!S.session)return;
+  try{
+    const data=await api(`/api/git-info?session_id=${encodeURIComponent(S.session.session_id)}`);
+    if(data.git&&data.git.is_git){
+      const g=data.git;
+      let text=g.branch||'git';
+      if(g.dirty>0) text+=` \u00b7 ${g.dirty}\u2206`; // middot + delta
+      if(g.behind>0) text+=` \u2193${g.behind}`;
+      if(g.ahead>0) text+=` \u2191${g.ahead}`;
+      badge.textContent=text;
+      badge.className='git-badge'+(g.dirty>0?' dirty':'');
+      badge.style.display='';
+    } else {
+      badge.style.display='none';
+      badge.textContent='';
+    }
+  }catch(e){badge.style.display='none';}
 }
 
 function navigateUp(){

@@ -214,6 +214,18 @@ def handle_get(handler, parsed):
     if parsed.path == '/api/list':
         return _handle_list_dir(handler, parsed)
 
+    if parsed.path == '/api/git-info':
+        qs = parse_qs(parsed.query)
+        sid = qs.get('session_id', [''])[0]
+        if not sid:
+            return bad(handler, 'session_id required')
+        s = get_session(sid)
+        if not s:
+            return bad(handler, 'Session not found', 404)
+        from api.workspace import git_info_for_workspace
+        info = git_info_for_workspace(Path(s.workspace))
+        return j(handler, {'git': info})
+
     if parsed.path == '/api/chat/stream/status':
         stream_id = parse_qs(parsed.query).get('stream_id', [''])[0]
         return j(handler, {'active': stream_id in STREAMS, 'stream_id': stream_id})
