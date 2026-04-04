@@ -84,6 +84,36 @@ let _scrollPinned=true;
 })();
 function _fmtTokens(n){if(!n||n<0)return'0';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'k';return String(n);}
 
+// Context usage indicator in composer footer
+function _syncCtxIndicator(usage){
+  const el=$('ctxIndicator');
+  if(!el)return;
+  const inTok=usage.input_tokens||0;
+  const outTok=usage.output_tokens||0;
+  const total=inTok+outTok;
+  if(!total){el.style.display='none';return;}
+  el.style.display='';
+  // Estimate context window from model name (rough, covers major families)
+  // TODO: fetch exact values from server or model metadata API
+  const _CTX={claude:200000,gemini:1000000,'gpt-4o':128000,'gpt-5':128000,o3:200000,o4:200000,deepseek:128000,llama:128000};
+  const _m=(S.session&&S.session.model||'').toLowerCase();
+  let ctxWindow=128000;
+  for(const[k,v]of Object.entries(_CTX)){if(_m.includes(k)){ctxWindow=v;break;}}
+  const pct=Math.min(100,Math.round((inTok/ctxWindow)*100));
+  const bar=$('ctxBar');
+  const label=$('ctxLabel');
+  if(bar){
+    bar.style.width=pct+'%';
+    bar.className='ctx-bar'+(pct>75?' ctx-high':pct>50?' ctx-mid':'');
+  }
+  if(label){
+    const cost=usage.estimated_cost;
+    let text=`${_fmtTokens(inTok)} in \u00b7 ${_fmtTokens(outTok)} out`;
+    if(cost) text+=` \u00b7 $${cost<0.01?cost.toFixed(4):cost.toFixed(2)}`;
+    label.textContent=text;
+  }
+}
+
 function scrollIfPinned(){
   if(!_scrollPinned) return;
   const el=$('messages');
