@@ -126,10 +126,24 @@ def _discover_python(agent_dir: Path) -> str:
 _AGENT_DIR = _discover_agent_dir()
 PYTHON_EXE = _discover_python(_AGENT_DIR)
 
-# ── Inject agent dir into sys.path so Hermes modules are importable ───────────
+# ── Inject agent dir into sys.path so Hermes modules are importable ──────────
+
+# When users (or CI builds) run `pip install --target .` or
+# `pip install -t .` inside the hermes-agent checkout, third-party
+# package directories (openai/, pydantic/, requests/, etc.) end up
+# alongside real Hermes source files.  Putting _AGENT_DIR at the
+# FRONT of sys.path means Python resolves `import pydantic` from that
+# local directory — which breaks whenever the host platform differs
+# from the container (e.g. macOS .so files inside a Linux image).
+#
+# Fix: insert _AGENT_DIR at the END of sys.path.  Python searches
+# entries in order, so site-packages resolves pip packages correctly,
+# and Hermes-specific modules (run_agent, hermes/, etc.) still
+# resolve because they do not exist in site-packages.
+
 if _AGENT_DIR is not None:
     if str(_AGENT_DIR) not in sys.path:
-        sys.path.insert(0, str(_AGENT_DIR))
+        sys.path.append(str(_AGENT_DIR))
     _HERMES_FOUND = True
 else:
     _HERMES_FOUND = False
@@ -232,16 +246,20 @@ def print_startup_config():
 def verify_hermes_imports():
     """
     Attempt to import the key Hermes modules.
-    Returns (ok: bool, missing: list[str]).
+    Returns (ok: bool, missing: list[str], errors: dict[str, str]).
     """
     required = ['run_agent']
     missing  = []
+    errors   = {}
     for mod in required:
         try:
             __import__(mod)
-        except ImportError:
+        except Exception as e:
             missing.append(mod)
-    return (len(missing) == 0), missing
+            # Capture the full error message so startup logs show WHY
+            # (e.g. pydantic_core .so mismatch) instead of just the name.
+            errors[mod] = f"{type(e).__name__}: {e}"
+    return (len(missing) == 0), missing, errors
 
 # ── Limits ───────────────────────────────────────────────────────────────────
 MAX_FILE_BYTES   = 200_000
