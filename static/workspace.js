@@ -12,13 +12,46 @@ async function api(path,opts={}){
   return ct.includes('application/json')?res.json():res.text();
 }
 
+// Persist/restore expanded directory state per workspace in localStorage
+function _wsExpandKey(){
+  const ws=S.session&&S.session.workspace;
+  return ws?'hermes-webui-expanded:'+ws:null;
+}
+function _saveExpandedDirs(){
+  const key=_wsExpandKey();if(!key)return;
+  try{localStorage.setItem(key,JSON.stringify([...(S._expandedDirs||new Set())]));}catch(e){}
+}
+function _restoreExpandedDirs(){
+  const key=_wsExpandKey();
+  if(!key){S._expandedDirs=new Set();return;}
+  try{
+    const raw=localStorage.getItem(key);
+    S._expandedDirs=raw?new Set(JSON.parse(raw)):new Set();
+  }catch(e){S._expandedDirs=new Set();}
+}
+
 async function loadDir(path){
   if(!S.session)return;
   try{
-    if(!path||path==='.'){ S._dirCache={}; if(S._expandedDirs)S._expandedDirs=new Set(); }
+    if(!path||path==='.'){
+      S._dirCache={};
+      _restoreExpandedDirs();  // restore per-workspace expanded state on root load
+    }
     S.currentDir=path||'.';
     const data=await api(`/api/list?session_id=${encodeURIComponent(S.session.session_id)}&path=${encodeURIComponent(path)}`);
     S.entries=data.entries||[];renderBreadcrumb();renderFileTree();
+    // Pre-fetch contents of restored expanded dirs so they render without a second click
+    if(!path||path==='.'){
+      for(const dirPath of (S._expandedDirs||[])){
+        if(!S._dirCache[dirPath]){
+          try{
+            const dc=await api(`/api/list?session_id=${encodeURIComponent(S.session.session_id)}&path=${encodeURIComponent(dirPath)}`);
+            S._dirCache[dirPath]=dc.entries||[];
+          }catch(e2){S._dirCache[dirPath]=[];}
+        }
+      }
+      if(S._expandedDirs&&S._expandedDirs.size>0)renderFileTree();
+    }
     if(typeof clearPreview==='function'){
       if(typeof _previewDirty!=='undefined'&&_previewDirty){
         if(confirm('You have unsaved changes in the preview. Discard and navigate?'))clearPreview();
