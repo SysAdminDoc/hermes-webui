@@ -262,6 +262,8 @@ across 22 test files.
 - Code block copy button with "Copied!" feedback
 - Syntax highlighting via Prism.js (Python, JS, bash, JSON, SQL, and more)
 - Safe HTML rendering in AI responses (bold, italic, code converted to markdown)
+- rAF-throttled token streaming for smoother rendering during long responses
+- Context usage indicator in composer footer -- token count, cost, and fill bar (model-aware)
 
 ### Sessions
 - Create, rename, duplicate, delete, search by title and message content
@@ -269,7 +271,7 @@ across 22 test files.
 - Archive sessions (hide without deleting, toggle to show)
 - Session projects -- named groups with colors for organizing sessions
 - Session tags -- add #tag to titles for colored chips and click-to-filter
-- Grouped by Today / Yesterday / Earlier in the sidebar
+- Grouped by Today / Yesterday / Earlier in the sidebar (collapsible date groups)
 - Download as Markdown transcript, full JSON export, or import from JSON
 - Sessions persist across page reloads and SSH tunnel reconnects
 - Browser tab title reflects the active session name
@@ -283,6 +285,7 @@ across 22 test files.
 - Edit, create, delete, and rename files; create folders
 - Binary file download (auto-detected from server)
 - File preview auto-closes on directory navigation (with unsaved-edit guard)
+- Git detection -- branch name and dirty file count badge in workspace header
 - Right panel is drag-resizable
 - Syntax highlighted code preview (Prism.js)
 
@@ -347,26 +350,26 @@ across 22 test files.
 ## Architecture
 
 ```
-server.py               HTTP routing shell + auth middleware (~81 lines)
+server.py               HTTP routing shell + auth middleware (~83 lines)
 api/
   auth.py               Optional password authentication, signed cookies (~149 lines)
-  config.py             Discovery, globals, model detection, reloadable config (~702 lines)
+  config.py             Discovery, globals, model detection, reloadable config (~726 lines)
   helpers.py            HTTP helpers, security headers (~71 lines)
-  models.py             Session model + CRUD (~146 lines)
+  models.py             Session model + CRUD + CLI bridge (~338 lines)
   profiles.py           Profile state management, hermes_cli wrapper (~366 lines)
-  routes.py             All GET + POST route handlers (~1180 lines)
-  streaming.py          SSE engine, run_agent, cancel support (~272 lines)
+  routes.py             All GET + POST route handlers (~1314 lines)
+  streaming.py          SSE engine, run_agent, cancel support (~332 lines)
   upload.py             Multipart parser, file upload handler (~78 lines)
-  workspace.py          File ops, workspace helpers (~245 lines)
+  workspace.py          File ops, workspace helpers, git detection (~288 lines)
 static/
-  index.html            HTML template (~364 lines)
-  style.css             All CSS incl. mobile responsive (~670 lines)
-  ui.js                 DOM helpers, renderMd, tool cards, file tree (~1002 lines)
-  workspace.js          File preview, file ops (~191 lines)
-  sessions.js           Session CRUD, list rendering, search (~556 lines)
-  messages.js           send(), SSE handlers, approval, transcript (~337 lines)
-  panels.js             Cron, skills, memory, profiles, settings (~1030 lines)
-  commands.js           Slash command autocomplete (~156 lines)
+  index.html            HTML template (~388 lines)
+  style.css             All CSS incl. mobile responsive (~726 lines)
+  ui.js                 DOM helpers, renderMd, tool cards, context indicator (~1063 lines)
+  workspace.js          File preview, file ops, git badge (~247 lines)
+  sessions.js           Session CRUD, collapsible groups, search (~589 lines)
+  messages.js           send(), SSE handlers, rAF throttle (~352 lines)
+  panels.js             Cron, skills, memory, profiles, settings (~1146 lines)
+  commands.js           Slash command autocomplete (~170 lines)
   boot.js               Mobile nav, voice input, boot IIFE (~338 lines)
 tests/
   conftest.py           Isolated test server (port 8788)
