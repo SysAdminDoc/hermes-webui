@@ -37,6 +37,12 @@
   .session-item:has(.session-title-input) .session-actions{display:none;}
   @keyframes newflash{0%{background:rgba(124,185,255,0.22);color:var(--blue);}100%{background:transparent;color:var(--muted);}}
   .session-item.new-flash{animation:newflash 1.4s ease-out forwards;}
+  /* Collapsible date group headers */
+  .session-date-header{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:8px 10px 4px;cursor:pointer;user-select:none;opacity:.8;transition:opacity .15s;}
+  .session-date-header:hover{opacity:1;}
+  .session-date-header.pinned{color:#f5c542;}
+  .session-date-caret{font-size:9px;transition:transform .2s;flex-shrink:0;display:inline-block;}
+  .session-date-caret.collapsed{transform:rotate(-90deg);}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(20,30,50,.95);backdrop-filter:blur(12px);border:1px solid rgba(124,185,255,0.25);color:var(--text);font-size:13px;padding:10px 20px;border-radius:12px;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;z-index:100;box-shadow:0 4px 20px rgba(0,0,0,.3);letter-spacing:.01em;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-2px);}
   .reconnect-banner{display:none;background:#1a2535;border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:10px 16px;margin:10px auto;max-width:780px;font-size:13px;color:var(--gold);display:none;align-items:center;justify-content:space-between;gap:12px;}
