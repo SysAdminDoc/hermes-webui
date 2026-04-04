@@ -198,26 +198,53 @@ function renderSessionListFromCache(){
   // Date grouping: Pinned / Today / Yesterday / Earlier
   const now=Date.now();
   const ONE_DAY=86400000;
-  let lastGroup='';
   const ordered=[...pinned,...unpinned].slice(0,50);
-  if(pinned.length){
-    const hdr=document.createElement('div');
-    hdr.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#f5c542;padding:10px 10px 4px;opacity:.9;';
-    hdr.textContent='\u2605 Pinned';
-    list.appendChild(hdr);
+  // Collapse state persisted in localStorage
+  let _groupCollapsed={};
+  try{_groupCollapsed=JSON.parse(localStorage.getItem('hermes-date-groups-collapsed')||'{}');}catch(e){}
+  const _saveCollapsed=()=>{try{localStorage.setItem('hermes-date-groups-collapsed',JSON.stringify(_groupCollapsed));}catch(e){}};
+  // Group sessions by date
+  const groups=[];
+  let curLabel=null,curItems=[];
+  if(pinned.length) groups.push({label:'\u2605 Pinned',items:pinned,isPinned:true});
+  for(const s of unpinned){
+    const ts=(s.updated_at||s.created_at||0)*1000;
+    const label=ts>now-ONE_DAY?'Today':ts>now-2*ONE_DAY?'Yesterday':'Earlier';
+    if(label!==curLabel){
+      if(curItems.length) groups.push({label:curLabel,items:curItems});
+      curLabel=label;curItems=[s];
+    } else { curItems.push(s); }
   }
-  for(const s of ordered){
-    if(!s.pinned){
-      const ts=(s.updated_at||s.created_at||0)*1000;  // group by last activity, not creation
-      const group=ts>now-ONE_DAY?'Today':ts>now-2*ONE_DAY?'Yesterday':'Earlier';
-      if(group!==lastGroup){
-        lastGroup=group;
-        const hdr=document.createElement('div');
-        hdr.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:10px 10px 4px;opacity:.8;';
-        hdr.textContent=group;
-        list.appendChild(hdr);
-      }
-    }
+  if(curItems.length) groups.push({label:curLabel,items:curItems});
+  // Render groups with collapsible headers
+  for(const g of groups){
+    const wrapper=document.createElement('div');
+    wrapper.className='session-date-group';
+    const hdr=document.createElement('div');
+    hdr.className='session-date-header'+(g.isPinned?' pinned':'');
+    const caret=document.createElement('span');
+    caret.className='session-date-caret';
+    caret.textContent='\u25B8'; // right-pointing triangle
+    const label=document.createElement('span');
+    label.textContent=g.label;
+    hdr.appendChild(caret);hdr.appendChild(label);
+    const body=document.createElement('div');
+    body.className='session-date-body';
+    if(_groupCollapsed[g.label]){body.style.display='none';caret.classList.add('collapsed');}
+    hdr.onclick=()=>{
+      const isCollapsed=body.style.display==='none';
+      body.style.display=isCollapsed?'':'none';
+      caret.classList.toggle('collapsed',!isCollapsed);
+      _groupCollapsed[g.label]=!isCollapsed;
+      _saveCollapsed();
+    };
+    wrapper.appendChild(hdr);
+    for(const s of g.items){ body.appendChild(_renderOneSession(s)); }
+    wrapper.appendChild(body);
+    list.appendChild(wrapper);
+  }
+  // ── Render session items (extracted for group body use) ──
+  function _renderOneSession(s){
     const el=document.createElement('div');
     const isActive=S.session&&s.session_id===S.session.session_id;
     el.className='session-item'+(isActive?' active':'')+(isActive&&S.session&&S.session._flash?' new-flash':'')+(s.archived?' archived':'')+(s.is_cli_session?' cli-session':'');
@@ -385,7 +412,7 @@ function renderSessionListFromCache(){
       _clickTimer=null;
       startRename();
     };
-    list.appendChild(el);
+    return el;
   }
 }
 
