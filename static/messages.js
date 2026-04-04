@@ -149,7 +149,7 @@ async function send(){
         // Stamp _ts on the last assistant message if it has no timestamp
         const lastAsst=[...S.messages].reverse().find(m=>m.role==='assistant');
         if(lastAsst&&!lastAsst._ts&&!lastAsst.timestamp) lastAsst._ts=Date.now()/1000;
-        if(d.usage) S.lastUsage=d.usage;
+        if(d.usage){S.lastUsage=d.usage;_syncCtxIndicator(d.usage);}
         if(d.session.tool_calls&&d.session.tool_calls.length){
           S.toolCalls=d.session.tool_calls.map(tc=>({...tc,done:true}));
         } else {
