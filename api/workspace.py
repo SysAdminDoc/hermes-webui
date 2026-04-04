@@ -269,9 +269,11 @@ def git_info_for_workspace(workspace: Path) -> dict:
         return None
     # Status counts
     status_out = _run_git(['status', '--porcelain'], workspace) or ''
-    modified = sum(1 for l in status_out.splitlines() if l and l[0:2].strip() in ('M', 'MM', 'AM'))
-    untracked = sum(1 for l in status_out.splitlines() if l.startswith('??'))
-    dirty = len(status_out.splitlines()) if status_out else 0
+    lines = [l for l in status_out.splitlines() if l]
+    # git status --porcelain: XY format where X=index, Y=worktree
+    modified = sum(1 for l in lines if len(l) >= 2 and (l[0] in 'MAR' or l[1] in 'MAR'))
+    untracked = sum(1 for l in lines if l.startswith('??'))
+    dirty = len(lines)
     # Ahead/behind
     ahead = _run_git(['rev-list', '--count', '@{u}..HEAD'], workspace)
     behind = _run_git(['rev-list', '--count', 'HEAD..@{u}'], workspace)
