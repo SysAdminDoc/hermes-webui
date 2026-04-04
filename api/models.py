@@ -10,7 +10,7 @@ from pathlib import Path
 import api.config as _cfg
 from api.config import (
     SESSION_DIR, SESSION_INDEX_FILE, SESSIONS, SESSIONS_MAX,
-    LOCK, DEFAULT_WORKSPACE, DEFAULT_MODEL, PROJECTS_FILE
+    LOCK, DEFAULT_WORKSPACE, DEFAULT_MODEL, PROJECTS_FILE, HOME
 )
 from api.workspace import get_last_workspace
 
