@@ -93,8 +93,12 @@ function _syncCtxIndicator(usage){
   const total=inTok+outTok;
   if(!total){el.style.display='none';return;}
   el.style.display='';
-  // Estimate context window fill (assume 128k default, common for most models)
-  const ctxWindow=128000;
+  // Estimate context window from model name (rough, covers major families)
+  // TODO: fetch exact values from server or model metadata API
+  const _CTX={claude:200000,gemini:1000000,'gpt-4o':128000,'gpt-5':128000,o3:200000,o4:200000,deepseek:128000,llama:128000};
+  const _m=(S.session&&S.session.model||'').toLowerCase();
+  let ctxWindow=128000;
+  for(const[k,v]of Object.entries(_CTX)){if(_m.includes(k)){ctxWindow=v;break;}}
   const pct=Math.min(100,Math.round((inTok/ctxWindow)*100));
   const bar=$('ctxBar');
   const label=$('ctxLabel');
