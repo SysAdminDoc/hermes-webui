@@ -230,6 +230,9 @@ def handle_get(handler, parsed):
         file_path = qs.get('file', [''])[0]
         if file_path:
             # Serve a linked file from the skill directory
+            import re as _re
+            if _re.search(r'[*?\[\]]', name):
+                return bad(handler, 'Invalid skill name', 400)
             skill_dir = None
             for p in SKILLS_DIR.rglob(name):
                 if p.is_dir(): skill_dir = p; break

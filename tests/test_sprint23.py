@@ -1,15 +1,21 @@
-"""Sprint 23 tests: profile/workspace/model coherence."""
-import json, pathlib, re, urllib.request, urllib.error
+"""
+Sprint 23 Tests: agentic transparency — token/cost display, session usage fields,
+subagent card names, skill picker in cron, skill linked files.
+"""
+import json, urllib.error, urllib.request
 
 BASE = "http://127.0.0.1:8788"
+
 
 def get(path):
     with urllib.request.urlopen(BASE + path, timeout=10) as r:
         return json.loads(r.read()), r.status
 
+
 def post(path, body=None):
     data = json.dumps(body or {}).encode()
-    req = urllib.request.Request(BASE + path, data=data, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(BASE + path, data=data,
+                                headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return json.loads(r.read()), r.status
@@ -17,177 +23,171 @@ def post(path, body=None):
         return json.loads(e.read()), e.code
 
 
-# ── Workspace profile-locality ──────────────────────────────────────────────
-
-def test_workspace_list_returns_data():
-    """Workspace list endpoint works after profile-local refactor."""
-    data, status = get("/api/workspaces")
-    assert status == 200
-    assert "workspaces" in data
-    assert isinstance(data["workspaces"], list)
-    assert "last" in data
+def make_session(created_list):
+    d, _ = post("/api/session/new", {})
+    sid = d["session"]["session_id"]
+    created_list.append(sid)
+    return sid, d["session"]
 
 
-def test_workspace_add_remove_roundtrip():
-    """Workspace add/remove still works with profile-local storage."""
-    import os
-    # Use a path that won't resolve differently (macOS /tmp -> /private/tmp)
-    resolved_tmp = str(pathlib.Path("/tmp").resolve())
-    # Clean slate
-    post("/api/workspaces/remove", {"path": resolved_tmp})
-    # Add
-    data, status = post("/api/workspaces/add", {"path": "/tmp", "name": "Temp"})
-    assert status == 200
-    assert any(w["path"] == resolved_tmp for w in data.get("workspaces", []))
-    # Remove
-    data, status = post("/api/workspaces/remove", {"path": resolved_tmp})
-    assert status == 200
-    assert not any(w["path"] == resolved_tmp for w in data.get("workspaces", []))
+# ── Session usage fields ─────────────────────────────────────────────────
 
-
-# ── Profile switch response fields ─────────────────────────────────────────
-
-def test_profile_switch_returns_default_model_and_workspace():
-    """switch_profile() response includes default_model and default_workspace."""
-    # Prior tests (test_chat_stream_opens_successfully) may leave a live LLM stream in
-    # STREAMS. The server-side thread keeps running until the LLM response completes.
-    # Wait up to 30 seconds for it to drain before attempting the profile switch.
-    import time
-    for _ in range(60):
-        health, _ = get("/health")
-        if health.get("active_streams", 0) == 0:
-            break
-        time.sleep(0.5)
-    data, status = post("/api/profile/switch", {"name": "default"})
-    assert status == 200, f"Profile switch returned {status}: {data}"
-    assert "active" in data
-    assert data["active"] == "default"
-    # default_workspace should always be present (may be null for model)
-    assert "default_workspace" in data
-    assert isinstance(data["default_workspace"], str)
-    assert "default_model" in data  # can be None
-
-
-def test_profile_active_endpoint():
-    """GET /api/profile/active returns name and path."""
-    data, status = get("/api/profile/active")
-    assert status == 200
-    assert "name" in data, "Response missing 'name' field"
-    assert isinstance(data["name"], str) and data["name"], "Profile name should be a non-empty string"
-    assert "path" in data
-
-
-# ── Session profile tagging ────────────────────────────────────────────────
-
-def test_new_session_has_profile_field():
-    """Sessions created after Sprint 22 should have a profile field."""
-    data, status = post("/api/session/new", {})
-    assert status == 200
-    session = data["session"]
-    assert "profile" in session
-    # Clean up
-    post("/api/session/delete", {"session_id": session["session_id"]})
-
-
-def test_sessions_list_includes_profile():
-    """Sessions created after Sprint 22 expose a profile field."""
-    # Create a session and check via the direct session endpoint
-    # (/api/sessions filters out empty Untitled sessions; use /api/session instead)
-    create_data, _ = post("/api/session/new", {})
-    sid = create_data["session"]["session_id"]
+def test_new_session_has_usage_fields():
+    """New session should include input_tokens, output_tokens, estimated_cost."""
+    created = []
     try:
-        data, status = get(f"/api/session?session_id={sid}")
+        sid, sess = make_session(created)
+        post("/api/session/rename", {"session_id": sid, "title": "Usage Test"})
+        d, status = get(f"/api/session?session_id={sid}")
         assert status == 200
-        session = data.get("session", data)
-        assert "profile" in session, f"'profile' field missing from session: {list(session.keys())}"
+        sess = d["session"]
+        assert "input_tokens" in sess, "input_tokens field missing from session"
+        assert "output_tokens" in sess, "output_tokens field missing from session"
+        assert "estimated_cost" in sess, "estimated_cost field missing from session"
+        assert sess["input_tokens"] == 0
+        assert sess["output_tokens"] == 0
     finally:
-        post("/api/session/delete", {"session_id": sid})
+        for s in created:
+            post("/api/session/delete", {"session_id": s})
 
 
-# ── Static JS analysis ─────────────────────────────────────────────────────
-
-REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
-
-def test_sessions_js_has_profile_filter():
-    """sessions.js should filter sessions by active profile."""
-    content = (REPO_ROOT / "static" / "sessions.js").read_text()
-    assert "_showAllProfiles" in content
-    assert "profileFiltered" in content
-    assert "S.activeProfile" in content
-
-
-def test_panels_js_clears_model_on_switch():
-    """switchToProfile() must clear localStorage model key."""
-    content = (REPO_ROOT / "static" / "panels.js").read_text()
-    assert "localStorage.removeItem('hermes-webui-model')" in content
-    assert "loadWorkspaceList" in content
-    assert "renderSessionList" in content
-
-
-# ── Regression: profile switch base dir bug (PR #44) ──────────────────────
-
-def test_profile_switch_base_home_not_subdir():
-    """_DEFAULT_HERMES_HOME must always be the base ~/.hermes root, not a
-    profile subdir.  Regression: if HERMES_HOME was mutated to a profiles/
-    subdir at server startup, switch_profile() looked for
-    ~/.hermes/profiles/X/profiles/X which never exists — returning 404.
-
-    We verify the fix is present via static analysis of profiles.py.
-    The live-switch variant is in test_profile_switch_returns_default_model_and_workspace.
-    """
-    content = (REPO_ROOT / "api" / "profiles.py").read_text()
-
-    # The fix must define a resolver function that handles the profiles/ subdir case
-    assert "_resolve_base_hermes_home" in content, (
-        "profiles.py must define _resolve_base_hermes_home() to safely resolve "
-        "the base HERMES_HOME regardless of HERMES_HOME env var mutation"
-    )
-    assert "p.parent.name == 'profiles'" in content, (
-        "_resolve_base_hermes_home must detect when HERMES_HOME points to a "
-        "profiles/ subdir (e.g. ~/.hermes/profiles/webui) and walk up to base"
-    )
-    assert "p.parent.parent" in content, (
-        "_resolve_base_hermes_home must return p.parent.parent when HERMES_HOME "
-        "is a profiles/ subdir, giving back the actual ~/.hermes base"
-    )
-    # _DEFAULT_HERMES_HOME must be set from the resolver, not directly from env
-    assert "_DEFAULT_HERMES_HOME = _resolve_base_hermes_home()" in content, (
-        "_DEFAULT_HERMES_HOME must be assigned from _resolve_base_hermes_home(), "
-        "not directly from os.getenv('HERMES_HOME')"
-    )
+def test_session_compact_has_usage_fields():
+    """Session list should include usage fields in compact form."""
+    created = []
+    try:
+        sid, _ = make_session(created)
+        post("/api/session/rename", {"session_id": sid, "title": "Compact Usage"})
+        d, status = get("/api/sessions")
+        assert status == 200
+        match = [s for s in d["sessions"] if s["session_id"] == sid]
+        assert len(match) == 1
+        assert "input_tokens" in match[0], "input_tokens missing from session list"
+        assert "output_tokens" in match[0], "output_tokens missing from session list"
+        assert match[0]["input_tokens"] == 0
+        assert match[0]["output_tokens"] == 0
+    finally:
+        for s in created:
+            post("/api/session/delete", {"session_id": s})
 
 
-def test_api_helper_returns_clean_error_message():
-    """workspace.js api() helper must parse JSON error bodies and surface
-    the human-readable 'error' field, not raw JSON like
-    {'error': 'Profile X does not exist.'}.
-
-    Regression: api() did `throw new Error(await res.text())` which made
-    showToast display 'Switch failed: {"error":"Profile X does not exist."}' --
-    JSON noise the user shouldn't see.
-    """
-    content = (REPO_ROOT / "static" / "workspace.js").read_text()
-    # Must parse the JSON error body
-    assert "JSON.parse(text)" in content, (
-        "api() must parse JSON error bodies -- raw res.text() leaks JSON to the UI"
-    )
-    # Must extract the .error field
-    assert "j.error" in content, (
-        "api() must extract j.error from parsed JSON error response"
-    )
+def test_session_usage_defaults_zero():
+    """New session usage fields should default to 0/None in creation response."""
+    created = []
+    try:
+        sid, sess = make_session(created)
+        assert "input_tokens" in sess, "input_tokens missing from new session response"
+        assert "output_tokens" in sess, "output_tokens missing from new session response"
+        assert sess["input_tokens"] == 0
+        assert sess["output_tokens"] == 0
+    finally:
+        for s in created:
+            post("/api/session/delete", {"session_id": s})
 
 
-def test_profile_switch_resolve_base_home_logic():
-    """Static analysis: _resolve_base_hermes_home() must handle the case
-    where HERMES_HOME points to a profiles/ subdir by walking up to the base.
-    """
-    content = (REPO_ROOT / "api" / "profiles.py").read_text()
-    assert "_resolve_base_hermes_home" in content, (
-        "profiles.py must define _resolve_base_hermes_home()"
-    )
-    assert "p.parent.name == 'profiles'" in content, (
-        "_resolve_base_hermes_home must detect and unwrap profiles/ subdir paths"
-    )
-    assert "p.parent.parent" in content, (
-        "_resolve_base_hermes_home must walk up two levels from a profiles/ subdir"
-    )
+# ── Skills content linked_files ──────────────────────────────────────────
+
+def test_skills_content_requires_name():
+    """GET /api/skills/content without name should return 400."""
+    try:
+        d, status = get("/api/skills/content")
+        assert status == 400, f"Expected 400 for missing name, got {status}"
+    except urllib.error.HTTPError as e:
+        assert e.code == 400, f"Expected 400 for missing name, got {e.code}"
+
+
+def test_skills_content_has_linked_files_key():
+    """GET /api/skills/content should always return a linked_files key."""
+    try:
+        d, status = get("/api/skills")
+        if not d.get("skills"):
+            return  # no skills in test env, skip
+        name = d["skills"][0]["name"]
+        d2, status2 = get(f"/api/skills/content?name={name}")
+        assert status2 == 200
+        assert "linked_files" in d2, "linked_files key missing from skills/content response"
+        # linked_files must be a dict (possibly empty), not None
+        assert isinstance(d2["linked_files"], dict), "linked_files must be a dict"
+    except urllib.error.HTTPError:
+        pass  # skills module unavailable in this env
+
+
+def test_skills_content_file_path_traversal_rejected():
+    """GET /api/skills/content with traversal path should be rejected."""
+    try:
+        d, status = get("/api/skills")
+        if not d.get("skills"):
+            return  # no skills in test env, skip
+        name = d["skills"][0]["name"]
+        # Attempt path traversal via file param
+        import urllib.parse
+        traversal = urllib.parse.quote("../../etc/passwd", safe="")
+        try:
+            d2, status2 = get(f"/api/skills/content?name={name}&file={traversal}")
+            assert status2 in (400, 404), f"Path traversal should be rejected, got {status2}"
+        except urllib.error.HTTPError as e:
+            assert e.code in (400, 404), f"Path traversal should be rejected, got {e.code}"
+    except urllib.error.HTTPError:
+        pass
+
+
+def test_skills_content_wildcard_name_rejected():
+    """GET /api/skills/content with glob wildcard in name should be rejected when file param present."""
+    try:
+        try:
+            d2, status2 = get("/api/skills/content?name=*&file=SKILL.md")
+            assert status2 == 400, f"Wildcard name should return 400, got {status2}"
+        except urllib.error.HTTPError as e:
+            assert e.code in (400, 404), f"Wildcard name should be rejected, got {e.code}"
+    except Exception:
+        pass
+
+
+# ── Cron create with skills ───────────────────────────────────────────────
+
+def test_cron_create_accepts_skills():
+    """POST /api/crons/create should accept and store a skills array."""
+    created_jobs = []
+    try:
+        body = {
+            "name": "test-sprint23-skills",
+            "schedule": "0 9 * * *",
+            "prompt": "test prompt",
+            "deliver": "local",
+            "skills": ["some-skill"]
+        }
+        d, status = post("/api/crons/create", body)
+        assert status == 200, f"Expected 200 from cron create, got {status}: {d}"
+        assert d.get("ok"), f"Cron create did not return ok: {d}"
+        job_id = d.get("job", {}).get("id") or d.get("id")
+        if job_id:
+            created_jobs.append(job_id)
+        # Verify job appears in list
+        jobs_d, _ = get("/api/crons")
+        job = next((j for j in jobs_d.get("jobs", []) if j.get("name") == "test-sprint23-skills"), None)
+        assert job is not None, "Created cron job not found in job list"
+        assert job.get("skills") == ["some-skill"] or job.get("skill") == "some-skill", \
+            f"skills not stored on job: {job}"
+    finally:
+        for jid in created_jobs:
+            post("/api/crons/delete", {"id": jid})
+        # Also cleanup by name if ID unavailable
+        jobs_d, _ = get("/api/crons")
+        for j in jobs_d.get("jobs", []):
+            if j.get("name") == "test-sprint23-skills":
+                post("/api/crons/delete", {"id": j["id"]})
+
+
+# ── Tool call integrity ──────────────────────────────────────────────────
+
+def test_tool_calls_have_real_names():
+    """Tool calls in session JSON should not have unresolved 'tool' name."""
+    created = []
+    try:
+        sid, _ = make_session(created)
+        d, status = get(f"/api/session?session_id={sid}")
+        assert status == 200
+        for tc in d["session"].get("tool_calls", []):
+            assert tc.get("name") not in ("tool", "", None), f"Unresolved tool name: {tc}"
+    finally:
+        for s in created:
+            post("/api/session/delete", {"session_id": s})

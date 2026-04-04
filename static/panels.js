@@ -112,7 +112,12 @@ function _renderCronSkillTags(){
   for(const name of _cronSelectedSkills){
     const tag=document.createElement('span');
     tag.className='skill-tag';
-    tag.innerHTML=esc(name)+'<span class="remove-tag" onclick="this.parentElement.remove();_cronSelectedSkills=_cronSelectedSkills.filter(s=>s!==\''+esc(name)+'\')">×</span>';
+    tag.dataset.skill=name;
+    const rm=document.createElement('span');
+    rm.className='remove-tag';rm.textContent='×';
+    rm.onclick=()=>{_cronSelectedSkills=_cronSelectedSkills.filter(s=>s!==name);tag.remove();};
+    tag.appendChild(document.createTextNode(name));
+    tag.appendChild(rm);
     wrap.appendChild(tag);
   }
 }
@@ -414,13 +419,17 @@ async function openSkill(name, el) {
       for (const [cat, files] of categories) {
         html += `<div class="skill-linked-section"><h4>${esc(cat)}</h4>`;
         for (const f of files) {
-          html += `<a class="skill-linked-file" onclick="openSkillFile('${esc(name)}','${esc(f)}');return false" href="#">${esc(f)}</a>`;
+          html += `<a class="skill-linked-file" href="#" data-skill-name="${esc(name)}" data-skill-file="${esc(f)}">${esc(f)}</a>`;
         }
         html += '</div>';
       }
       html += '</div>';
     }
     $('previewMd').innerHTML = html;
+    // Wire linked-file clicks via data attributes (avoids inline JS XSS with apostrophes)
+    $('previewMd').querySelectorAll('.skill-linked-file').forEach(a=>{
+      a.addEventListener('click',e=>{e.preventDefault();openSkillFile(a.dataset.skillName,a.dataset.skillFile);});
+    });
     $('previewArea').classList.add('visible');
     $('fileTree').style.display = 'none';
   } catch(e) { setStatus('Could not load skill: ' + e.message); }

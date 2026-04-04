@@ -82,7 +82,7 @@ let _scrollPinned=true;
     _scrollPinned=nearBottom;
   });
 })();
-function _fmtTokens(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'k';return String(n);}
+function _fmtTokens(n){if(!n||n<0)return'0';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'k';return String(n);}
 
 function scrollIfPinned(){
   if(!_scrollPinned) return;
@@ -426,7 +426,7 @@ function renderMessages(){
       inner.appendChild(thinkRow);
     }
     const row=document.createElement('div');row.className='msg-row';
-    row.dataset.msgIdx=rawIdx;
+    row.dataset.msgIdx=rawIdx;row.dataset.role=m.role||'assistant';
     let filesHtml='';
     if(m.attachments&&m.attachments.length)
       filesHtml=`<div class="msg-files">${m.attachments.map(f=>`<div class="msg-file-badge">&#128206; ${esc(f)}</div>`).join('')}</div>`;
@@ -488,9 +488,11 @@ function renderMessages(){
       else inner.appendChild(frag);
     }
   }
-  // Render per-turn usage badge on the last assistant message (if usage data exists)
+  // Render usage badge on the last assistant message row (if usage data exists)
   if(S.session&&(S.session.input_tokens||S.session.output_tokens)){
-    const lastAssist=inner.querySelector('.msg-row:last-child');
+    const rows=inner.querySelectorAll('.msg-row');
+    let lastAssist=null;
+    for(let i=rows.length-1;i>=0;i--){if(rows[i].dataset.role==='assistant'){lastAssist=rows[i];break;}}
     if(lastAssist&&!lastAssist.querySelector('.msg-usage')){
       const usage=document.createElement('div');
       usage.className='msg-usage';
