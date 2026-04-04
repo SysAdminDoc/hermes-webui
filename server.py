@@ -61,9 +61,11 @@ def main():
 
     print_startup_config()
 
-    ok, missing = verify_hermes_imports()
+    ok, missing, errors = verify_hermes_imports()
     if not ok and _HERMES_FOUND:
         print(f'[!!] Warning: Hermes agent found but missing modules: {missing}', flush=True)
+        for mod, err in errors.items():
+            print(f'     {mod}: {err}', flush=True)
         print('     Agent features may not work correctly.', flush=True)
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
