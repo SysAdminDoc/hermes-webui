@@ -381,7 +381,7 @@
     /* Tool cards */
     .tool-card{margin-left:0!important;font-size:12px;}
     /* Settings modal */
-    .settings-panel{width:95vw;max-width:95vw;}
+    .settings-panel{width:95vw;max-width:95vw;min-height:min(580px,88vh);max-height:92vh;}
     /* Login page responsive */
     .card{width:90vw;max-width:320px;padding:28px 24px;}
   }
@@ -652,7 +652,7 @@ body.resizing{user-select:none;cursor:col-resize;}
 
 /* ── Settings overlay ── */
 .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;}
-.settings-panel{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:0;width:380px;max-width:90vw;max-height:80vh;overflow:visible;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;}
+.settings-panel{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:0;width:420px;max-width:92vw;max-height:92vh;min-height:min(680px,90vh);overflow:visible;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;}
 .settings-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--border);}
 .settings-body{padding:20px;overflow-y:auto;flex:1;}
 .settings-field{margin-bottom:16px;}
