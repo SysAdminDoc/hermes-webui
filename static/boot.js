@@ -226,7 +226,7 @@ document.addEventListener('keydown',async e=>{
   if(e.key==='Escape'){
     // Close settings overlay if open
     const settingsOverlay=$('settingsOverlay');
-    if(settingsOverlay&&settingsOverlay.style.display!=='none'){toggleSettings();return;}
+    if(settingsOverlay&&settingsOverlay.style.display!=='none'){_closeSettingsPanel();return;}
     // Close workspace dropdown
     closeWsDropdown();
     // Clear session search
@@ -308,7 +308,7 @@ document.querySelectorAll('.suggestion').forEach(btn=>{
 
 (async()=>{
   // Load send key preference
-  try{const s=await api('/api/settings');window._sendKey=s.send_key||'enter';window._showTokenUsage=!!s.show_token_usage;window._showCliSessions=!!s.show_cli_sessions;}catch(e){window._sendKey='enter';window._showTokenUsage=false;window._showCliSessions=false;}
+  try{const s=await api('/api/settings');window._sendKey=s.send_key||'enter';window._showTokenUsage=!!s.show_token_usage;window._showCliSessions=!!s.show_cli_sessions;const _theme=s.theme||'dark';document.documentElement.dataset.theme=_theme;localStorage.setItem('hermes-theme',_theme);}catch(e){window._sendKey='enter';window._showTokenUsage=false;window._showCliSessions=false;}
   // Fetch active profile
   try{const p=await api('/api/profile/active');S.activeProfile=p.name||'default';}catch(e){S.activeProfile='default';}
   // Update profile chip label immediately
