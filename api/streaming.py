@@ -310,6 +310,12 @@ def _run_agent_streaming(session_id, msg_text, model, workspace, stream_id, atta
                             break
             s.save()
             usage = {'input_tokens': input_tokens, 'output_tokens': output_tokens, 'estimated_cost': estimated_cost}
+            # Include context window data from the agent's compressor for the UI indicator
+            _cc = getattr(agent, 'context_compressor', None)
+            if _cc:
+                usage['context_length'] = getattr(_cc, 'context_length', 0) or 0
+                usage['threshold_tokens'] = getattr(_cc, 'threshold_tokens', 0) or 0
+                usage['last_prompt_tokens'] = getattr(_cc, 'last_prompt_tokens', 0) or 0
             put('done', {'session': s.compact() | {'messages': s.messages, 'tool_calls': tool_calls}, 'usage': usage})
           finally:
             if old_cwd is None: os.environ.pop('TERMINAL_CWD', None)
