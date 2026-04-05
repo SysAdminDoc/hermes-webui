@@ -227,6 +227,14 @@ def handle_get(handler, parsed) -> bool:
         info = git_info_for_workspace(Path(s.workspace))
         return j(handler, {'git': info})
 
+    if parsed.path == '/api/updates/check':
+        settings = load_settings()
+        if not settings.get('check_for_updates', True):
+            return j(handler, {'disabled': True})
+        force = parse_qs(parsed.query).get('force', ['0'])[0] == '1'
+        from api.updates import check_for_updates
+        return j(handler, check_for_updates(force=force))
+
     if parsed.path == '/api/chat/stream/status':
         stream_id = parse_qs(parsed.query).get('stream_id', [''])[0]
         return j(handler, {'active': stream_id in STREAMS, 'stream_id': stream_id})
@@ -599,6 +607,14 @@ def handle_post(handler, parsed) -> bool:
     # ── Session import from JSON (POST) ──
     if parsed.path == '/api/session/import':
         return _handle_session_import(handler, body)
+
+    # ── Self-update (POST) ──
+    if parsed.path == '/api/updates/apply':
+        target = body.get('target', '')
+        if target not in ('webui', 'agent'):
+            return bad(handler, 'target must be "webui" or "agent"')
+        from api.updates import apply_update
+        return j(handler, apply_update(target))
 
     # ── CLI session import (POST) ──
     if parsed.path == '/api/session/import_cli':
