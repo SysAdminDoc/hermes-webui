@@ -1,0 +1,116 @@
+# Hermes Web UI — Themes
+
+Hermes Web UI supports pluggable color themes. Five themes ship built-in, and
+you can create your own with pure CSS — no Python changes needed.
+
+---
+
+## Switching Themes
+
+**Settings panel:** Click the gear icon, select a theme from the dropdown. The
+preview is instant — the UI updates as you click through options.
+
+**Slash command:** Type `/theme dark` or `/theme light` in the composer.
+
+**Themes persist** across page reloads and server restarts (stored in
+`settings.json` server-side, with `localStorage` for flicker-free loading).
+
+---
+
+## Built-in Themes
+
+| Theme | Description |
+|-------|-------------|
+| **Dark** (default) | Deep navy/indigo with muted blue accents. Easy on the eyes for long sessions. |
+| **Light** | Clean white/gray with dark text. High contrast for bright environments. |
+| **Solarized Dark** | Ethan Schoonover's classic dark palette. Teal background, warm accents. |
+| **Monokai** | Warm dark theme inspired by the Monokai editor scheme. Green/pink accents. |
+| **Nord** | Arctic blue-gray palette from the Nord color system. Calm and minimal. |
+
+---
+
+## Creating a Custom Theme
+
+A theme is a CSS block that overrides the color variables. Add it to
+`static/style.css` (or a separate file that you link after the main stylesheet).
+
+### Step 1: Define your theme block
+
+Every color in the UI comes from these CSS variables:
+
+```css
+:root[data-theme="your-theme-name"] {
+  --bg: #1a1a2e;          /* Main background */
+  --sidebar: #16213e;      /* Sidebar background */
+  --border: rgba(255,255,255,0.08);   /* Subtle borders */
+  --border2: rgba(255,255,255,0.14);  /* Stronger borders */
+  --text: #e8e8f0;         /* Primary text color */
+  --muted: #8888aa;        /* Secondary/muted text */
+  --accent: #e94560;       /* Accent color (errors, warnings, delete) */
+  --blue: #7cb9ff;         /* Primary action color (links, active states) */
+  --gold: #c9a84c;         /* Secondary accent (pinned items, gold highlights) */
+  --code-bg: #0d1117;      /* Code block background */
+}
+```
+
+That's it. Override any or all of these variables. The entire UI adapts
+automatically because every color reference uses `var(--name)`.
+
+### Step 2: Add it to the theme picker (optional)
+
+To make your theme appear in the Settings dropdown, add an `<option>` to the
+theme `<select>` in `static/index.html`:
+
+```html
+<option value="your-theme-name">Your Theme Name</option>
+```
+
+And update the `/theme` command's valid theme list in `static/commands.js`.
+
+### Step 3: Test it
+
+Switch to your theme via `/theme your-theme-name` or the Settings panel.
+Check these areas:
+- Sidebar session list (hover states, active state, project borders)
+- Message bubbles (user vs assistant styling)
+- Code blocks (background contrast, copy button visibility)
+- Tool cards (running indicator, expand/collapse)
+- Settings panel and login page
+- Mobile layout (hamburger sidebar, bottom nav)
+
+### Tips
+
+- **Light themes** need additional scrollbar overrides to avoid dark scrollbars
+  on a light background. See the built-in light theme for the pattern.
+- The **logo gradient** uses `--accent` automatically, so it adapts to your
+  theme without extra work.
+- **Prism.js syntax highlighting** uses its own CDN stylesheet (Tomorrow theme).
+  It works well on dark themes; on light themes the contrast is acceptable but
+  not perfect. Custom Prism theme support is planned for a future update.
+- **No server changes needed.** The `theme` setting in `settings.json` accepts
+  any string — your custom theme name will persist without code changes.
+
+---
+
+## How Themes Work Internally
+
+1. Each theme is a `:root[data-theme="name"]` CSS block that overrides variables.
+2. Switching themes sets `document.documentElement.dataset.theme = name` in JS.
+3. A tiny inline `<script>` in `<head>` reads `localStorage` before the
+   stylesheet loads — this prevents a flash of the wrong theme on page load.
+4. The theme preference is saved server-side via `POST /api/settings` and
+   loaded on boot via `GET /api/settings`.
+5. The `/theme` command and Settings dropdown both update the DOM, localStorage,
+   and server settings simultaneously.
+
+---
+
+## Contributing a Theme
+
+To contribute a new built-in theme:
+
+1. Add your `:root[data-theme="name"]` block to `static/style.css`
+2. Add the `<option>` to the Settings panel in `static/index.html`
+3. Add the theme name to the valid list in `cmdTheme()` in `static/commands.js`
+4. Test on desktop and mobile
+5. Open a PR — themes are pure CSS additions with no backend changes needed

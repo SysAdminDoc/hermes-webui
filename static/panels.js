@@ -958,6 +958,9 @@ async function loadSettingsPanel(){
     // Send key preference
     const sendKeySel=$('settingsSendKey');
     if(sendKeySel) sendKeySel.value=settings.send_key||'enter';
+    // Theme preference
+    const themeSel=$('settingsTheme');
+    if(themeSel) themeSel.value=settings.theme||'dark';
     const showUsageCb=$('settingsShowTokenUsage');
     if(showUsageCb) showUsageCb.checked=!!settings.show_token_usage;
     const showCliCb=$('settingsShowCliSessions');
@@ -992,6 +995,7 @@ async function saveSettings(){
   if(model) body.default_model=model;
   if(workspace) body.default_workspace=workspace;
   if(sendKey) body.send_key=sendKey;
+  body.theme=($('settingsTheme')||{}).value||'dark';
   body.show_token_usage=showTokenUsage;
   body.show_cli_sessions=showCliSessions;
   body.sync_to_insights=!!($('settingsSyncInsights')||{}).checked;

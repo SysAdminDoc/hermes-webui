@@ -10,6 +10,7 @@ const COMMANDS=[
   {name:'workspace', desc:'Switch workspace by name',            fn:cmdWorkspace, arg:'name'},
   {name:'new',       desc:'Start a new chat session',            fn:cmdNew},
   {name:'usage',     desc:'Toggle token usage display on/off',   fn:cmdUsage},
+  {name:'theme',     desc:'Switch theme (dark/light/solarized/monokai/nord)', fn:cmdTheme, arg:'name'},
 ];
 
 function parseCommand(text){
@@ -120,6 +121,22 @@ async function cmdUsage(){
   if(cb) cb.checked=next;
   renderMessages();
   showToast('Token usage '+(next?'on':'off'));
+}
+
+async function cmdTheme(args){
+  const themes=['dark','light','solarized','monokai','nord'];
+  if(!args||!themes.includes(args.toLowerCase())){
+    showToast('Usage: /theme '+themes.join('|'));
+    return;
+  }
+  const t=args.toLowerCase();
+  document.documentElement.dataset.theme=t;
+  localStorage.setItem('hermes-theme',t);
+  try{await api('/api/settings',{method:'POST',body:JSON.stringify({theme:t})});}catch(e){}
+  // Update settings dropdown if panel is open
+  const sel=$('settingsTheme');
+  if(sel)sel.value=t;
+  showToast('Theme: '+t);
 }
 
 // ── Autocomplete dropdown ───────────────────────────────────────────────────

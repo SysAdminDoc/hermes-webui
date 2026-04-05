@@ -653,6 +653,7 @@ _SETTINGS_DEFAULTS = {
     'show_token_usage': False,  # show input/output token badge below assistant messages
     'show_cli_sessions': False,  # merge CLI sessions from state.db into the sidebar
     'sync_to_insights': False,  # mirror WebUI token usage to state.db for /insights
+    'theme': 'dark',  # active UI theme name (no enum gate -- allows custom themes)
     'password_hash': None,  # SHA-256 hash; None = auth disabled
 }
 
