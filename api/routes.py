@@ -56,7 +56,7 @@ except ImportError:
 # ── Login page (self-contained, no external deps) ────────────────────────────
 _LOGIN_PAGE_HTML = '''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hermes — Sign in</title>
+<title>{{BOT_NAME}} — Sign in</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#1a1a2e;color:#e8e8f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
@@ -79,8 +79,8 @@ button:hover{background:rgba(124,185,255,.25)}
 .err{color:#e94560;font-size:12px;margin-top:10px;display:none}
 </style></head><body>
 <div class="card">
-  <div class="logo">H</div>
-  <h1>Hermes</h1>
+  <div class="logo">{{BOT_NAME_INITIAL}}</div>
+  <h1>{{BOT_NAME}}</h1>
   <p class="sub">Enter your password to continue</p>
   <form onsubmit="doLogin(event);return false">
     <input type="password" id="pw" placeholder="Password" autofocus
@@ -117,11 +117,8 @@ def handle_get(handler, parsed) -> bool:
 
     if parsed.path == '/login':
         import html as _html
-        _bot = _html.escape(load_settings().get('bot_name', 'Hermes'))
-        _page = _LOGIN_PAGE_HTML.replace(
-            '<title>Hermes — Sign in</title>',
-            f'<title>{_bot} — Sign in</title>',
-        ).replace('<h1>Hermes</h1>', f'<h1>{_bot}</h1>')
+        _bn = _html.escape(load_settings().get('bot_name', 'Hermes'))
+        _page = _LOGIN_PAGE_HTML.replace('{{BOT_NAME}}', _bn).replace('{{BOT_NAME_INITIAL}}', _bn[0].upper())
         return t(handler, _page, content_type='text/html; charset=utf-8')
 
     if parsed.path == '/api/auth/status':
