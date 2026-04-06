@@ -2,6 +2,7 @@
 Hermes Web UI -- Route handlers for GET and POST endpoints.
 Extracted from server.py (Sprint 11) so server.py is a thin shell.
 """
+import html as _html
 import json
 import os
 import queue
@@ -116,8 +117,7 @@ def handle_get(handler, parsed) -> bool:
                  content_type='text/html; charset=utf-8')
 
     if parsed.path == '/login':
-        import html as _html
-        _bn = _html.escape(load_settings().get('bot_name', 'Hermes'))
+        _bn = _html.escape(load_settings().get('bot_name') or 'Hermes')
         _page = _LOGIN_PAGE_HTML.replace('{{BOT_NAME}}', _bn).replace('{{BOT_NAME_INITIAL}}', _bn[0].upper())
         return t(handler, _page, content_type='text/html; charset=utf-8')
 
@@ -526,6 +526,8 @@ def handle_post(handler, parsed) -> bool:
 
     # ── Settings (POST) ──
     if parsed.path == '/api/settings':
+        if 'bot_name' in body:
+            body['bot_name'] = (str(body['bot_name']) or '').strip() or 'Hermes'
         saved = save_settings(body)
         saved.pop('password_hash', None)  # never expose hash to client
         return j(handler, saved)
