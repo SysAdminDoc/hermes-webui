@@ -116,7 +116,13 @@ def handle_get(handler, parsed) -> bool:
                  content_type='text/html; charset=utf-8')
 
     if parsed.path == '/login':
-        return t(handler, _LOGIN_PAGE_HTML, content_type='text/html; charset=utf-8')
+        import html as _html
+        _bot = _html.escape(load_settings().get('bot_name', 'Hermes'))
+        _page = _LOGIN_PAGE_HTML.replace(
+            '<title>Hermes — Sign in</title>',
+            f'<title>{_bot} — Sign in</title>',
+        ).replace('<h1>Hermes</h1>', f'<h1>{_bot}</h1>')
+        return t(handler, _page, content_type='text/html; charset=utf-8')
 
     if parsed.path == '/api/auth/status':
         from api.auth import is_auth_enabled, parse_cookie, verify_session
