@@ -522,18 +522,35 @@ function renderMessages(){
       byAssistant[key].push(tc);
     }
     const allRows = Array.from(inner.querySelectorAll('.msg-row[data-msg-idx]'));
+    // Track the last inserted node per anchor so back-to-back groups for the
+    // same (filtered) anchor row are inserted in chronological order.
+    const anchorInsertAfter = new Map();
     for(const [key, cards] of Object.entries(byAssistant)){
       const aIdx = parseInt(key);
-      let insertBefore = null;
-      if(aIdx === -1){
-        for(let i=allRows.length-1;i>=0;i--){
-          const ri=parseInt(allRows[i].dataset.msgIdx||'-1',10);
-          if(ri>=0&&S.messages[ri]&&S.messages[ri].role==='assistant'){insertBefore=allRows[i];break;}
-        }
-      } else {
+      // Find the right insertion point: cards go AFTER the assistant message
+      // that triggered them. We look for the row at aIdx, or the nearest
+      // visible ASSISTANT row at or before aIdx (the assistant message may be
+      // filtered out if it contained only tool_use blocks with no text response).
+      let anchorRow = null;
+      if(aIdx >= 0){
+        // First: exact match for the assistant row
         for(const r of allRows){
           const ri=parseInt(r.dataset.msgIdx||'-1');
-          if(ri>aIdx&&S.messages[ri]&&S.messages[ri].role==='assistant'){insertBefore=r;break;}
+          if(ri===aIdx){anchorRow=r;break;}
+        }
+        // Fallback: nearest visible ASSISTANT row at or before aIdx
+        if(!anchorRow){
+          for(let i=allRows.length-1;i>=0;i--){
+            const ri=parseInt(allRows[i].dataset.msgIdx||'-1');
+            if(ri<=aIdx&&S.messages[ri]&&S.messages[ri].role==='assistant'){anchorRow=allRows[i];break;}
+          }
+        }
+      }
+      // aIdx === -1 or no assistant anchor found: attach after the last assistant row
+      if(!anchorRow){
+        for(let i=allRows.length-1;i>=0;i--){
+          const ri=parseInt(allRows[i].dataset.msgIdx||'-1',10);
+          if(ri>=0&&S.messages[ri]&&S.messages[ri].role==='assistant'){anchorRow=allRows[i];break;}
         }
       }
       const frag=document.createDocumentFragment();
@@ -554,8 +571,15 @@ function renderMessages(){
         toggle.appendChild(collapseBtn);
         frag.insertBefore(toggle,frag.firstChild);
       }
-      if(insertBefore) inner.insertBefore(frag,insertBefore);
+      // Insert after the anchor row (or after any previously inserted group for
+      // the same anchor), preserving chronological order for multi-step chains.
+      const insertAfterNode = anchorInsertAfter.get(anchorRow) || anchorRow;
+      const refNode = insertAfterNode ? insertAfterNode.nextSibling : null;
+      if(refNode) inner.insertBefore(frag,refNode);
       else inner.appendChild(frag);
+      // Record the last child we inserted so the next group for this anchor
+      // goes after it rather than back at anchorRow.nextSibling.
+      anchorInsertAfter.set(anchorRow, inner.lastChild);
     }
   }
   // Render usage badge on the last assistant message row (if enabled and usage data exists)
