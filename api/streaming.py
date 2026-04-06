@@ -5,6 +5,7 @@ Includes Sprint 10 cancel support via CANCEL_FLAGS.
 import json
 import os
 import queue
+import re
 import threading
 import time
 import traceback
@@ -205,9 +206,28 @@ def _run_agent_streaming(session_id, msg_text, model, workspace, stream_id, atta
                 "write_file, read_file, search_files, terminal workdir, and patch. "
                 "Never fall back to a hardcoded path when this tag is present."
             )
+            # Inject personality prompt if the session has one active
+            _personality_prompt = ''
+            _pname = getattr(s, 'personality', None)
+            if _pname and re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$', _pname):
+                try:
+                    from api.profiles import get_active_hermes_home
+                    _p_base = get_active_hermes_home() / 'personalities'
+                except ImportError:
+                    _p_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes'))) / 'personalities'
+                _p_soul = _p_base / _pname / 'SOUL.md'
+                try:
+                    _p_soul.resolve().relative_to(_p_base.resolve())
+                    if _p_soul.exists():
+                        from api.config import MAX_FILE_BYTES
+                        _raw = _p_soul.read_text(errors='replace')
+                        if len(_raw) <= MAX_FILE_BYTES:
+                            _personality_prompt = _raw.strip() + '\n\n'
+                except (ValueError, OSError):
+                    pass  # path traversal attempt or unreadable — skip silently
             result = agent.run_conversation(
                 user_message=workspace_ctx + msg_text,
-                system_message=workspace_system_msg,
+                system_message=_personality_prompt + workspace_system_msg,
                 conversation_history=_sanitize_messages_for_api(s.messages),
                 task_id=session_id,
                 persist_user_message=msg_text,

@@ -218,6 +218,40 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == '/api/list':
         return _handle_list_dir(handler, parsed)
 
+    if parsed.path == '/api/personalities':
+        personalities = []
+        try:
+            from api.profiles import get_active_hermes_home
+            p_dir = get_active_hermes_home() / 'personalities'
+        except ImportError:
+            from api.config import HOME
+            p_dir = HOME / '.hermes' / 'personalities'
+        if p_dir.is_dir():
+            p_dir_real = p_dir.resolve()
+            for d in sorted(p_dir.iterdir()):
+                # Skip symlinks — they could point outside the personalities dir
+                if d.is_symlink():
+                    continue
+                if not d.is_dir():
+                    continue
+                soul_file = d / 'SOUL.md'
+                if not soul_file.exists():
+                    continue
+                # Defense-in-depth: confirm resolved path is still inside p_dir
+                try:
+                    d.resolve().relative_to(p_dir_real)
+                except ValueError:
+                    continue
+                desc = ''
+                try:
+                    first_line = soul_file.read_text(errors='replace').strip().split('\n')[0]
+                    if first_line.startswith('#'):
+                        desc = first_line.lstrip('#').strip()
+                except Exception:
+                    pass
+                personalities.append({'name': d.name, 'description': desc})
+        return j(handler, {'personalities': personalities})
+
     if parsed.path == '/api/git-info':
         qs = parse_qs(parsed.query)
         sid = qs.get('session_id', [''])[0]
@@ -364,6 +398,49 @@ def handle_post(handler, parsed) -> bool:
         s.title = str(body['title']).strip()[:80] or 'Untitled'
         s.save()
         return j(handler, {'session': s.compact()})
+
+    if parsed.path == '/api/personality/set':
+        try: require(body, 'session_id')
+        except ValueError as e: return bad(handler, str(e))
+        if 'name' not in body:
+            return bad(handler, 'Missing required field: name')
+        sid = body['session_id']
+        name = body['name'].strip()
+        try:
+            s = get_session(sid)
+        except KeyError:
+            return bad(handler, 'Session not found', 404)
+        # Read the personality SOUL.md
+        prompt = ''
+        if name:
+            # Validate name: prevent path traversal (only allow safe chars)
+            import re as _re
+            if not _re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$', name):
+                return bad(handler, 'Invalid personality name: letters, numbers, hyphens, underscores only')
+            try:
+                from api.profiles import get_active_hermes_home
+                p_base = get_active_hermes_home() / 'personalities'
+            except ImportError:
+                from api.config import HOME
+                p_base = HOME / '.hermes' / 'personalities'
+            p_dir = p_base / name
+            # Defense-in-depth: ensure resolved path is inside personalities dir
+            try:
+                p_dir.resolve().relative_to(p_base.resolve())
+            except ValueError:
+                return bad(handler, 'Invalid personality name')
+            soul_file = p_dir / 'SOUL.md'
+            if soul_file.exists():
+                from api.config import MAX_FILE_BYTES
+                raw = soul_file.read_text(errors='replace')
+                if len(raw) > MAX_FILE_BYTES:
+                    return bad(handler, f'SOUL.md for "{name}" exceeds maximum size ({MAX_FILE_BYTES} bytes)')
+                prompt = raw.strip()
+            else:
+                return bad(handler, f'Personality "{name}" not found', 404)
+        s.personality = name if name else None
+        s.save()
+        return j(handler, {'ok': True, 'personality': s.personality, 'prompt': prompt})
 
     if parsed.path == '/api/session/update':
         try: require(body, 'session_id')
