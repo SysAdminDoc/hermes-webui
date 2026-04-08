@@ -114,18 +114,22 @@ async function send(){
   // Extract display text from assistantText, stripping completed thinking blocks
   // and hiding content still inside an open thinking block.
   function _streamDisplay(){
-    let t=assistantText;
+    const raw=assistantText;
     for(const {open,close} of _thinkPairs){
-      if(!t.startsWith(open)) continue;
-      const ci=t.indexOf(close,open.length);
-      if(ci!==-1){
-        // Thinking block complete — strip it, show the rest
-        return t.slice(ci+close.length).replace(/^\s+/,'');
+      if(raw.startsWith(open)){
+        const ci=raw.indexOf(close,open.length);
+        if(ci!==-1){
+          // Thinking block complete — strip it, show the rest
+          return raw.slice(ci+close.length).replace(/^\s+/,'');
+        }
+        // Still inside thinking block — show placeholder
+        return '';
       }
-      // Still inside thinking block — show placeholder
-      return '';
+      // Hide partial tag prefixes while streaming so users don't see
+      // `<thi`, `<think`, etc. before the model finishes the token.
+      if(open.startsWith(raw)) return '';
     }
-    return t;
+    return raw;
   }
   function _scheduleRender(){
     if(_renderPending) return;
