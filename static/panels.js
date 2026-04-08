@@ -1098,9 +1098,11 @@ async function saveSettings(andClose){
     window._botName=body.bot_name;
     if(typeof applyBotName==='function') applyBotName();
     if(typeof setLocale==='function') setLocale(language);
+    if(typeof applyLocaleToDOM==='function') applyLocaleToDOM();
     _settingsDirty=false; _settingsThemeOnOpen=theme;
     const bar=$('settingsUnsavedBar'); if(bar) bar.style.display='none';
     renderMessages();
+    if(typeof syncTopbar==='function') syncTopbar();
     if(typeof renderSessionList==='function') renderSessionList();
     showToast(t('settings_saved'));
     $('settingsOverlay').style.display='none';

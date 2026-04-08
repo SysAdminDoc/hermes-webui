@@ -285,5 +285,18 @@ function loadLocale() {
   setLocale(saved);
 }
 
+/**
+ * Re-stamp all [data-i18n] elements in the DOM with the current locale.
+ * Safe to call at any time — missing keys fall back to English.
+ * Call after setLocale() to make static HTML text update without a reload.
+ */
+function applyLocaleToDOM() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const val = t(key);
+    if (val && val !== key) el.textContent = val;
+  });
+}
+
 // Apply saved locale immediately so there's no flash of English on reload.
 loadLocale();
