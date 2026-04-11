@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hermes vs. Perplexity Computer | Comparison</title>
+  <meta name="description" content="Hermes vs. Perplexity Computer — an honest comparison of a self-hosted persistent agent vs. a cloud agentic workflow engine." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --bg-card: #161b22;
+      --bg-card-hover: #1c2128;
+      --border: #30363d;
+      --border-hover: #484f58;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent: #f0a500;
+      --accent-dim: #c88800;
+      --accent-glow: rgba(240,165,0,0.15);
+      --accent-subtle: rgba(240,165,0,0.08);
+      --green: #3fb950;
+      --red: #f85149;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+      --nav-height: 64px;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4),0 4px 16px rgba(0,0,0,0.3);
+    }
+    [data-theme="light"] {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f6f8fa;
+      --bg-tertiary: #eaeef2;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f6f8fa;
+      --border: #d0d7de;
+      --border-hover: #9198a1;
+      --text-primary: #1f2328;
+      --text-secondary: #656d76;
+      --text-muted: #9198a1;
+      --accent: #c07800;
+      --accent-dim: #a06000;
+      --accent-glow: rgba(192,120,0,0.12);
+      --accent-subtle: rgba(192,120,0,0.06);
+      --green: #1a7f37;
+      --red: #cf222e;
+      --blue: #0969da;
+      --purple: #7c3aed;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1),0 4px 16px rgba(0,0,0,0.06);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;font-size:16px}
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.6;transition:background 0.2s,color 0.2s;-webkit-font-smoothing:antialiased}
+    a{color:var(--accent);text-decoration:none;transition:color 0.15s}
+    a:hover{color:var(--accent-dim)}
+    img{max-width:100%}
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-track{background:var(--bg-secondary)}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    #nav{position:fixed;top:0;left:0;right:0;height:var(--nav-height);background:rgba(13,17,23,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000}
+    [data-theme="light"] #nav{background:rgba(255,255,255,0.92)}
+    .nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:100%;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .nav-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:var(--text-primary);text-decoration:none;flex-shrink:0}
+    .nav-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1}
+    .nav-back{display:flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:0.875rem;font-weight:500;padding:6px 12px;border-radius:6px;transition:color 0.15s,background 0.15s;text-decoration:none}
+    .nav-back:hover{color:var(--text-primary);background:var(--bg-tertiary)}
+    .btn-theme{background:none;border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;padding:7px 10px;border-radius:6px;font-size:15px;line-height:1;transition:border-color 0.15s,color 0.15s,background 0.15s}
+    .btn-theme:hover{border-color:var(--border-hover);color:var(--text-primary);background:var(--bg-tertiary)}
+    .btn-cta{background:var(--accent);color:#000;font-size:0.8rem;font-weight:600;padding:7px 14px;border-radius:6px;border:none;cursor:pointer;text-decoration:none;display:inline-block;transition:background 0.15s,transform 0.1s;white-space:nowrap}
+    .btn-cta:hover{background:var(--accent-dim);color:#000;transform:translateY(-1px)}
+    main{padding-top:var(--nav-height)}
+    .hero{padding:60px 24px 48px;background:var(--bg-primary);position:relative;overflow:hidden}
+    .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:400px;background:radial-gradient(ellipse at center,var(--accent-glow) 0%,transparent 70%);pointer-events:none}
+    .container{max-width:1100px;margin:0 auto;position:relative}
+    .section{padding:64px 24px}
+    .section-alt{background:var(--bg-secondary)}
+    .breadcrumb{display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-muted);margin-bottom:24px;flex-wrap:wrap}
+    .breadcrumb a{color:var(--text-muted)}
+    .breadcrumb a:hover{color:var(--accent)}
+    .breadcrumb-sep{opacity:0.4}
+    .page-label{font-size:0.75rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+    .page-title{font-size:clamp(2rem,5vw,3.2rem);font-weight:800;line-height:1.1;letter-spacing:-0.02em;margin-bottom:16px}
+    .page-sub{font-size:1.05rem;color:var(--text-secondary);max-width:680px;line-height:1.7;margin-bottom:32px}
+    .verdict{display:flex;align-items:flex-start;gap:16px;background:var(--accent-subtle);border:1px solid rgba(240,165,0,0.2);border-radius:var(--radius-lg);padding:20px 24px;margin-bottom:48px}
+    [data-theme="light"] .verdict{border-color:rgba(192,120,0,0.2)}
+    .verdict-icon{font-size:1.6rem;flex-shrink:0;line-height:1}
+    .verdict-text strong{color:var(--text-primary);display:block;margin-bottom:4px;font-size:1rem}
+    .verdict-text p{color:var(--text-secondary);font-size:0.9rem;line-height:1.6;margin:0}
+    .section-title{font-size:clamp(1.4rem,3vw,1.9rem);font-weight:700;margin-bottom:8px;color:var(--text-primary)}
+    .section-body{font-size:1rem;color:var(--text-secondary);max-width:720px;line-height:1.7;margin-bottom:32px}
+    .feature-compare{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px}
+    @media(max-width:700px){.feature-compare{grid-template-columns:1fr}}
+    .fc-col{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px}
+    .fc-col.hermes{border-color:var(--accent);border-width:2px}
+    .fc-col-label{font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:16px;color:var(--text-muted)}
+    .fc-col.hermes .fc-col-label{color:var(--accent)}
+    .fc-col-name{font-size:1.1rem;font-weight:700;color:var(--text-primary);margin-bottom:20px}
+    .fc-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+    .fc-row:last-child{border-bottom:none}
+    .fc-key{flex:1;font-size:0.875rem;color:var(--text-secondary)}
+    .fc-val{font-size:0.875rem;font-weight:500;text-align:right;min-width:60px}
+    .fc-val.yes{color:var(--green)}
+    .fc-val.no{color:var(--text-muted)}
+    .fc-val.partial{color:var(--accent)}
+    .fc-val.preview{color:var(--purple)}
+    .fc-val.cloud{color:var(--blue)}
+    .narrative{max-width:780px}
+    .narrative h3{font-size:1.1rem;font-weight:700;color:var(--text-primary);margin:32px 0 10px}
+    .narrative h3:first-child{margin-top:0}
+    .narrative p{font-size:0.975rem;color:var(--text-secondary);line-height:1.75;margin-bottom:16px}
+    .narrative ul{padding-left:20px;margin-bottom:16px}
+    .narrative li{font-size:0.975rem;color:var(--text-secondary);line-height:1.7;margin-bottom:6px}
+    .narrative strong{color:var(--text-primary)}
+    .narrative a{color:var(--accent)}
+    .table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border);margin:24px 0 40px}
+    table{width:100%;border-collapse:collapse;font-size:0.875rem}
+    thead th{background:var(--bg-tertiary);color:var(--text-secondary);font-weight:600;font-size:0.78rem;letter-spacing:0.04em;text-transform:uppercase;padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+    thead th:first-child{color:var(--text-primary)}
+    tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:var(--bg-card-hover)}
+    tbody tr.hl{background:var(--accent-subtle)}
+    tbody tr.hl:hover{background:rgba(240,165,0,0.12)}
+    tbody td{padding:12px 16px;color:var(--text-secondary);vertical-align:middle}
+    tbody td:first-child{font-weight:600;color:var(--text-primary);white-space:nowrap}
+    .c-yes{color:var(--green);font-weight:600}
+    .c-no{color:var(--text-muted);font-size:0.82rem}
+    .c-partial{color:var(--accent);font-size:0.82rem}
+    .c-cloud{color:var(--blue);font-size:0.82rem}
+    .c-prev{color:var(--purple);font-size:0.82rem}
+    .who-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+    @media(max-width:600px){.who-grid{grid-template-columns:1fr}}
+    .who-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px}
+    .who-card.choose-hermes{border-color:var(--green)}
+    .who-card-label{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;color:var(--text-muted)}
+    .who-card.choose-hermes .who-card-label{color:var(--green)}
+    .who-card ul{padding-left:18px}
+    .who-card li{font-size:0.9rem;color:var(--text-secondary);line-height:1.65;margin-bottom:6px}
+    .who-card strong{color:var(--text-primary)}
+    .cta-strip{background:var(--bg-secondary);border-top:1px solid var(--border);padding:40px 24px;text-align:center}
+    .cta-strip h2{font-size:1.4rem;font-weight:700;margin-bottom:8px}
+    .cta-strip p{color:var(--text-secondary);margin-bottom:24px;font-size:0.975rem}
+    .cta-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#000;font-weight:600;font-size:0.95rem;padding:12px 22px;border-radius:8px;transition:background 0.15s,transform 0.1s}
+    .btn-primary:hover{background:var(--accent-dim);color:#000;transform:translateY(-1px)}
+    .btn-secondary{display:inline-flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-weight:500;font-size:0.95rem;padding:12px 22px;border-radius:8px;transition:border-color 0.15s,background 0.15s}
+    .btn-secondary:hover{border-color:var(--border-hover);background:var(--bg-card-hover);color:var(--text-primary)}
+    .compare-nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}
+    .compare-nav-label{width:100%;font-size:0.75rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px}
+    .cpill{display:inline-block;padding:6px 14px;border:1px solid var(--border);border-radius:100px;font-size:0.82rem;font-weight:500;color:var(--text-secondary);transition:border-color 0.15s,color 0.15s,background 0.15s}
+    .cpill:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-subtle)}
+    .cpill.active{border-color:var(--accent);color:var(--accent);background:var(--accent-subtle)}
+    @media(max-width:768px){
+      .section{padding:48px 16px}
+      .hero{padding:48px 16px 36px}
+      .feature-compare{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">
+      <div class="nav-logo-icon">⚡</div>
+      Hermes
+    </a>
+    <a href="../index.html#compare" class="nav-back">← All comparisons</a>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <button class="btn-theme" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+      <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-cta" target="_blank" rel="noopener">Get started →</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Hermes</a>
+        <span class="breadcrumb-sep">/</span>
+        <a href="../index.html#compare">Compare</a>
+        <span class="breadcrumb-sep">/</span>
+        <span>Perplexity Computer</span>
+      </div>
+      <p class="page-label">Head-to-head comparison</p>
+      <h1 class="page-title">Hermes vs. Perplexity Computer</h1>
+      <p class="page-sub">
+        Perplexity Computer (launched February 2026) is a cloud-based agentic workflow engine that orchestrates 19+ frontier models, runs tasks in isolated sandboxes, and connects to 400+ services. Here's how it compares to a self-hosted persistent agent.
+      </p>
+
+      <div class="verdict">
+        <div class="verdict-icon">🔍</div>
+        <div class="verdict-text">
+          <strong>Verdict: Different audiences, different trade-offs.</strong>
+          <p>Perplexity Computer is the lowest-friction way to run complex multi-step AI workflows — no setup, massive model variety, and broad connector coverage. Hermes is for users who need their agent on their own hardware: persistent cross-project memory, any-interval scheduling, and full control over what runs where. The key dividing line is data sovereignty and infrastructure ownership.</p>
+        </div>
+      </div>
+
+      <!-- Feature compare grid -->
+      <h2 class="section-title">Feature comparison</h2>
+      <div class="feature-compare">
+        <div class="fc-col hermes">
+          <div class="fc-col-label">You are here</div>
+          <div class="fc-col-name">Hermes</div>
+          <div class="fc-row"><span class="fc-key">Persistent memory</span><span class="fc-val yes">Yes, layered</span></div>
+          <div class="fc-row"><span class="fc-key">Self-improving skills</span><span class="fc-val yes">Yes, automatic</span></div>
+          <div class="fc-row"><span class="fc-key">Scheduled jobs</span><span class="fc-val yes">Yes, self-hosted</span></div>
+          <div class="fc-row"><span class="fc-key">Scheduling interval</span><span class="fc-val yes">Any (no minimum)</span></div>
+          <div class="fc-row"><span class="fc-key">Messaging integration</span><span class="fc-val yes">15+ platforms</span></div>
+          <div class="fc-row"><span class="fc-key">Slack integration</span><span class="fc-val yes">Yes</span></div>
+          <div class="fc-row"><span class="fc-key">Self-hosted</span><span class="fc-val yes">Yes</span></div>
+          <div class="fc-row"><span class="fc-key">Data sovereignty</span><span class="fc-val yes">Yes, your hardware</span></div>
+          <div class="fc-row"><span class="fc-key">Open source</span><span class="fc-val yes">Yes, MIT</span></div>
+          <div class="fc-row"><span class="fc-key">Provider-agnostic</span><span class="fc-val yes">Yes, any LLM</span></div>
+          <div class="fc-row"><span class="fc-key">Multi-model routing</span><span class="fc-val partial">Manual choice</span></div>
+          <div class="fc-row"><span class="fc-key">Web search built-in</span><span class="fc-val yes">Yes (tool)</span></div>
+          <div class="fc-row"><span class="fc-key">Code execution</span><span class="fc-val yes">Full shell</span></div>
+          <div class="fc-row"><span class="fc-key">Pricing</span><span class="fc-val yes">Free, self-hosted</span></div>
+          <div class="fc-row"><span class="fc-key">Memory inspectability</span><span class="fc-val yes">Yes, markdown files</span></div>
+        </div>
+        <div class="fc-col">
+          <div class="fc-col-label">Comparing against</div>
+          <div class="fc-col-name">Perplexity Computer</div>
+          <div class="fc-row"><span class="fc-key">Persistent memory</span><span class="fc-val partial">Yes (AI context level)</span></div>
+          <div class="fc-row"><span class="fc-key">Self-improving skills</span><span class="fc-val no">No (50+ prebuilt playbooks)</span></div>
+          <div class="fc-row"><span class="fc-key">Scheduled jobs</span><span class="fc-val yes">Yes (Tasks)</span></div>
+          <div class="fc-row"><span class="fc-key">Scheduling interval</span><span class="fc-val partial">Daily / weekly minimum</span></div>
+          <div class="fc-row"><span class="fc-key">Messaging integration</span><span class="fc-val partial">Slack, Teams, email</span></div>
+          <div class="fc-row"><span class="fc-key">Slack integration</span><span class="fc-val yes">Yes (full, native)</span></div>
+          <div class="fc-row"><span class="fc-key">Self-hosted</span><span class="fc-val no">No (cloud-only)</span></div>
+          <div class="fc-row"><span class="fc-key">Data sovereignty</span><span class="fc-val no">No (Perplexity servers)</span></div>
+          <div class="fc-row"><span class="fc-key">Open source</span><span class="fc-val no">No</span></div>
+          <div class="fc-row"><span class="fc-key">Provider-agnostic</span><span class="fc-val yes">Yes (19+ models, auto-routed)</span></div>
+          <div class="fc-row"><span class="fc-key">Multi-model routing</span><span class="fc-val yes">Yes, automatic</span></div>
+          <div class="fc-row"><span class="fc-key">Web search built-in</span><span class="fc-val yes">Yes (proprietary index)</span></div>
+          <div class="fc-row"><span class="fc-key">Code execution</span><span class="fc-val cloud">Cloud sandbox</span></div>
+          <div class="fc-row"><span class="fc-key">Pricing</span><span class="fc-val partial">$20/mo Pro, $200/mo Max</span></div>
+          <div class="fc-row"><span class="fc-key">Memory inspectability</span><span class="fc-val no">Limited (opaque)</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Narrative -->
+  <section class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">Deep dive</h2>
+      <p class="section-body">Perplexity Computer and Hermes are both agentic systems that run multi-step tasks autonomously. They're built on almost opposite assumptions about where computation should live and who should control it.</p>
+
+      <div class="narrative">
+
+        <h3>What Perplexity Computer actually is</h3>
+        <p>
+          Perplexity Computer — launched February 25, 2026 for Max subscribers and expanded to all Pro subscribers in March 2026 — is a cloud-based agentic workflow engine. Its tagline is "Chat answers. Agents do tasks. <strong>Computer works.</strong>" You describe a goal in natural language; the system decomposes it into subtasks, dispatches parallel sub-agents, and runs everything in an isolated cloud sandbox (2 vCPUs, 8 GB RAM, Python + Node.js pre-installed) with real browser access and a real filesystem.
+        </p>
+        <p>
+          The core differentiator is <strong>multi-model orchestration at scale</strong>. Perplexity Computer routes across 19+ frontier models — Claude Opus, GPT-5 variants, Gemini, Grok, and others — automatically selecting the best model for each subtask. No single model handles the whole pipeline; orchestration is the product. Tasks can run for hours, check in only when genuinely blocked, and notify you on completion via email or push notification.
+        </p>
+        <p>
+          It also ships with <strong>400+ prebuilt OAuth connectors</strong> (Google Drive, Gmail, Notion, Jira, GitHub, Slack, Salesforce, Snowflake, and more) and MCP server support added in March 2026. The connector ecosystem is broad, though independent reviewers found several connectors (Vercel, Ahrefs, GitHub OAuth) unreliable in practice — the GitHub personal access token path worked better than the official connector.
+        </p>
+
+        <h3>The cloud-only constraint</h3>
+        <p>
+          Everything Perplexity Computer does runs on Perplexity's infrastructure. Your task data — the files, API calls, environment state — lives in their cloud sandbox for the duration of the job and beyond. <strong>There is no self-hosted option.</strong> Perplexity's CEO has confirmed that browsing and search history is used for advertising purposes (standard for the free/Pro tier). Enterprise tiers have different data terms, but the execution environment still runs on Perplexity's servers.
+        </p>
+        <p>
+          This matters most for workflows that touch proprietary code, internal databases, hardware on a private network, or anything regulated. The sandbox is isolated per task, which reduces cross-contamination risks, but it doesn't change the fundamental fact that your work runs on someone else's infrastructure.
+        </p>
+        <p>
+          Perplexity announced "Personal Computer" in March 2026 — a dedicated Mac mini that runs a local-cloud hybrid model, providing persistent local compute. It's a direct response to the self-hosting gap. As of April 2026 it's waitlist-only with no pricing announced.
+        </p>
+
+        <h3>Scheduling: Tasks vs. cron</h3>
+        <p>
+          Perplexity ships a <strong>Tasks</strong> feature (available on Pro, Max, and Enterprise) that supports once, daily, weekly, every weekday, monthly, and yearly schedules. The Slack integration extends this — you can prompt Perplexity in Slack on a recurring schedule, e.g. "every Monday at 9am, pull Salesforce numbers and post to #sales-updates." Task limits are 10 (Pro/Max) to 40 (Enterprise Max).
+        </p>
+        <p>
+          Hermes cron is architecturally different. It runs as a headless server process with no minimum interval (you can schedule something every minute if you want), no task count cap, and <strong>full access to your accumulated memory and skills at job run time</strong>. A scheduled Hermes job that fires at 3am can reference everything Hermes has learned about your stack over the past six months. A Perplexity scheduled task starts each run with the context you explicitly give it.
+        </p>
+        <p>
+          For light recurring reminders, research briefings, and business report generation, Perplexity Tasks is genuinely convenient. For workflows that need deep context, access to private infrastructure, or minute-granularity scheduling, Hermes is the better fit.
+        </p>
+
+        <h3>Memory: what persists and what doesn't</h3>
+        <p>
+          Perplexity Computer does have cross-session memory at the AI context level — it can remember preferences and prior conversation state. But independent testing found that <strong>the sandbox environment itself doesn't persist</strong>: OAuth tokens expired between sessions, requiring re-authentication on reconnects. "Memory" here means conversational context, not a running environment that accumulates state.
+        </p>
+        <p>
+          Hermes memory is different in kind. It's a layered system — user profile, agent memory, skills, session history — all stored as readable markdown files on your server. Memory compounds across every session, every project, and every tool call over months. A Hermes agent six months in knows your CI workflow, your code conventions, your recurring failure modes, and the exact commands that fixed them last time. That doesn't exist in Perplexity Computer's current model.
+        </p>
+
+        <h3>Where Perplexity Computer genuinely wins</h3>
+        <p>
+          The strengths are real and worth acknowledging:
+        </p>
+        <ul>
+          <li><strong>Zero setup.</strong> No server, no configuration, no dependency management. Paste a goal, get a result. For non-technical users or one-off complex tasks this is a genuine edge.</li>
+          <li><strong>Multi-model routing.</strong> Automatically using the best model for each subtask — Gemini for deep research, Claude for reasoning, GPT-5 for long context — is something you'd have to build manually in Hermes.</li>
+          <li><strong>Parallel sub-agents.</strong> Running dozens of sub-agents simultaneously on separate sandboxes is powerful for research, competitive analysis, and data processing at scale.</li>
+          <li><strong>Proprietary search index.</strong> Perplexity's own search infrastructure (not reliant on third-party APIs) is consistently one of the better AI search products. It's built into every task.</li>
+          <li><strong>400+ connectors out of the box.</strong> The breadth of prebuilt OAuth integrations is wider than anything you'd set up yourself on a new Hermes install.</li>
+          <li><strong>Slack-native workflows.</strong> For teams already living in Slack, the Perplexity Slack bot with scheduling is genuinely smooth — no SSH tunnel required.</li>
+          <li><strong>Image and video generation.</strong> Google image generation and Sora video (Max tier) are built-in. Hermes can call these APIs but doesn't bundle them.</li>
+        </ul>
+
+        <h3>The credit system: understand before you commit</h3>
+        <p>
+          Max ($200/month) includes 10,000 credits. A simple task might cost 30 credits; a complex coding session can cost thousands. One independent reviewer building a single webpage burned through $200 in additional credits via silent failure loops — the agent kept trying, consuming credits, without surfacing that it was stuck. Credits expire at month end with no rollover.
+        </p>
+        <p>
+          Auto-refill is off by default with a $400/month default spending cap. Tasks pause (not cancel) when credits run out, preserving progress — which is a thoughtful design. But the cost model is opaque enough that it warrants careful monitoring, especially for long-running or looping tasks. Hermes runs on your server: the "cost" is your compute, which is fixed and predictable.
+        </p>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Full comparison table -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Full comparison table</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Perplexity Computer</th>
+              <th>Hermes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Persistent memory</td><td><span class="c-partial">Yes (AI context level; env doesn't persist)</span></td><td class="hl"><span class="c-yes">✓ Layered, automatic, permanent</span></td></tr>
+            <tr><td>Memory inspectability</td><td><span class="c-no">Limited (opaque)</span></td><td class="hl"><span class="c-yes">✓ Readable markdown files</span></td></tr>
+            <tr><td>Self-improving skills</td><td><span class="c-no">No (50+ prebuilt playbooks)</span></td><td class="hl"><span class="c-yes">✓ Auto-written from experience</span></td></tr>
+            <tr><td>Scheduled jobs</td><td><span class="c-partial">Yes (Tasks: daily/weekly+; max 10–40)</span></td><td class="hl"><span class="c-yes">✓ Any interval, no cap, self-hosted</span></td></tr>
+            <tr><td>Messaging access</td><td><span class="c-partial">Slack (full), Teams, email</span></td><td class="hl"><span class="c-yes">✓ 15+ platforms (Telegram, WhatsApp, Discord…)</span></td></tr>
+            <tr><td>Self-hosted</td><td><span class="c-no">No (cloud-only)</span></td><td class="hl"><span class="c-yes">✓ Yes</span></td></tr>
+            <tr><td>Data sovereignty</td><td><span class="c-no">No (Perplexity servers; advertising data use confirmed)</span></td><td class="hl"><span class="c-yes">✓ Your hardware</span></td></tr>
+            <tr><td>Open source</td><td><span class="c-no">No</span></td><td class="hl"><span class="c-yes">✓ MIT</span></td></tr>
+            <tr><td>Provider-agnostic</td><td><span class="c-yes">✓ 19+ models, auto-routed</span></td><td class="hl"><span class="c-yes">✓ Any provider (OpenAI, Anthropic, local…)</span></td></tr>
+            <tr><td>Local/self-hosted LLM</td><td><span class="c-no">No</span></td><td class="hl"><span class="c-yes">✓ Yes (Ollama, llama.cpp, etc.)</span></td></tr>
+            <tr><td>Web search</td><td><span class="c-yes">✓ Proprietary Perplexity index</span></td><td class="hl"><span class="c-yes">✓ Via tool (web_search)</span></td></tr>
+            <tr><td>Code execution</td><td><span class="c-cloud">Cloud sandbox (Python, Node.js)</span></td><td class="hl"><span class="c-yes">✓ Full shell on your server</span></td></tr>
+            <tr><td>Private network / local DB access</td><td><span class="c-no">No</span></td><td class="hl"><span class="c-yes">✓ Yes (runs on your network)</span></td></tr>
+            <tr><td>400+ OAuth connectors</td><td><span class="c-yes">✓ Yes (reliability varies)</span></td><td class="hl"><span class="c-partial">Via tool use / MCP</span></td></tr>
+            <tr><td>MCP support</td><td><span class="c-yes">✓ Yes (March 2026)</span></td><td class="hl"><span class="c-yes">✓ Yes (client + server)</span></td></tr>
+            <tr><td>Parallel sub-agents</td><td><span class="c-yes">✓ Yes (cloud VMs)</span></td><td class="hl"><span class="c-yes">✓ Yes (delegate_task)</span></td></tr>
+            <tr><td>Web UI</td><td><span class="c-yes">✓ Yes (perplexity.ai/computer)</span></td><td class="hl"><span class="c-yes">✓ Yes (self-hosted)</span></td></tr>
+            <tr><td>Mobile app</td><td><span class="c-yes">✓ iOS, Android</span></td><td class="hl"><span class="c-yes">✓ Via messaging apps</span></td></tr>
+            <tr><td>Image / video generation</td><td><span class="c-yes">✓ Yes (Max tier)</span></td><td class="hl"><span class="c-partial">Via API tools</span></td></tr>
+            <tr><td>Pricing</td><td><span class="c-partial">$20/mo Pro, $200/mo Max + credit usage</span></td><td class="hl"><span class="c-yes">✓ Free (self-hosted, your compute)</span></td></tr>
+            <tr><td>Always-on (no app open)</td><td><span class="c-yes">✓ Cloud runs 24/7</span></td><td class="hl"><span class="c-yes">✓ Server process runs 24/7</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Who should choose what -->
+  <section class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">Who should choose what</h2>
+      <p class="section-body">Both are serious agentic systems. The decision comes down to how you weight setup cost vs. data control, and whether connector breadth or scheduling depth matters more.</p>
+      <div class="who-grid">
+        <div class="who-card choose-hermes">
+          <div class="who-card-label">Choose Hermes if…</div>
+          <ul>
+            <li><strong>Data sovereignty</strong> is non-negotiable — proprietary code, regulated data, or private infrastructure</li>
+            <li>You need <strong>minute-level or sub-hourly scheduling</strong> without task count caps</li>
+            <li>You want an agent that gets <strong>smarter about your specific workflow</strong> over months without manual curation</li>
+            <li>You want to use a <strong>local model</strong> (Ollama, llama.cpp) or swap providers freely</li>
+            <li>You need to access <strong>local network resources</strong> — internal databases, private APIs, on-prem services</li>
+            <li>You want predictable, fixed costs — your own compute, no credit burn</li>
+            <li>You want <strong>15+ messaging platforms</strong> including Telegram, WhatsApp, Signal, Discord</li>
+            <li>Open source and <strong>full inspectability</strong> of what the agent knows and does matters to you</li>
+          </ul>
+        </div>
+        <div class="who-card choose-other">
+          <div class="who-card-label">Choose Perplexity Computer if…</div>
+          <ul>
+            <li>You want <strong>zero setup</strong> — no server, no config, start immediately</li>
+            <li>You need <strong>automatic best-model routing</strong> across 19+ frontier models without managing API keys</li>
+            <li>You do heavy <strong>research, competitive analysis, or report generation</strong> at scale and want parallel sub-agents</li>
+            <li>Your team is already <strong>Slack-native</strong> and wants recurring workflow automation from within Slack</li>
+            <li>You need <strong>400+ prebuilt connectors</strong> (Salesforce, Snowflake, HubSpot, Canva) without custom integration work</li>
+            <li>You want Perplexity's <strong>proprietary search index</strong> deeply integrated into every task</li>
+            <li><strong>Data privacy is acceptable</strong> on Perplexity's infrastructure for your use case</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Compare nav -->
+      <div class="compare-nav">
+        <span class="compare-nav-label">Other comparisons</span>
+        <a href="openclaw.html" class="cpill">vs. OpenClaw</a>
+        <a href="claude-code.html" class="cpill">vs. Claude Code</a>
+        <a href="codex.html" class="cpill">vs. Codex</a>
+        <a href="opencode.html" class="cpill">vs. OpenCode</a>
+        <a href="cursor.html" class="cpill">vs. Cursor</a>
+        <a href="copilot.html" class="cpill">vs. Copilot</a>
+        <a href="claude-ai.html" class="cpill">vs. Claude.ai</a>
+        <a href="chatgpt.html" class="cpill">vs. ChatGPT</a>
+        <a href="perplexity-computer.html" class="cpill active">vs. Perplexity Computer</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- CTA strip -->
+<div class="cta-strip">
+  <div class="container">
+    <h2>Ready to try Hermes?</h2>
+    <p>Open source, MIT licensed, runs on any Linux/macOS server in under a minute.</p>
+    <div class="cta-btns">
+      <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" target="_blank" rel="noopener" class="btn-primary">Get started →</a>
+      <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener" class="btn-secondary">View on GitHub</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const html = document.documentElement;
+  const toggle = document.getElementById('theme-toggle');
+  function setTheme(t) {
+    html.setAttribute('data-theme', t);
+    localStorage.setItem('theme', t);
+    toggle.textContent = t === 'light' ? '🌙' : '☀️';
+  }
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved) setTheme(saved);
+  else if (!prefersDark) setTheme('light');
+  else setTheme('dark');
+  toggle.addEventListener('click', () => setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+</script>
+
+</body>
+</html>
