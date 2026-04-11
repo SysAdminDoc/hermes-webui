@@ -79,7 +79,7 @@
 
     /* ===== RESET & BASE ===== */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; font-size: 16px; }
+    html { scroll-behavior: smooth; font-size: 16px; overflow-x: hidden; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg-primary);
@@ -2075,10 +2075,6 @@ hermes doctor         # diagnose any issues</code></pre>
       themeToggle.textContent = '🌙';
     } else {
       themeToggle.textContent = '☀️';
-    }
-  } else {
-      themeToggle.innerHTML = '&#9790;';
-      hljsTheme.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
     }
   }
 
