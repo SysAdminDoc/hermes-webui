@@ -372,41 +372,54 @@
   }
 
   /* HOW TO PICK */
+
   .picker-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
     margin-top: 28px;
   }
   .picker-card {
-    background: var(--bg-card);
+    background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
   }
   .picker-card:hover {
     border-color: var(--accent);
-    box-shadow: 0 4px 16px rgba(240,165,0,0.08);
+    box-shadow: 0 4px 20px rgba(240,165,0,0.12);
+    transform: translateY(-1px);
   }
   .picker-card .use-case {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     color: var(--text-muted);
-    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .picker-card .use-case .uc-icon {
+    font-size: 0.95rem;
+    letter-spacing: 0;
   }
   .picker-card .recommendation {
-    font-size: 0.97rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 4px;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1.2;
   }
   .picker-card .why-short {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
+    line-height: 1.45;
+    margin-top: 2px;
   }
 
   /* FREE TIER NOTE */
@@ -1112,48 +1125,52 @@
     </div>
 
     <!-- QUICK PICKER -->
-    <div style="margin-top:40px;">
-      <div class="section-label" style="font-size:0.75rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;">Quick reference — pick by use case</div>
+    <div style="margin-top:48px;">
+      <div style="margin-bottom:20px;">
+        <div class="section-label" style="font-size:0.7rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">Quick reference</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);margin-bottom:4px;">Pick by use case</div>
+        <div style="font-size:0.85rem;color:var(--text-secondary);">Not sure which model to start with? Match your task to a pick.</div>
+      </div>
       <div class="picker-grid">
         <div class="picker-card">
-          <div class="use-case">Daily assistant</div>
+          <div class="use-case"><span class="uc-icon">🤖</span> Daily assistant</div>
           <div class="recommendation">Claude Sonnet 4.6</div>
-          <div class="why-short">Fast, affordable, strong all-around</div>
+          <div class="why-short">Fast, affordable, strong across everything. The best starting point.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Complex coding</div>
+          <div class="use-case"><span class="uc-icon">💻</span> Complex coding</div>
           <div class="recommendation">Claude Opus 4.6</div>
-          <div class="why-short">Powers Claude Code, deep reasoning</div>
+          <div class="why-short">Powers Claude Code &amp; Cursor. Deep multi-file reasoning.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Creative writing</div>
+          <div class="use-case"><span class="uc-icon">✍️</span> Creative writing</div>
           <div class="recommendation">Claude Opus 4.6</div>
-          <div class="why-short">Mazur #1, best prose voice</div>
+          <div class="why-short">Mazur writing benchmark #1. Best prose voice of any model.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Search & news</div>
+          <div class="use-case"><span class="uc-icon">🔍</span> Search &amp; news</div>
           <div class="recommendation">Gemini 3.1 Pro</div>
-          <div class="why-short">Native Google Search grounding</div>
+          <div class="why-short">Native Google Search grounding. 2M context for long research.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Hard reasoning</div>
+          <div class="use-case"><span class="uc-icon">🧮</span> Hard reasoning</div>
           <div class="recommendation">Gemini 3.1 Pro</div>
-          <div class="why-short">GPQA #1 at 95.45%, AIME 98%+</div>
+          <div class="why-short">GPQA Diamond #1 at 95.45%. Best at PhD-level science and math.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Budget pick</div>
+          <div class="use-case"><span class="uc-icon">💰</span> Budget pick</div>
           <div class="recommendation">DeepSeek V3.2</div>
-          <div class="why-short">MIT license, self-hostable, $0.28/1M</div>
+          <div class="why-short">MIT licensed, self-hostable, $0.28/1M. Frontier-class for almost nothing.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Huge documents</div>
+          <div class="use-case"><span class="uc-icon">📄</span> Huge documents</div>
           <div class="recommendation">Gemini 3.1 Pro</div>
-          <div class="why-short">Up to 2M token context window</div>
+          <div class="why-short">Up to 2M token context. Load entire codebases or books in one pass.</div>
         </div>
         <div class="picker-card">
-          <div class="use-case">Try everything</div>
+          <div class="use-case"><span class="uc-icon">🗝️</span> Try everything</div>
           <div class="recommendation">OpenRouter</div>
-          <div class="why-short">One API key, every model</div>
+          <div class="why-short">One API key, every model. Switch between Claude, GPT, Gemini instantly.</div>
         </div>
       </div>
     </div>
