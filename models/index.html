@@ -648,9 +648,9 @@
         <div class="model-info">
           <h3>Gemini 3.1 Pro</h3>
           <div class="model-meta">Google DeepMind &middot; 1–2M context &middot; $2 / $12 per 1M tokens</div>
-          <div class="model-why">#4 on Chatbot Arena (1,492 Elo), #1 on GPQA Diamond reasoning (95.45%), and #1 on creative writing Arena scores. Exceptional value — at $2/$12 per 1M tokens it matches or beats models costing 4–10x more. The 2M context variant handles entire codebases and book-length documents. Currently in preview.</div>
+          <div class="model-why">#4 on Chatbot Arena (1,492 Elo), #1 on GPQA Diamond reasoning (94.1%), and #1 on creative writing Arena scores. Exceptional value — at $2/$12 per 1M tokens it matches or beats models costing 4–10x more. The 2M context variant handles entire codebases and book-length documents. Currently in preview.</div>
           <div class="model-pills">
-            <span class="pill blue">GPQA #1 (95.45%)</span>
+            <span class="pill blue">GPQA #1 (94.1%)</span>
             <span class="pill green">Best value</span>
             <span class="pill purple">2M context</span>
           </div>
@@ -817,18 +817,18 @@
       <div class="model-card" style="--model-color: #ff9040;">
         <div class="rank-badge">5</div>
         <div class="model-info">
-          <h3>DeepSeek V3.2</h3>
-          <div class="model-meta">DeepSeek &middot; 128K context &middot; $0.28 / $0.42 per 1M tokens</div>
-          <div class="model-why">MIT-licensed, fully self-hostable, and scores 72–74% on SWE-bench Verified — competitive with frontier models released 12 months ago at near-zero cost. The "reasoning-first" architecture integrates thinking into tool use natively. Gold-medal level at competitive programming (IMO, ICPC, IOI). For privacy-first setups or ultra-high-volume coding workloads, nothing comes close on value.</div>
+          <h3>Qwen 3.6-Plus</h3>
+          <div class="model-meta">Alibaba &middot; 1M context &middot; Emerging agentic pick &middot; OpenRouter available</div>
+          <div class="model-why">Leads Terminal-Bench at 61.6% — ahead of both GPT-5.4 and Gemini 3.1 Pro on CLI and DevOps automation. 88.2% on GPQA Diamond. The 1M token context fits large codebases cleanly. An emerging dark-horse for agentic coding pipelines with strong independent eval scores. Available now via Alibaba Cloud and OpenRouter.</div>
           <div class="model-pills">
-            <span class="pill orange">MIT license</span>
-            <span class="pill green">Self-hostable</span>
-            <span class="pill gold">Competitive coding</span>
+            <span class="pill orange">Terminal-Bench #1 (61.6%)</span>
+            <span class="pill blue">1M context</span>
+            <span class="pill green">Agentic emerging</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">$0.28</span>
-          <span class="score-label">per 1M input</span>
+          <span class="score-val">61.6%</span>
+          <span class="score-label">Terminal-Bench</span>
         </div>
       </div>
     </div>
@@ -846,7 +846,7 @@
       <div class="section-icon icon-purple">✍️</div>
       <div class="section-header-text">
         <h2>Best for writing</h2>
-        <p>Creative writing, copywriting, long-form docs, email drafts, blog posts. Ranked on Chatbot Arena creative writing Elo and Mazur writing scores. These models have a real voice and don't sound like a 2012 press release.</p>
+        <p>Creative writing, copywriting, long-form docs, email drafts. Ranked on EQ-Bench Creative Writing Elo (sycophancy-resistant, community-verified) and Chatbot Arena creative writing scores.</p>
       </div>
     </div>
 
@@ -854,49 +854,13 @@
       <div class="model-card" style="--model-color: #f0a500;">
         <div class="rank-badge gold">🥇</div>
         <div class="model-info">
-          <h3>Claude Opus 4.6</h3>
-          <div class="model-meta">Anthropic &middot; 1M context &middot; $5 / $25 per 1M tokens</div>
-          <div class="model-why">Leads the Mazur creative writing benchmark (8.53) and instruction-following Arena (1,500 Elo — the highest of any model tested). Produces prose that feels genuinely human — varied rhythm, natural hedging, opinions where warranted. Particularly strong at maintaining stylistic consistency over very long documents. The thinking variant (8.56 Mazur) pushes even further for literary work.</div>
-          <div class="model-pills">
-            <span class="pill gold">Mazur #1 (8.53)</span>
-            <span class="pill green">IF Elo #1</span>
-            <span class="pill blue">Long-form</span>
-          </div>
-        </div>
-        <div class="model-score">
-          <span class="score-val">8.53</span>
-          <span class="score-label">Mazur score</span>
-        </div>
-      </div>
-
-      <div class="model-card" style="--model-color: #58a6ff;">
-        <div class="rank-badge silver">🥈</div>
-        <div class="model-info">
-          <h3>Gemini 3.1 Pro</h3>
-          <div class="model-meta">Google DeepMind &middot; 1–2M context &middot; $2 / $12 per 1M tokens</div>
-          <div class="model-why">#1 on Chatbot Arena creative writing Elo (1,487) — human raters prefer it for fiction and blogs. The 2M context and 65K output limit make it uniquely capable for genuinely long-form projects: full chapters, entire reports, long storytelling arcs where other models lose the thread. Also leads multilingual creative writing in 40+ languages. At $2/$12 it is 12x cheaper on input than Opus.</div>
-          <div class="model-pills">
-            <span class="pill blue">Arena CW #1 (1487)</span>
-            <span class="pill purple">2M context</span>
-            <span class="pill gold">65K output</span>
-          </div>
-        </div>
-        <div class="model-score">
-          <span class="score-val">1487</span>
-          <span class="score-label">Arena CW Elo</span>
-        </div>
-      </div>
-
-      <div class="model-card" style="--model-color: #3fb950;">
-        <div class="rank-badge bronze">🥉</div>
-        <div class="model-info">
           <h3>Claude Sonnet 4.6</h3>
           <div class="model-meta">Anthropic &middot; 200K context &middot; $3 / $15 per 1M tokens</div>
-          <div class="model-why">Beats Opus on EQ-Bench Creative Writing Elo (1,936 vs 1,932) — the community benchmark specifically designed to catch sycophancy and measure genuine literary quality. Near-Opus prose at 85% lower cost and faster latency. The smart pick for high-volume writing: daily summaries, email drafts, social copy, documentation. Strong, consistent tone across long sessions.</div>
+          <div class="model-why">Leads EQ-Bench Creative Writing at 1,936 Elo — higher than Opus (1,932) on the benchmark specifically designed to resist sycophancy and measure genuine literary quality. Best voice consistency over long documents: tone, register, and style stay coherent across sessions. At 85% lower cost than Opus, it's the smart pick for high-volume writing — drafts, summaries, long-form content pipelines.</div>
           <div class="model-pills">
-            <span class="pill green">EQ-Bench CW #1</span>
-            <span class="pill blue">Best value</span>
-            <span class="pill gold">High volume</span>
+            <span class="pill gold">EQ-Bench CW #1 (1936)</span>
+            <span class="pill green">Best value</span>
+            <span class="pill blue">Voice consistency</span>
           </div>
         </div>
         <div class="model-score">
@@ -905,39 +869,75 @@
         </div>
       </div>
 
+      <div class="model-card" style="--model-color: #58a6ff;">
+        <div class="rank-badge silver">🥈</div>
+        <div class="model-info">
+          <h3>Claude Opus 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 1M context &middot; $5 / $25 per 1M tokens</div>
+          <div class="model-why">Leads the Mazur creative writing benchmark (8.53) and instruction-following Arena (1,500 Elo — highest of any model tested). The thinking variant (8.56 Mazur) pushes further for complex literary work. #1 on Chatbot Arena overall at 1,504 Elo. Best for projects demanding deep voice and stylistic range — where spending more per token is justified by the work's importance.</div>
+          <div class="model-pills">
+            <span class="pill blue">Mazur #1 (8.53)</span>
+            <span class="pill gold">IF Elo #1</span>
+            <span class="pill green">Literary depth</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">8.53</span>
+          <span class="score-label">Mazur score</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #3fb950;">
+        <div class="rank-badge bronze">🥉</div>
+        <div class="model-info">
+          <h3>Gemini 3.1 Pro</h3>
+          <div class="model-meta">Google DeepMind &middot; 1–2M context &middot; $2 / $12 per 1M tokens</div>
+          <div class="model-why">#1 on Chatbot Arena creative writing Elo (1,487) — human raters prefer it for fiction and blogs — and best for AI-tell avoidance across independent evals. The 2M context and 65K output limit are unmatched for long-form projects: entire chapters, full reports, long narrative arcs. Strong multilingual creative writing in 40+ languages. 12x cheaper on input than Opus.</div>
+          <div class="model-pills">
+            <span class="pill purple">Arena CW #1 (1487)</span>
+            <span class="pill blue">2M context</span>
+            <span class="pill gold">AI-tell avoidance</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">1487</span>
+          <span class="score-label">Arena CW Elo</span>
+        </div>
+      </div>
+
       <div class="model-card" style="--model-color: #8b949e;">
         <div class="rank-badge">4</div>
         <div class="model-info">
           <h3>GPT-5.4</h3>
           <div class="model-meta">OpenAI &middot; 1.1M context &middot; $2.50 / $15 per 1M tokens</div>
-          <div class="model-why">Community pick for structured and marketing writing — technical documentation, reports, pitch decks, business writing. Excellent at following precise formatting instructions. GPT-5.4 Pro is also one of the top Arena creative writing performers (Elo: 1,461). Faster and slightly cheaper than Opus. The go-to for analytical or commercial writing over literary prose.</div>
+          <div class="model-why">Solid for structured and commercial writing: technical docs, reports, pitch decks, email campaigns. Excellent instruction-following (~92% IFEval). Ranked ~9th on Arena creative writing — noticeably behind Claude and Gemini for fiction and literary prose, but a strong default when your output needs precise formatting or structured argument flow over stylistic voice.</div>
           <div class="model-pills">
-            <span class="pill blue">Marketing copy</span>
-            <span class="pill green">Structured docs</span>
+            <span class="pill blue">Structured docs</span>
+            <span class="pill green">92% IFEval</span>
             <span class="pill gold">Technical writing</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">1461</span>
-          <span class="score-label">Arena CW Elo</span>
+          <span class="score-val">~9th</span>
+          <span class="score-label">Arena CW rank</span>
         </div>
       </div>
 
       <div class="model-card" style="--model-color: #ff9040;">
         <div class="rank-badge">5</div>
         <div class="model-info">
-          <h3>Meta Muse Spark</h3>
-          <div class="model-meta">Meta &middot; 1M context &middot; Free (not yet on commercial API)</div>
-          <div class="model-why">Meta's ground-up redesign from their new Superintelligence Labs — the successor to Llama 4. Natively multimodal (text, images, audio, tool use in one architecture). Debuted at #3 on Chatbot Arena overall (1,493 Elo) and posts strong creative writing scores. Powers Meta AI on WhatsApp, Instagram, and the web. No commercial API yet but open-weight access is expected.</div>
+          <h3>Kimi K2.5</h3>
+          <div class="model-meta">Moonshot AI &middot; 128K context &middot; $0.60 / $2.50 per 1M tokens</div>
+          <div class="model-why">~1,700 EQ-Bench Creative Writing Elo — roughly 87% of Sonnet's literary quality at 80% lower cost. The budget pick for high-volume content: product descriptions, social copy, blog drafts, content pipelines where you need coherent writing at scale without paying frontier prices on every call. API is live and available now.</div>
           <div class="model-pills">
-            <span class="pill orange">Open weight</span>
-            <span class="pill green">Arena #3</span>
-            <span class="pill blue">Multimodal</span>
+            <span class="pill orange">Budget CW pick</span>
+            <span class="pill green">~1700 EQ-Bench CW</span>
+            <span class="pill gold">Volume content</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">1493</span>
-          <span class="score-label">Arena Elo</span>
+          <span class="score-val">$0.60</span>
+          <span class="score-label">per 1M input</span>
         </div>
       </div>
     </div>
@@ -1064,7 +1064,7 @@
       <div class="section-icon icon-orange">🧮</div>
       <div class="section-header-text">
         <h2>Best for reasoning and analysis</h2>
-        <p>Hard math, PhD-level science, complex multi-step logic. Ranked on GPQA Diamond (graduate-level questions — PhD expert baseline is just 65%) and Humanity's Last Exam.</p>
+        <p>Hard math, PhD-level science, complex multi-step logic, knowledge work, and second-brain tasks. Ranked on GPQA Diamond (PhD expert baseline: 65%), Humanity's Last Exam, and ARC-AGI-2.</p>
       </div>
     </div>
 
@@ -1073,16 +1073,16 @@
         <div class="rank-badge gold">🥇</div>
         <div class="model-info">
           <h3>Gemini 3.1 Pro</h3>
-          <div class="model-meta">Google DeepMind &middot; 1–2M context &middot; 95.45% GPQA Diamond</div>
-          <div class="model-why">Leads GPQA Diamond at 95.45% — the highest score of any model evaluated, 30 points above the PhD human expert baseline. Near-perfect on AIME 2025 math (98.13%). Strong across physics, chemistry, biology, and multi-domain expert knowledge. The combination of top reasoning and 2M context makes it uniquely capable for research requiring both depth and breadth.</div>
+          <div class="model-meta">Google DeepMind &middot; 1–2M context &middot; 94.1% GPQA Diamond</div>
+          <div class="model-why">Leads GPQA Diamond at 94.1% and ARC-AGI-2 visual reasoning at 77.1% — the highest score on both of the hardest published reasoning benchmarks. Near-perfect AIME 2025 math (98%+). Strong across physics, chemistry, biology, and multi-domain expert knowledge. The 2M context makes it uniquely capable for research requiring both depth and breadth in one pass.</div>
           <div class="model-pills">
-            <span class="pill gold">GPQA #1 (95.45%)</span>
-            <span class="pill blue">AIME 98%+</span>
+            <span class="pill gold">GPQA #1 (94.1%)</span>
+            <span class="pill blue">ARC-AGI-2 #1 (77.1%)</span>
             <span class="pill purple">2M context</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">95.45%</span>
+          <span class="score-val">94.1%</span>
           <span class="score-label">GPQA Diamond</span>
         </div>
       </div>
@@ -1091,16 +1091,16 @@
         <div class="rank-badge silver">🥈</div>
         <div class="model-info">
           <h3>GPT-5.4</h3>
-          <div class="model-meta">OpenAI &middot; 1.1M context &middot; 91.67% GPQA Diamond</div>
-          <div class="model-why">91.67% on GPQA Diamond (tied with Gemini 3 Pro at rank 3/4), 41.6% on Humanity's Last Exam, and 75.1% on Terminal-Bench DevOps. The GPT-5.4 Pro variant adds extended reasoning for the hardest problems. Best overall reasoning package when you also need coding and writing strength — Gemini 3.1 Pro edges it on pure GPQA but GPT-5.4 is more balanced across task types.</div>
+          <div class="model-meta">OpenAI &middot; 1.1M context &middot; ~92% GPQA Diamond</div>
+          <div class="model-why">~92% on GPQA Diamond, 41.6% on Humanity's Last Exam, and ~92% on IFEval strict compliance. The best-balanced reasoning model: strong on scientific knowledge, reliable at following precise analytical instructions, and capable across coding and writing tasks simultaneously. The GPT-5.4 Pro variant adds extended reasoning for the genuinely hard problems.</div>
           <div class="model-pills">
-            <span class="pill blue">GPQA 91.67%</span>
-            <span class="pill gold">HLE top scorer</span>
+            <span class="pill blue">GPQA ~92%</span>
+            <span class="pill gold">92% IFEval</span>
             <span class="pill green">Balanced</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">91.67%</span>
+          <span class="score-val">~92%</span>
           <span class="score-label">GPQA Diamond</span>
         </div>
       </div>
@@ -1109,17 +1109,17 @@
         <div class="rank-badge bronze">🥉</div>
         <div class="model-info">
           <h3>Claude Opus 4.6</h3>
-          <div class="model-meta">Anthropic &middot; 1M context &middot; 89.65% GPQA Diamond (thinking)</div>
-          <div class="model-why">The thinking variant reaches 89.65% on GPQA Diamond and leads Chatbot Arena overall at 1,504 Elo. Strong on ARC-AGI visual reasoning and multi-modal analytical tasks. The best model for tasks requiring both deep reasoning and very long context — it holds 1M tokens coherently where smaller context models fragment. Also the strongest at following precise analytical instructions.</div>
+          <div class="model-meta">Anthropic &middot; 1M context &middot; 89.2% GPQA Diamond</div>
+          <div class="model-why">89.2% GPQA Diamond and #1 on Chatbot Arena overall (1,504 Elo). Best for long-context reasoning tasks requiring both analytical depth and 1M-token coherence — feeding in entire research corpora, reviewing large codebases, or synthesising book-length material. Claude Sonnet 4.6 leads GDPval-AA structured knowledge retrieval (1,633 Elo #1) if throughput and cost matter.</div>
           <div class="model-pills">
             <span class="pill gold">Arena #1 overall</span>
-            <span class="pill blue">Visual reasoning</span>
-            <span class="pill green">1M context</span>
+            <span class="pill blue">1M context</span>
+            <span class="pill green">Long-context depth</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">89.65%</span>
-          <span class="score-label">GPQA (thinking)</span>
+          <span class="score-val">89.2%</span>
+          <span class="score-label">GPQA Diamond</span>
         </div>
       </div>
 
@@ -1128,11 +1128,11 @@
         <div class="model-info">
           <h3>Gemini 3 Flash (Thinking)</h3>
           <div class="model-meta">Google DeepMind &middot; 1M context &middot; $0.50 / $3 per 1M tokens</div>
-          <div class="model-why">89.8% on GPQA Diamond at just $0.50/$3 per 1M tokens — the best reasoning value by a large margin. Outperforms models costing 20x more. The thinking mode makes its chain-of-thought visible and auditable. If you run many hard reasoning calls per day and can't justify frontier pricing, this is the obvious answer. No other model gets this close to frontier reasoning at this price point.</div>
+          <div class="model-why">89.8% on GPQA Diamond at just $0.50/$3 per 1M tokens — the best reasoning value by a large margin, outperforming models that cost 20x more. The thinking mode shows its chain-of-thought for auditing. 0.34s time-to-first-token. If you run many hard reasoning calls per day and can't justify frontier pricing, nothing else comes close at this price point.</div>
           <div class="model-pills">
             <span class="pill orange">89.8% GPQA</span>
             <span class="pill green">Best value</span>
-            <span class="pill gold">Visible reasoning</span>
+            <span class="pill gold">Auditable thinking</span>
           </div>
         </div>
         <div class="model-score">
@@ -1144,18 +1144,18 @@
       <div class="model-card" style="--model-color: #ff9040;">
         <div class="rank-badge">5</div>
         <div class="model-info">
-          <h3>DeepSeek V3.2</h3>
-          <div class="model-meta">DeepSeek &middot; 128K context &middot; $0.28 / $0.42 per 1M tokens</div>
-          <div class="model-why">MIT-licensed and fully self-hostable with "reasoning-first" architecture that integrates chain-of-thought directly into tool use. Earned gold medals at IMO, ICPC, and IOI 2025 in competitive math and programming. Arena score of 1,424 is remarkable for an open-source model. The pick when you want auditability — you can read every reasoning step — and full data sovereignty at near-zero cost.</div>
+          <h3>Qwen 3.6-Plus</h3>
+          <div class="model-meta">Alibaba &middot; 1M context &middot; 88.2% GPQA Diamond &middot; Competitive pricing</div>
+          <div class="model-why">88.2% on GPQA Diamond with a 1M token context window at a fraction of frontier pricing — a genuine dark-horse for knowledge work. Strong on structured knowledge retrieval and multi-step analytical tasks. The same model that leads Terminal-Bench for coding also performs well on reasoning benchmarks, making it unusually versatile. Available via Alibaba Cloud and OpenRouter.</div>
           <div class="model-pills">
-            <span class="pill orange">MIT license</span>
-            <span class="pill green">IMO gold medal</span>
-            <span class="pill gold">Auditable</span>
+            <span class="pill orange">GPQA 88.2%</span>
+            <span class="pill blue">1M context</span>
+            <span class="pill green">Value pick</span>
           </div>
         </div>
         <div class="model-score">
-          <span class="score-val">$0.28</span>
-          <span class="score-label">per 1M input</span>
+          <span class="score-val">88.2%</span>
+          <span class="score-label">GPQA Diamond</span>
         </div>
       </div>
     </div>
@@ -1195,8 +1195,8 @@
         <p>The easiest way to try multiple models without multiple accounts. Get a key at <a href="https://openrouter.ai" target="_blank" style="color:var(--blue)">openrouter.ai</a>, set <code>provider: openrouter</code> and <code>OPENROUTER_API_KEY</code>. Access Claude, GPT, Gemini, DeepSeek, Llama and more with one key.</p>
       </div>
       <div class="setup-box">
-        <h4>Self-hosted (DeepSeek V3.2, Muse Spark)</h4>
-        <p>Run models locally with <a href="https://github.com/ggerganov/llama.cpp" target="_blank" style="color:var(--blue)">llama.cpp</a> or <a href="https://ollama.ai" target="_blank" style="color:var(--blue)">Ollama</a>. DeepSeek V3.2 (MIT) and Meta Muse Spark are the top open-weight picks for 2026. Point Hermes at your local server: set <code>provider: openai</code> with a <code>base_url</code> like <code>http://localhost:11434/v1</code>. Your API key can be any string.</p>
+        <h4>Self-hosted (DeepSeek V3.2, Qwen 3.6-Plus, Gemma 4)</h4>
+        <p>Run models locally with <a href="https://github.com/ggerganov/llama.cpp" target="_blank" style="color:var(--blue)">llama.cpp</a> or <a href="https://ollama.ai" target="_blank" style="color:var(--blue)">Ollama</a>. DeepSeek V3.2 (MIT) and Qwen 3.6-Plus are the top open-weight picks for coding. Gemma 4 26B MoE (Apache 2.0, 82.3% GPQA Diamond with only 3.8B active parameters) is the best edge/self-hosted reasoning option. Point Hermes at your local server: set <code>provider: openai</code> with a <code>base_url</code> like <code>http://localhost:11434/v1</code>. Your API key can be any string.</p>
       </div>
     </div>
 
@@ -1220,8 +1220,8 @@
         </div>
         <div class="picker-card">
           <div class="use-case"><span class="uc-icon">✍️</span> Creative writing</div>
-          <div class="recommendation">Claude Opus 4.6</div>
-          <div class="why-short">Mazur writing benchmark #1. Best prose voice of any model.</div>
+          <div class="recommendation">Claude Sonnet 4.6</div>
+          <div class="why-short">EQ-Bench CW #1 (1936). Best voice consistency, 85% cheaper than Opus.</div>
         </div>
         <div class="picker-card">
           <div class="use-case"><span class="uc-icon">🔍</span> Search &amp; news</div>
@@ -1231,12 +1231,12 @@
         <div class="picker-card">
           <div class="use-case"><span class="uc-icon">🧮</span> Hard reasoning</div>
           <div class="recommendation">Gemini 3.1 Pro</div>
-          <div class="why-short">GPQA Diamond #1 at 95.45%. Best at PhD-level science and math.</div>
+          <div class="why-short">GPQA #1 at 94.1%, ARC-AGI-2 #1 at 77.1%.</div>
         </div>
         <div class="picker-card">
           <div class="use-case"><span class="uc-icon">💰</span> Budget pick</div>
-          <div class="recommendation">DeepSeek V3.2</div>
-          <div class="why-short">MIT licensed, self-hostable, $0.28/1M. Frontier-class for almost nothing.</div>
+          <div class="recommendation">Gemini 3 Flash (Thinking)</div>
+          <div class="why-short">$0.50/1M, 89.8% GPQA Diamond. Best reasoning per dollar by far.</div>
         </div>
         <div class="picker-card">
           <div class="use-case"><span class="uc-icon">📄</span> Huge documents</div>
