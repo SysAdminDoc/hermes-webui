@@ -204,7 +204,12 @@ sudo mkdir -p ${UV_CACHE_DIR} || error_exit "Failed to create /uv_cache director
 sudo chown hermeswebui:hermeswebui ${UV_CACHE_DIR} || error_exit "Failed to set owner of ${UV_CACHE_DIR} to hermeswebui user"
 
 cd /app
-uv venv venv
+if [ -f /app/venv/bin/python3 ]; then
+  echo ""; echo "== Existing virtual environment found — reusing (fast restart)"
+else
+  echo ""; echo "== Creating new virtual environment"
+  uv venv venv
+fi
 export VIRTUAL_ENV=/app/venv
 test -d /app/venv
 test -f /app/venv/bin/activate
@@ -213,13 +218,18 @@ echo "";echo "== Activating hermes webui's virtual environment"
 source /app/venv/bin/activate || error_exit "Failed to activate hermeswebui virtual environment"
 test -x /app/venv/bin/python3
 
-echo ""; echo "== Installing hermes-webui dependencies"
-uv pip install -r requirements.txt --trusted-host pypi.org --trusted-host files.pythonhosted.org
-uv pip install -U pip setuptools --trusted-host pypi.org --trusted-host files.pythonhosted.org
-test -x /app/venv/bin/pip
+if [ -f /app/venv/.deps_installed ]; then
+  echo ""; echo "== Dependencies already installed — skipping (fast restart)"
+else
+  echo ""; echo "== Installing hermes-webui dependencies"
+  uv pip install -r requirements.txt --trusted-host pypi.org --trusted-host files.pythonhosted.org
+  uv pip install -U pip setuptools --trusted-host pypi.org --trusted-host files.pythonhosted.org
+  test -x /app/venv/bin/pip
 
-echo ""; echo "== Adding hermes-agent's pyproject.toml base dependencies to the virtual environment"
-uv pip install /home/hermeswebui/.hermes/hermes-agent --trusted-host pypi.org --trusted-host files.pythonhosted.org || error_exit "Failed to install hermes-agent's requirements"
+  echo ""; echo "== Adding hermes-agent's pyproject.toml base dependencies to the virtual environment"
+  uv pip install /home/hermeswebui/.hermes/hermes-agent --trusted-host pypi.org --trusted-host files.pythonhosted.org || error_exit "Failed to install hermes-agent's requirements"
+  touch /app/venv/.deps_installed
+fi
 
 echo ""; echo "== Running hermes-webui"
 cd /app; python server.py || error_exit "hermes-webui failed or exited with an error"
