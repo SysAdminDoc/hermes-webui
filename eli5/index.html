@@ -24,6 +24,9 @@
     --red: #f85149;
     --nav-height: 64px;
   }
+  [data-theme="light"] nav {
+    background: rgba(246, 248, 250, 0.95);
+  }
   [data-theme="light"] {
     --bg-primary: #ffffff;
     --bg-secondary: #f6f8fa;
@@ -53,8 +56,9 @@
     position: sticky;
     top: 0;
     height: var(--nav-height);
-    background: var(--bg-secondary);
+    background: rgba(13, 17, 23, 0.92);
     border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -437,11 +441,11 @@
 <body>
 
 <nav>
-  <a href="../" class="nav-logo"><span>☿</span> Hermes</a>
+  <a href="../" class="nav-logo"><span>⚡</span> Hermes</a>
   <div class="nav-right">
     <a href="../" class="nav-back">← <span>Back to main site</span></a>
     <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
-    <a href="https://github.com/nesquena/hermes-webui" class="btn-cta" target="_blank">Get started →</a>
+    <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-cta" target="_blank">Get started →</a>
   </div>
 </nav>
 
@@ -687,7 +691,7 @@
   <h2>Ready to try it?</h2>
   <p>It's open source, free to self-host, and takes about five minutes to get running.</p>
   <div class="cta-group">
-    <a href="https://github.com/nesquena/hermes-webui" class="btn-primary" target="_blank">View on GitHub →</a>
+    <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-primary" target="_blank">Get started →</a>
     <a href="../models/" class="btn-ghost">See the best AI models →</a>
   </div>
 </div>

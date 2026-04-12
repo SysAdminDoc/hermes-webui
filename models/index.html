@@ -25,6 +25,9 @@
     --orange: #ff9040;
     --nav-height: 64px;
   }
+  [data-theme="light"] nav {
+    background: rgba(246, 248, 250, 0.95);
+  }
   [data-theme="light"] {
     --bg-primary: #ffffff;
     --bg-secondary: #f6f8fa;
@@ -54,8 +57,9 @@
     position: sticky;
     top: 0;
     height: var(--nav-height);
-    background: var(--bg-secondary);
+    background: rgba(13, 17, 23, 0.92);
     border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -110,6 +114,9 @@
 
   /* TAB NAV */
   .tab-bar {
+    position: sticky;
+    top: var(--nav-height);
+    z-index: 90;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
@@ -364,7 +371,7 @@
     color: var(--text-primary);
   }
 
-  /* HOW TO PICK -->
+  /* HOW TO PICK */
   .picker-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -377,6 +384,11 @@
     border-radius: 12px;
     padding: 20px;
     text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .picker-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(240,165,0,0.08);
   }
   .picker-card .use-case {
     font-size: 0.75rem;
@@ -482,11 +494,11 @@
 <body>
 
 <nav>
-  <a href="../" class="nav-logo"><span>☿</span> Hermes</a>
+  <a href="../" class="nav-logo"><span>⚡</span> Hermes</a>
   <div class="nav-right">
     <a href="../" class="nav-back">← <span>Back to main site</span></a>
     <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
-    <a href="https://github.com/nesquena/hermes-webui" class="btn-cta" target="_blank">Get started →</a>
+    <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-cta" target="_blank">Get started →</a>
   </div>
 </nav>
 
