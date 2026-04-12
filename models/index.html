@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Best AI Models for Hermes — 2025 Guide</title>
+<meta name="description" content="The best AI models to use with Hermes in 2025 — top picks for coding, writing, web search, and all-around use.">
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-card: #161b22;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent: #f0a500;
+    --accent-dim: #c88800;
+    --accent-glow: rgba(240,165,0,0.12);
+    --green: #3fb950;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --orange: #ff9040;
+    --nav-height: 64px;
+  }
+  [data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-tertiary: #eaeef2;
+    --bg-card: #ffffff;
+    --border: #d0d7de;
+    --text-primary: #1f2328;
+    --text-secondary: #656d76;
+    --text-muted: #9198a1;
+    --accent: #c07800;
+    --accent-dim: #9a6200;
+    --accent-glow: rgba(192,120,0,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* NAV */
+  nav {
+    position: sticky;
+    top: 0;
+    height: var(--nav-height);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 100;
+  }
+  .nav-logo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-logo span { font-size: 1.4rem; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-back {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s;
+  }
+  .nav-back:hover { color: var(--text-primary); }
+  #theme-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--text-primary);
+    transition: border-color 0.2s;
+  }
+  #theme-toggle:hover { border-color: var(--accent); }
+  .btn-cta {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .btn-cta:hover { opacity: 0.85; }
+
+  /* TAB NAV */
+  .tab-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-pill {
+    padding: 12px 18px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+    text-decoration: none;
+    display: block;
+  }
+  .tab-pill:hover { color: var(--text-primary); }
+  .tab-pill.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* HERO */
+  .hero {
+    text-align: center;
+    padding: 72px 24px 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(240,165,0,0.07), transparent);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: var(--accent-glow);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(1.9rem, 4.5vw, 3.2rem);
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 14px;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero-sub {
+    font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+    color: var(--text-secondary);
+    max-width: 580px;
+    margin: 0 auto 20px;
+  }
+  .hero-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+  .hero-note a { color: var(--accent); text-decoration: none; }
+
+  /* SECTION */
+  .model-section {
+    padding: 64px 24px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .model-section + .model-section { padding-top: 0; }
+  .section-alt {
+    background: var(--bg-secondary);
+  }
+  .section-alt .model-section { }
+
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+  }
+  .icon-gold { background: rgba(240,165,0,0.15); border: 1px solid rgba(240,165,0,0.4); }
+  .icon-blue { background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.35); }
+  .icon-green { background: rgba(63,185,80,0.12); border: 1px solid rgba(63,185,80,0.35); }
+  .icon-purple { background: rgba(188,140,255,0.12); border: 1px solid rgba(188,140,255,0.35); }
+  .icon-orange { background: rgba(255,144,64,0.12); border: 1px solid rgba(255,144,64,0.35); }
+
+  .section-header-text h2 {
+    font-size: clamp(1.3rem, 2.5vw, 1.75rem);
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+  .section-header-text p {
+    font-size: 0.92rem;
+    color: var(--text-secondary);
+    max-width: 560px;
+  }
+
+  /* MODEL CARDS */
+  .model-list {
+    display: grid;
+    gap: 14px;
+  }
+  .model-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+    transition: border-color 0.2s, transform 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .model-card:hover {
+    border-color: var(--model-color, var(--accent));
+    transform: translateY(-1px);
+  }
+  .model-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--model-color, var(--accent));
+    border-radius: 14px 0 0 14px;
+  }
+
+  .rank-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    border: 2px solid var(--model-color, var(--accent));
+    color: var(--model-color, var(--accent));
+    background: transparent;
+  }
+  .rank-badge.gold { background: rgba(240,165,0,0.15); }
+  .rank-badge.silver { background: rgba(139,148,158,0.15); }
+  .rank-badge.bronze { background: rgba(201,120,80,0.15); }
+
+  .model-info h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .model-info .model-meta {
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .model-info .model-why {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .model-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .pill {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .pill.green { border-color: rgba(63,185,80,0.5); color: var(--green); background: rgba(63,185,80,0.08); }
+  .pill.blue { border-color: rgba(88,166,255,0.5); color: var(--blue); background: rgba(88,166,255,0.08); }
+  .pill.purple { border-color: rgba(188,140,255,0.5); color: var(--purple); background: rgba(188,140,255,0.08); }
+  .pill.gold { border-color: rgba(240,165,0,0.5); color: var(--accent); background: rgba(240,165,0,0.08); }
+  .pill.orange { border-color: rgba(255,144,64,0.5); color: var(--orange); background: rgba(255,144,64,0.08); }
+
+  .model-score {
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .score-val {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--model-color, var(--accent));
+    display: block;
+    line-height: 1;
+    margin-bottom: 3px;
+  }
+  .score-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* SETUP BOX */
+  .setup-box {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-top: 24px;
+  }
+  .setup-box h4 {
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+  .setup-box p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .setup-box code {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 0.82rem;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    color: var(--text-primary);
+  }
+
+  /* HOW TO PICK -->
+  .picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-top: 28px;
+  }
+  .picker-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .picker-card .use-case {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .picker-card .recommendation {
+    font-size: 0.97rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .picker-card .why-short {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+
+  /* FREE TIER NOTE */
+  .free-note {
+    background: rgba(63,185,80,0.08);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 20px;
+    font-size: 0.87rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .free-note .note-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+  /* CTA STRIP */
+  .cta-strip {
+    background: var(--accent-glow);
+    border: 1px solid var(--accent);
+    border-radius: 16px;
+    padding: 36px 40px;
+    text-align: center;
+    margin: 40px auto;
+    max-width: 700px;
+  }
+  .cta-strip h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 10px; }
+  .cta-strip p { color: var(--text-secondary); margin-bottom: 22px; font-size: 0.95rem; }
+  .cta-group { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    padding: 13px 26px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 13px 26px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+  }
+  .btn-ghost:hover { border-color: var(--accent); }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    text-align: center;
+    padding: 32px 24px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  /* DIVIDER */
+  .section-divider { height: 1px; background: var(--border); }
+
+  /* MOBILE */
+  @media (max-width: 640px) {
+    nav { padding: 0 16px; }
+    .nav-back span { display: none; }
+    .btn-cta { display: none; }
+    .model-card { grid-template-columns: auto 1fr; }
+    .model-score { display: none; }
+    .tab-bar { padding: 0 12px; }
+    .tab-pill { padding: 10px 14px; font-size: 0.82rem; }
+    .section-header { flex-direction: column; gap: 12px; }
+    .cta-strip { padding: 28px 20px; }
+  }
+  @media (max-width: 480px) {
+    .picker-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="../" class="nav-logo"><span>☿</span> Hermes</a>
+  <div class="nav-right">
+    <a href="../" class="nav-back">← <span>Back to main site</span></a>
+    <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
+    <a href="https://github.com/nesquena/hermes-webui" class="btn-cta" target="_blank">Get started →</a>
+  </div>
+</nav>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <a class="tab-pill active" href="#overall">🏆 Overall</a>
+  <a class="tab-pill" href="#coding">💻 Coding</a>
+  <a class="tab-pill" href="#writing">✍️ Writing</a>
+  <a class="tab-pill" href="#search">🔍 Search</a>
+  <a class="tab-pill" href="#reasoning">🧮 Reasoning</a>
+  <a class="tab-pill" href="#howto">⚙️ How to configure</a>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">2025 Model Guide</div>
+  <h1>Best AI models for <em>Hermes</em></h1>
+  <p class="hero-sub">Top picks across coding, writing, search, and reasoning — so you know exactly what to plug in and why.</p>
+  <p class="hero-note">Data from SWE-bench, GPQA, HumanEval, and Vellum's leaderboard. Updated April 2025. <a href="https://www.vellum.ai/llm-leaderboard" target="_blank">Source →</a></p>
+</section>
+
+<!-- =========================================
+     OVERALL
+     ========================================= -->
+<div id="overall" class="section-alt">
+  <div class="model-section">
+    <div class="section-header">
+      <div class="section-icon icon-gold">🏆</div>
+      <div class="section-header-text">
+        <h2>Overall best models</h2>
+        <p>Great at everything. If you only pick one, pick from here. These handle coding, writing, research, and reasoning with minimal trade-offs.</p>
+      </div>
+    </div>
+
+    <div class="model-list">
+      <!-- #1 -->
+      <div class="model-card" style="--model-color: #f0a500;">
+        <div class="rank-badge gold">🥇</div>
+        <div class="model-info">
+          <h3>Claude Opus 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; $5 / $25 per 1M tokens</div>
+          <div class="model-why">The top all-rounder right now. Leads ARC-AGI 2 visual reasoning (68.8%), sits near the top on GPQA Diamond reasoning and SWE-bench coding. Slower than Sonnet but makes fewer mistakes on genuinely hard tasks. Use it for your most important work.</div>
+          <div class="model-pills">
+            <span class="pill gold">Best reasoning</span>
+            <span class="pill green">Top coder</span>
+            <span class="pill blue">Long context</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">80.8%</span>
+          <span class="score-label">SWE-bench</span>
+        </div>
+      </div>
+
+      <!-- #2 -->
+      <div class="model-card" style="--model-color: #4a9eff;">
+        <div class="rank-badge silver">🥈</div>
+        <div class="model-info">
+          <h3>GPT-5.2</h3>
+          <div class="model-meta">OpenAI &middot; 400K context &middot; $1.50 / $14 per 1M tokens</div>
+          <div class="model-why">OpenAI's flagship. Exceptional on AIME 2025 math (100%), strong GPQA reasoning (92.4%), and competitive coding. The 400K context window is the largest of any frontier model. Faster than Opus 4.6 with better cost-efficiency. Great for breadth and speed.</div>
+          <div class="model-pills">
+            <span class="pill blue">400K context</span>
+            <span class="pill green">Fast</span>
+            <span class="pill gold">Strong math</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">92.4%</span>
+          <span class="score-label">GPQA Diamond</span>
+        </div>
+      </div>
+
+      <!-- #3 -->
+      <div class="model-card" style="--model-color: #3fb950;">
+        <div class="rank-badge bronze">🥉</div>
+        <div class="model-info">
+          <h3>Gemini 3 Pro</h3>
+          <div class="model-meta">Google DeepMind &middot; 10M context &middot; $2 / $12 per 1M tokens</div>
+          <div class="model-why">The context king — 10 million tokens means you can feed it entire codebases, books, or years of logs. Leads Humanity's Last Exam overall intelligence (45.8%) and AIME math (100%). Perfect for tasks requiring massive context or multilingual work.</div>
+          <div class="model-pills">
+            <span class="pill purple">10M context</span>
+            <span class="pill gold">Top on HLE</span>
+            <span class="pill blue">Multilingual</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">45.8%</span>
+          <span class="score-label">HLE score</span>
+        </div>
+      </div>
+
+      <!-- #4 -->
+      <div class="model-card" style="--model-color: #8b949e;">
+        <div class="rank-badge">4</div>
+        <div class="model-info">
+          <h3>Claude Sonnet 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; $3 / $15 per 1M tokens</div>
+          <div class="model-why">The fast, smart everyday workhorse. Nearly as capable as Opus at a lower price and higher speed. Scores 89.9% on GPQA reasoning and 79.6% on SWE-bench coding. The right choice for high-volume tasks where you need quality but can't always justify Opus's cost.</div>
+          <div class="model-pills">
+            <span class="pill green">Great value</span>
+            <span class="pill blue">Low latency</span>
+            <span class="pill gold">Reliable</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">89.9%</span>
+          <span class="score-label">GPQA Diamond</span>
+        </div>
+      </div>
+
+      <!-- #5 -->
+      <div class="model-card" style="--model-color: #ff9040;">
+        <div class="rank-badge">5</div>
+        <div class="model-info">
+          <h3>DeepSeek R1</h3>
+          <div class="model-meta">DeepSeek &middot; 128K context &middot; $0.55 / $2.19 per 1M tokens</div>
+          <div class="model-why">Remarkable value. Transparent chain-of-thought reasoning you can actually read, extreme consistency (lowest std. dev. of any model evaluated), and open weights you can self-host. Best budget pick — and surprisingly competitive with models 10x the price.</div>
+          <div class="model-pills">
+            <span class="pill orange">Open source</span>
+            <span class="pill green">Very cheap</span>
+            <span class="pill gold">Self-hostable</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">$0.55</span>
+          <span class="score-label">per 1M input</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="free-note">
+      <span class="note-icon">💡</span>
+      <span>Starting out? Claude Sonnet 4.6 is the best first pick — strong, affordable, and the model this project was built and tested with. Get your API key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--green)">console.anthropic.com</a>.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- =========================================
+     CODING
+     ========================================= -->
+<div id="coding">
+  <div class="model-section">
+    <div class="section-header">
+      <div class="section-icon icon-blue">💻</div>
+      <div class="section-header-text">
+        <h2>Best for coding</h2>
+        <p>Ranked on SWE-bench (real GitHub issues), HumanEval, and the Aider coding benchmark. These are the models that actually fix bugs and ship features, not just autocomplete.</p>
+      </div>
+    </div>
+
+    <div class="model-list">
+      <div class="model-card" style="--model-color: #f0a500;">
+        <div class="rank-badge gold">🥇</div>
+        <div class="model-info">
+          <h3>Claude Sonnet 4.5</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; $3 / $15 per 1M tokens</div>
+          <div class="model-why">The current SWE-bench champion at 82% — the highest score of any model on the most realistic coding benchmark available. Resolves actual GitHub issues, not toy problems. If raw agentic coding performance is your only metric, this is the model.</div>
+          <div class="model-pills">
+            <span class="pill gold">SWE-bench #1</span>
+            <span class="pill green">Agentic coding</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">82%</span>
+          <span class="score-label">SWE-bench</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #58a6ff;">
+        <div class="rank-badge silver">🥈</div>
+        <div class="model-info">
+          <h3>Claude Opus 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; $5 / $25 per 1M tokens</div>
+          <div class="model-why">Marginally behind Sonnet 4.5 on SWE-bench (80.8%) but stronger on complex reasoning. The better choice when code correctness requires deep multi-step thinking — architecture decisions, debugging subtle issues, reviewing large PRs.</div>
+          <div class="model-pills">
+            <span class="pill blue">Deep reasoning</span>
+            <span class="pill green">Complex bugs</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">80.8%</span>
+          <span class="score-label">SWE-bench</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #3fb950;">
+        <div class="rank-badge bronze">🥉</div>
+        <div class="model-info">
+          <h3>Gemini 2.5 Pro</h3>
+          <div class="model-meta">Google DeepMind &middot; 1M context &middot; $1.25 / $10 per 1M tokens</div>
+          <div class="model-why">Top Z-score across aggregated coding benchmarks — the "most consistent all-rounder" in independent evaluations. Shines on coding interviews, algorithm problems, and editing existing codebases. Good choice when you need a cheaper alternative that doesn't drop off on hard tasks.</div>
+          <div class="model-pills">
+            <span class="pill purple">1M context</span>
+            <span class="pill gold">Consistent</span>
+            <span class="pill green">Algorithms</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">1.38</span>
+          <span class="score-label">Z-score avg</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #8b949e;">
+        <div class="rank-badge">4</div>
+        <div class="model-info">
+          <h3>GPT-5.3 Codex</h3>
+          <div class="model-meta">OpenAI &middot; 400K context &middot; $1.75 / $14 per 1M tokens</div>
+          <div class="model-why">The fastest model for code-specific tasks — 0.003s time-to-first-token. Tuned specifically for coding and refactoring. Best pick when you're running many short iterative coding calls and latency matters more than peak accuracy.</div>
+          <div class="model-pills">
+            <span class="pill blue">0.003s latency</span>
+            <span class="pill green">Refactoring</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">0.003s</span>
+          <span class="score-label">time to first token</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #ff9040;">
+        <div class="rank-badge">5</div>
+        <div class="model-info">
+          <h3>DeepSeek R1</h3>
+          <div class="model-meta">DeepSeek &middot; 128K context &middot; $0.55 / $2.19 per 1M tokens</div>
+          <div class="model-why">Open weights means you can self-host it. Excellent and consistent on coding tasks with visible step-by-step reasoning. The go-to for privacy-first setups or teams who want to run everything locally without sacrificing too much coding quality.</div>
+          <div class="model-pills">
+            <span class="pill orange">Self-hostable</span>
+            <span class="pill gold">Transparent</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">Open</span>
+          <span class="score-label">weights</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- =========================================
+     WRITING
+     ========================================= -->
+<div id="writing" class="section-alt">
+  <div class="model-section">
+    <div class="section-header">
+      <div class="section-icon icon-purple">✍️</div>
+      <div class="section-header-text">
+        <h2>Best for writing</h2>
+        <p>Creative writing, copywriting, drafting emails, summarising documents, blog posts. These models have natural voice and don't sound like a press release from 2012.</p>
+      </div>
+    </div>
+
+    <div class="model-list">
+      <div class="model-card" style="--model-color: #f0a500;">
+        <div class="rank-badge gold">🥇</div>
+        <div class="model-info">
+          <h3>Claude Opus 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; $5 / $25 per 1M tokens</div>
+          <div class="model-why">Widely considered the best model for creative and long-form writing. Produces prose that feels genuinely human — varied sentence rhythm, natural hedging, strong opinions where warranted. Particularly good at maintaining consistency over long documents. If you write a lot, this is your model.</div>
+          <div class="model-pills">
+            <span class="pill gold">Creative writing</span>
+            <span class="pill green">Long-form</span>
+            <span class="pill blue">Natural voice</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">#1</span>
+          <span class="score-label">creative writing</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #58a6ff;">
+        <div class="rank-badge silver">🥈</div>
+        <div class="model-info">
+          <h3>Claude Sonnet 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; $3 / $15 per 1M tokens</div>
+          <div class="model-why">Near-Opus quality at a lower cost and faster speed. The right choice for high-volume writing — daily summaries, email drafts, social copy, documentation. Keeps a consistent tone across long sessions. Community consensus: "Sonnet 4.5 seems to be the sweet spot right now."</div>
+          <div class="model-pills">
+            <span class="pill blue">High volume</span>
+            <span class="pill green">Great value</span>
+            <span class="pill gold">Consistent tone</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">Fast</span>
+          <span class="score-label">55 tok/s</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #3fb950;">
+        <div class="rank-badge bronze">🥉</div>
+        <div class="model-info">
+          <h3>Gemini 3 Pro</h3>
+          <div class="model-meta">Google DeepMind &middot; 10M context &middot; $2 / $12 per 1M tokens</div>
+          <div class="model-why">The 10M token context window is unmatched for writing tasks that span large source material — digest an entire book, process a year of meeting notes, or maintain consistency across a very long document. Strong multilingual writing in 90+ languages.</div>
+          <div class="model-pills">
+            <span class="pill purple">10M context</span>
+            <span class="pill blue">Multilingual</span>
+            <span class="pill gold">Document-scale</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">10M</span>
+          <span class="score-label">token context</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #8b949e;">
+        <div class="rank-badge">4</div>
+        <div class="model-info">
+          <h3>GPT-5.2</h3>
+          <div class="model-meta">OpenAI &middot; 400K context &middot; $1.50 / $14 per 1M tokens</div>
+          <div class="model-why">Strong structured writing — technical documentation, reports, business writing. Excellent at following precise formatting instructions. Faster and slightly cheaper than Claude Opus. Good default for analytical writing where precision matters more than creative flair.</div>
+          <div class="model-pills">
+            <span class="pill blue">Structured docs</span>
+            <span class="pill green">Technical writing</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">92 t/s</span>
+          <span class="score-label">speed</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #ff9040;">
+        <div class="rank-badge">5</div>
+        <div class="model-info">
+          <h3>Llama 4 Maverick</h3>
+          <div class="model-meta">Meta &middot; 10M context &middot; $0.20 / $0.60 per 1M tokens</div>
+          <div class="model-why">Open-source, extremely affordable, and capable enough for everyday writing tasks. Good for teams who need to run thousands of writing tasks per day without a large budget. Self-hostable if you need full data control.</div>
+          <div class="model-pills">
+            <span class="pill orange">Open source</span>
+            <span class="pill green">Very cheap</span>
+            <span class="pill gold">Self-hostable</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">$0.20</span>
+          <span class="score-label">per 1M input</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- =========================================
+     SEARCH / WEB
+     ========================================= -->
+<div id="search">
+  <div class="model-section">
+    <div class="section-header">
+      <div class="section-icon icon-green">🔍</div>
+      <div class="section-header-text">
+        <h2>Best for search and web tasks</h2>
+        <p>Models with web browsing, retrieval, and research capabilities. For Hermes cron jobs that check the news, summarise feeds, monitor prices, or answer time-sensitive questions.</p>
+      </div>
+    </div>
+
+    <div class="model-list">
+      <div class="model-card" style="--model-color: #f0a500;">
+        <div class="rank-badge gold">🥇</div>
+        <div class="model-info">
+          <h3>Gemini 3 Pro</h3>
+          <div class="model-meta">Google DeepMind &middot; 10M context &middot; Built-in Google Search grounding</div>
+          <div class="model-why">The strongest pick for search-heavy tasks. Integrates directly with Google Search for real-time grounding — it can cite sources, verify claims, and pull current information without you building a retrieval layer. 10M context means it can absorb the results of dozens of parallel searches.</div>
+          <div class="model-pills">
+            <span class="pill gold">Google Search built-in</span>
+            <span class="pill blue">Real-time</span>
+            <span class="pill green">Cited sources</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">Live</span>
+          <span class="score-label">web access</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #58a6ff;">
+        <div class="rank-badge silver">🥈</div>
+        <div class="model-info">
+          <h3>GPT-5.2 (with Browsing)</h3>
+          <div class="model-meta">OpenAI &middot; 400K context &middot; Web browsing via tool use</div>
+          <div class="model-why">Excellent at combining web retrieval with deep reasoning. The large 400K context window helps it synthesise many search results into a coherent answer. Strong for research tasks, competitive intelligence, and fact-checking. Browsing is via tool calls that Hermes can orchestrate.</div>
+          <div class="model-pills">
+            <span class="pill blue">400K context</span>
+            <span class="pill gold">Deep synthesis</span>
+            <span class="pill green">Research</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">400K</span>
+          <span class="score-label">context tokens</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #3fb950;">
+        <div class="rank-badge bronze">🥉</div>
+        <div class="model-info">
+          <h3>Claude Sonnet 4.6 + web_search tool</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; Hermes web_search tool</div>
+          <div class="model-why">Hermes ships a web_search tool that any Claude model can use. Sonnet 4.6 is the best balance for high-frequency search tasks — fast enough to run cron jobs every few minutes without high latency, smart enough to synthesise results well. The most practical pick for daily Hermes automations.</div>
+          <div class="model-pills">
+            <span class="pill purple">Hermes native</span>
+            <span class="pill gold">Daily cron jobs</span>
+            <span class="pill green">Best value</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">Built-in</span>
+          <span class="score-label">web_search tool</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #8b949e;">
+        <div class="rank-badge">4</div>
+        <div class="model-info">
+          <h3>Llama 4 Scout</h3>
+          <div class="model-meta">Meta &middot; 10M context &middot; $0.11 / $0.34 per 1M tokens</div>
+          <div class="model-why">Cheapest model with a massive context window (10M tokens). Useful for ingesting huge amounts of retrieved content — entire site crawls, large RSS archives, or long document collections. Not the best at reasoning over what it finds, but exceptional at fitting it all in context at nearly zero cost.</div>
+          <div class="model-pills">
+            <span class="pill orange">Ultra cheap</span>
+            <span class="pill purple">10M context</span>
+            <span class="pill blue">High volume</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">$0.11</span>
+          <span class="score-label">per 1M input</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #ff9040;">
+        <div class="rank-badge">5</div>
+        <div class="model-info">
+          <h3>Gemini 2.0 Flash</h3>
+          <div class="model-meta">Google DeepMind &middot; Ultra-low latency &middot; $0.10 / $0.40 per 1M tokens</div>
+          <div class="model-why">Fastest real-time capable model with built-in Google Search grounding and a stunning 0.34s time-to-first-token. Perfect for latency-sensitive search pipelines — live monitoring, real-time alerts, or high-frequency lookups where you need a response in under a second.</div>
+          <div class="model-pills">
+            <span class="pill gold">0.34s latency</span>
+            <span class="pill green">Real-time alerts</span>
+            <span class="pill blue">Search grounding</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">0.34s</span>
+          <span class="score-label">time to first token</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- =========================================
+     REASONING
+     ========================================= -->
+<div id="reasoning" class="section-alt">
+  <div class="model-section">
+    <div class="section-header">
+      <div class="section-icon icon-orange">🧮</div>
+      <div class="section-header-text">
+        <h2>Best for reasoning and analysis</h2>
+        <p>Hard math, graduate-level science, complex multi-step logic, and tasks where you genuinely need the model to think rather than pattern-match.</p>
+      </div>
+    </div>
+
+    <div class="model-list">
+      <div class="model-card" style="--model-color: #f0a500;">
+        <div class="rank-badge gold">🥇</div>
+        <div class="model-info">
+          <h3>GPT-5.2</h3>
+          <div class="model-meta">OpenAI &middot; 400K context &middot; 92.4% GPQA Diamond</div>
+          <div class="model-why">Tops the GPQA Diamond graduate-level reasoning benchmark (92.4%) among actively deployed models. Perfect scores on AIME 2025 advanced math. Strong across physics, chemistry, biology, and multi-domain logical reasoning. The pick when the problem is genuinely hard.</div>
+          <div class="model-pills">
+            <span class="pill gold">GPQA #1 (92.4%)</span>
+            <span class="pill blue">AIME perfect score</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">92.4%</span>
+          <span class="score-label">GPQA Diamond</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #58a6ff;">
+        <div class="rank-badge silver">🥈</div>
+        <div class="model-info">
+          <h3>Gemini 3 Pro</h3>
+          <div class="model-meta">Google DeepMind &middot; 10M context &middot; 45.8% HLE</div>
+          <div class="model-why">Leads Humanity's Last Exam — arguably the hardest published benchmark, requiring genuine expert knowledge across disciplines. Perfect AIME score alongside GPT-5.2. The best model for tasks that require spanning multiple knowledge domains simultaneously.</div>
+          <div class="model-pills">
+            <span class="pill gold">HLE leader</span>
+            <span class="pill blue">AIME perfect</span>
+            <span class="pill purple">Multi-domain</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">45.8%</span>
+          <span class="score-label">HLE benchmark</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #3fb950;">
+        <div class="rank-badge bronze">🥉</div>
+        <div class="model-info">
+          <h3>Claude Opus 4.6</h3>
+          <div class="model-meta">Anthropic &middot; 200K context &middot; 91.3% GPQA Diamond</div>
+          <div class="model-why">Close behind GPT-5.2 on GPQA (91.3%) and leads ARC-AGI 2 visual reasoning (68.8%). The reasoning model with the best combination of analytical depth, visual understanding, and long context. Strong choice for multi-modal reasoning tasks.</div>
+          <div class="model-pills">
+            <span class="pill gold">ARC-AGI leader</span>
+            <span class="pill blue">Visual reasoning</span>
+            <span class="pill green">Multi-modal</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">91.3%</span>
+          <span class="score-label">GPQA Diamond</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #8b949e;">
+        <div class="rank-badge">4</div>
+        <div class="model-info">
+          <h3>Kimi K2 Thinking</h3>
+          <div class="model-meta">Moonshot AI &middot; 256K context &middot; $0.60 / $2.50 per 1M tokens</div>
+          <div class="model-why">A surprise contender — second on Humanity's Last Exam (44.9%) and AIME (99.1%) at a fraction of the cost of frontier models. Extended thinking mode makes its reasoning chain visible. Best value for hard reasoning if you don't want to pay Opus or GPT-5.2 prices.</div>
+          <div class="model-pills">
+            <span class="pill orange">Thinking mode</span>
+            <span class="pill green">Best value</span>
+            <span class="pill gold">HLE #2</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">$0.60</span>
+          <span class="score-label">per 1M input</span>
+        </div>
+      </div>
+
+      <div class="model-card" style="--model-color: #ff9040;">
+        <div class="rank-badge">5</div>
+        <div class="model-info">
+          <h3>DeepSeek R1</h3>
+          <div class="model-meta">DeepSeek &middot; 128K context &middot; $0.55 / $2.19 per 1M tokens</div>
+          <div class="model-why">Transparent, step-by-step chain-of-thought reasoning you can read and audit. Open weights for full self-hosting. Not quite at the top on benchmarks but extremely consistent and honest about uncertainty. Good for logic tasks where you want to verify the reasoning, not just the answer.</div>
+          <div class="model-pills">
+            <span class="pill orange">Chain-of-thought</span>
+            <span class="pill green">Auditable</span>
+            <span class="pill gold">Open weights</span>
+          </div>
+        </div>
+        <div class="model-score">
+          <span class="score-val">Open</span>
+          <span class="score-label">source</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- =========================================
+     HOW TO CONFIGURE
+     ========================================= -->
+<div id="howto">
+  <div class="model-section">
+    <div class="section-header">
+      <div class="section-icon icon-gold">⚙️</div>
+      <div class="section-header-text">
+        <h2>How to set up a model in Hermes</h2>
+        <p>Each model needs an API key and a provider setting. Here's the quick version for each major provider.</p>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:16px;">
+      <div class="setup-box">
+        <h4>Anthropic (Claude models)</h4>
+        <p>Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a>, then in Hermes settings set <code>provider: anthropic</code> and <code>ANTHROPIC_API_KEY</code> in your environment. Model names: <code>claude-opus-4-6</code>, <code>claude-sonnet-4-6</code>, <code>claude-sonnet-4-5</code>.</p>
+      </div>
+      <div class="setup-box">
+        <h4>OpenAI (GPT models)</h4>
+        <p>Get your key at <a href="https://platform.openai.com" target="_blank" style="color:var(--blue)">platform.openai.com</a>, then set <code>provider: openai</code> and <code>OPENAI_API_KEY</code>. Model names: <code>gpt-5-2</code>, <code>gpt-4-1</code>, <code>gpt-4-1-mini</code>.</p>
+      </div>
+      <div class="setup-box">
+        <h4>Google (Gemini models)</h4>
+        <p>Get your key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a>, then set <code>provider: google</code> and <code>GOOGLE_API_KEY</code>. Model names: <code>gemini-3-pro</code>, <code>gemini-2-5-pro</code>, <code>gemini-2-0-flash</code>.</p>
+      </div>
+      <div class="setup-box">
+        <h4>OpenRouter (all models via one key)</h4>
+        <p>The easiest way to try multiple models without multiple accounts. Get a key at <a href="https://openrouter.ai" target="_blank" style="color:var(--blue)">openrouter.ai</a>, set <code>provider: openrouter</code> and <code>OPENROUTER_API_KEY</code>. Access Claude, GPT, Gemini, DeepSeek, Llama and more with one key.</p>
+      </div>
+      <div class="setup-box">
+        <h4>Self-hosted (DeepSeek R1, Llama)</h4>
+        <p>Run models locally with <a href="https://github.com/ggerganov/llama.cpp" target="_blank" style="color:var(--blue)">llama.cpp</a> or <a href="https://ollama.ai" target="_blank" style="color:var(--blue)">Ollama</a>. Point Hermes to your local server: set <code>provider: openai</code> with a custom <code>base_url</code> like <code>http://localhost:11434/v1</code>. Your API key can be any string.</p>
+      </div>
+    </div>
+
+    <!-- QUICK PICKER -->
+    <div style="margin-top:40px;">
+      <div class="section-label" style="font-size:0.75rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;">Quick reference — pick by use case</div>
+      <div class="picker-grid">
+        <div class="picker-card">
+          <div class="use-case">Daily assistant</div>
+          <div class="recommendation">Claude Sonnet 4.6</div>
+          <div class="why-short">Fast, affordable, strong all-around</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Complex coding</div>
+          <div class="recommendation">Claude Sonnet 4.5</div>
+          <div class="why-short">SWE-bench champion, real bug fixes</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Creative writing</div>
+          <div class="recommendation">Claude Opus 4.6</div>
+          <div class="why-short">Best prose, most human voice</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Search & news</div>
+          <div class="recommendation">Gemini 3 Pro</div>
+          <div class="why-short">Native Google Search grounding</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Hard reasoning</div>
+          <div class="recommendation">GPT-5.2</div>
+          <div class="why-short">GPQA #1, AIME perfect score</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Budget pick</div>
+          <div class="recommendation">DeepSeek R1</div>
+          <div class="why-short">Open source, self-hostable, great value</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Huge documents</div>
+          <div class="recommendation">Gemini 3 Pro</div>
+          <div class="why-short">10M token context window</div>
+        </div>
+        <div class="picker-card">
+          <div class="use-case">Try everything</div>
+          <div class="recommendation">OpenRouter</div>
+          <div class="why-short">One API key, every model</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA -->
+<div style="padding:40px 24px 60px;max-width:960px;margin:0 auto;">
+  <div class="cta-strip">
+    <h2>Ready to get started?</h2>
+    <p>Self-host Hermes in under five minutes and bring your own API key.</p>
+    <div class="cta-group">
+      <a href="https://github.com/nesquena/hermes-webui" class="btn-primary" target="_blank">View on GitHub →</a>
+      <a href="../eli5/" class="btn-ghost">New to AI agents? →</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>Part of the <a href="../">Hermes</a> project &mdash; <a href="https://github.com/nesquena/hermes-webui" target="_blank">open source on GitHub</a> &mdash; benchmarks from <a href="https://www.vellum.ai/llm-leaderboard" target="_blank">Vellum Leaderboard</a></p>
+</footer>
+
+<script>
+  var themeToggle = document.getElementById('theme-toggle');
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('theme', t);
+    themeToggle.textContent = t === 'light' ? '🌙' : '☀️';
+  }
+  themeToggle.addEventListener('click', function() {
+    setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  var saved = localStorage.getItem('theme');
+  if (saved) setTheme(saved);
+
+  // Tab bar scroll-to-section
+  document.querySelectorAll('.tab-pill[href^="#"]').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      var target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        var offset = 64 + 46; // nav + tab bar
+        var top = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+      }
+      document.querySelectorAll('.tab-pill').forEach(function(p) { p.classList.remove('active'); });
+      this.classList.add('active');
+    });
+  });
+
+  // Update active tab on scroll
+  var sections = ['overall','coding','writing','search','reasoning','howto'];
+  window.addEventListener('scroll', function() {
+    var scrollY = window.scrollY + 120;
+    var current = sections[0];
+    sections.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && el.getBoundingClientRect().top + window.scrollY <= scrollY) current = id;
+    });
+    document.querySelectorAll('.tab-pill').forEach(function(p) {
+      p.classList.toggle('active', p.getAttribute('href') === '#' + current);
+    });
+  }, { passive: true });
+</script>
+</body>
+</html>
