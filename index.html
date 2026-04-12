@@ -1123,6 +1123,17 @@
     }
 
     /* ===== RESPONSIVE ===== */
+    /* ===== COMMUNITY BANNER ===== */
+    .community-banner{display:flex;align-items:center;gap:16px;background:var(--accent-subtle);border:1px solid rgba(240,165,0,0.25);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:36px;text-decoration:none;color:inherit;transition:border-color 0.15s,background 0.15s}
+    [data-theme="light"] .community-banner{border-color:rgba(192,120,0,0.2)}
+    .community-banner:hover{border-color:var(--accent);background:var(--accent-glow);color:inherit}
+    .community-banner-icon{font-size:1.8rem;flex-shrink:0;line-height:1}
+    .community-banner-text{flex:1;display:flex;flex-direction:column;gap:2px}
+    .community-banner-text strong{color:var(--text-primary);font-size:0.95rem}
+    .community-banner-text span{color:var(--text-secondary);font-size:0.85rem}
+    .community-banner-arrow{color:var(--accent);font-size:1.2rem;flex-shrink:0;transition:transform 0.15s}
+    .community-banner:hover .community-banner-arrow{transform:translateX(4px)}
+
     @media (max-width: 1024px) {
       .feature-grid { grid-template-columns: repeat(2, 1fr); }
       .resources-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1178,6 +1189,7 @@
       <li><a href="#compare">Compare</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#resources">Resources</a></li>
+      <li><a href="community/">Community</a></li>
     </ul>
     <div class="nav-actions">
       <button class="btn-theme" id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark mode">🌙</button>
@@ -1198,6 +1210,7 @@
   <a href="#compare" onclick="closeMobileMenu()">Compare</a>
   <a href="#install" onclick="closeMobileMenu()">Install</a>
   <a href="#resources" onclick="closeMobileMenu()">Resources</a>
+  <a href="community/" onclick="closeMobileMenu()" style="color:var(--accent)">&#127758; Community</a>
   <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" target="_blank" rel="noopener" style="color: var(--accent); margin-top: 4px;">Get started &#8594;</a>
 </div>
 
@@ -1949,6 +1962,14 @@ hermes doctor         # diagnose any issues</code></pre>
     <div class="container">
       <p class="section-label">Docs &amp; community</p>
       <h2 class="section-title">Resources</h2>
+      <a href="community/" class="community-banner">
+        <span class="community-banner-icon">&#127758;</span>
+        <span class="community-banner-text">
+          <strong>Community &amp; Ecosystem</strong>
+          <span>25 third-party projects, tools, and integrations built around Hermes</span>
+        </span>
+        <span class="community-banner-arrow">&#8594;</span>
+      </a>
       <div class="resources-grid">
 
         <a href="https://hermes-agent.nousresearch.com/docs/" target="_blank" rel="noopener" class="resource-card">

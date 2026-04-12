@@ -77,6 +77,16 @@
     .nav-back:hover{color:var(--text-primary);background:var(--bg-tertiary)}
     .btn-theme{background:none;border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;padding:7px 10px;border-radius:6px;font-size:15px;line-height:1;transition:border-color 0.15s,color 0.15s,background 0.15s}
     .btn-theme:hover{border-color:var(--border-hover);color:var(--text-primary);background:var(--bg-tertiary)}
+    .hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:6px;border:1px solid var(--border);border-radius:6px;background:none;transition:border-color 0.15s;flex-shrink:0}
+    .hamburger:hover{border-color:var(--border-hover)}
+    .hamburger span{display:block;width:20px;height:2px;background:var(--text-secondary);border-radius:2px;transition:transform 0.2s,opacity 0.2s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    #community-mobile-menu{display:none;position:fixed;top:var(--nav-height);left:0;right:0;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:16px 24px;z-index:999;flex-direction:column;gap:4px}
+    #community-mobile-menu.open{display:flex}
+    #community-mobile-menu a{color:var(--text-secondary);font-size:0.95rem;font-weight:500;padding:10px 12px;border-radius:6px;transition:color 0.15s,background 0.15s;text-decoration:none}
+    #community-mobile-menu a:hover{color:var(--text-primary);background:var(--bg-tertiary)}
     .btn-cta{background:var(--accent);color:#000;font-size:0.8rem;font-weight:600;padding:7px 14px;border-radius:6px;border:none;cursor:pointer;text-decoration:none;display:inline-block;transition:background 0.15s,transform 0.1s;white-space:nowrap}
     .btn-cta:hover{background:var(--accent-dim);color:#000;transform:translateY(-1px)}
 
@@ -152,6 +162,7 @@
       .project-grid{grid-template-columns:1fr}
       .nav-back span{display:none}
       .btn-cta{display:none}
+      .hamburger{display:flex}
       .nav-inner{gap:8px}
       .hero{padding:48px 16px 36px}
       .section{padding:48px 16px}
@@ -171,8 +182,22 @@
       <button class="btn-theme" id="theme-toggle" aria-label="Toggle theme">🌙</button>
       <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-cta" target="_blank" rel="noopener">Get started &rarr;</a>
     </div>
+    <button class="hamburger" id="community-hamburger" aria-label="Open menu">
+      <span></span><span></span><span></span>
+    </button>
   </div>
 </nav>
+
+<div id="community-mobile-menu">
+  <a href="../index.html">&#8962; Hermes Home</a>
+  <a href="../index.html#why">Why Hermes</a>
+  <a href="../index.html#features">Features</a>
+  <a href="../index.html#compare">Compare</a>
+  <a href="../index.html#install">Install</a>
+  <a href="../index.html#resources">Resources</a>
+  <a href="../index.html#resources" style="color:var(--accent)">&#127758; Community &amp; Ecosystem</a>
+  <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" target="_blank" rel="noopener" style="color:var(--accent);margin-top:4px">Get started &rarr;</a>
+</div>
 
 <main>
   <div class="hero">
@@ -297,10 +322,10 @@
         <a href="https://github.com/nesquena/hermes-webui" target="_blank" rel="noopener" class="project-card featured">
           <div class="project-header">
             <div class="project-name">hermes-webui</div>
-            <span class="featured-badge">Official</span>
+            <span class="featured-badge">Popular</span>
             <span class="project-stars"><svg viewBox="0 0 16 16"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/></svg>1.3k</span>
           </div>
-          <div class="project-desc">The official Web UI for Hermes Agent. Three-panel Claude-style layout with sessions, chat, workspace file browser, and full CLI parity.</div>
+          <div class="project-desc">Three-panel Claude-style Web UI for Hermes Agent. Sessions sidebar, chat, workspace file browser, and full CLI parity. No build step.</div>
           <div class="project-meta"><span class="lang-dot lang-python"></span> Python &middot; nesquena</div>
         </a>
 
@@ -543,6 +568,24 @@
   themeToggle.addEventListener('click',function(){
     setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark');
   });
+
+  // Hamburger menu
+  var chamburguer = document.getElementById('community-hamburger');
+  var cmobileMenu = document.getElementById('community-mobile-menu');
+  if(chamburguer && cmobileMenu){
+    chamburguer.addEventListener('click', function(){
+      var isOpen = cmobileMenu.classList.toggle('open');
+      chamburguer.classList.toggle('open', isOpen);
+      chamburguer.setAttribute('aria-expanded', isOpen);
+    });
+    document.addEventListener('click', function(e){
+      if(!chamburguer.contains(e.target) && !cmobileMenu.contains(e.target)){
+        cmobileMenu.classList.remove('open');
+        chamburguer.classList.remove('open');
+        chamburguer.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
 </script>
 
 </body>
