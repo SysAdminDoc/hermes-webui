@@ -167,7 +167,26 @@
       .hero{padding:48px 16px 36px}
       .feature-compare{grid-template-columns:1fr}
     }
-  </style>
+  
+    /* HAMBURGER */
+    .hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:6px;border:1px solid var(--border);border-radius:6px;background:none;transition:border-color 0.15s;flex-shrink:0}
+    .hamburger:hover{border-color:var(--accent)}
+    .hamburger span{display:block;width:20px;height:2px;background:var(--text-secondary);border-radius:2px;transition:transform 0.2s,opacity 0.2s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    #compare-mobile-menu{display:none;position:fixed;top:var(--nav-height,64px);left:0;right:0;background:var(--bg-secondary,#161b22);border-bottom:1px solid var(--border,#30363d);padding:16px 24px;z-index:999;flex-direction:column;gap:4px}
+    #compare-mobile-menu.open{display:flex}
+    #compare-mobile-menu a{color:var(--text-secondary,#8b949e);font-size:0.95rem;font-weight:500;padding:10px 12px;border-radius:6px;text-decoration:none;transition:color 0.15s,background 0.15s}
+    #compare-mobile-menu a:hover{color:var(--text-primary,#e6edf3);background:var(--bg-tertiary,#21262d)}
+    #compare-mobile-menu a.accent{color:var(--accent,#f0a500)}
+    #compare-mobile-menu .menu-divider{height:1px;background:var(--border,#30363d);margin:4px 0}
+    @media(max-width:640px){
+      .hamburger{display:flex}
+      .btn-cta{display:none}
+      .nav-back span{display:none}
+    }
+    </style>
 </head>
 <body>
 
@@ -183,7 +202,18 @@
       <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-cta" target="_blank" rel="noopener">Get started →</a>
     </div>
   </div>
+  <button class="hamburger" id="compare-hamburger" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
 </nav>
+
+<div id="compare-mobile-menu">
+  <a href="../index.html">⚡ Hermes Home</a>
+  <a href="../index.html#compare">← All comparisons</a>
+  <div class="menu-divider"></div>
+  <a href="../eli5/" class="accent">🧠 ELI5</a>
+  <a href="../models/" class="accent">🤖 Best Models</a>
+  <a href="../community/" class="accent">🌎 Community</a>
+  <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" target="_blank" rel="noopener" class="accent">Get started →</a>
+</div>
 
 <main>
 

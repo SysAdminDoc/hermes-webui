@@ -436,6 +436,61 @@
   @media (max-width: 400px) {
     .concept-grid { grid-template-columns: 1fr; }
   }
+
+  /* HAMBURGER + MOBILE MENU */
+  .hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: none;
+    transition: border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .hamburger:hover { border-color: var(--accent); }
+  .hamburger span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text-secondary);
+    border-radius: 2px;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+  #eli5-mobile-menu {
+    display: none;
+    position: fixed;
+    top: var(--nav-height);
+    left: 0; right: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    z-index: 999;
+    flex-direction: column;
+    gap: 4px;
+  }
+  #eli5-mobile-menu.open { display: flex; }
+  #eli5-mobile-menu a {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 10px 12px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+    text-decoration: none;
+  }
+  #eli5-mobile-menu a:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+  #eli5-mobile-menu a.accent { color: var(--accent); }
+  @media (max-width: 640px) {
+    .hamburger { display: flex; }
+    .btn-cta { display: none; }
+    .nav-back span { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -447,7 +502,22 @@
     <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
     <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" class="btn-cta" target="_blank">Get started →</a>
   </div>
+  <button class="hamburger" id="eli5-hamburger" aria-label="Open menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
 </nav>
+
+<div id="eli5-mobile-menu">
+  <a href="../">⚡ Hermes Home</a>
+  <a href="../#why">Why Hermes</a>
+  <a href="../#features">Features</a>
+  <a href="../#compare">Compare</a>
+  <a href="../#install">Install</a>
+  <a href="../eli5/" class="accent">🧠 ELI5 — What is Hermes?</a>
+  <a href="../models/" class="accent">🤖 Best Models</a>
+  <a href="../community/" class="accent">🌎 Community</a>
+  <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" target="_blank" class="accent" style="margin-top:4px">Get started →</a>
+</div>
 
 <!-- HERO -->
 <section class="hero">
@@ -712,6 +782,24 @@
   });
   var saved = localStorage.getItem('theme');
   if (saved) setTheme(saved);
+
+  // Hamburger
+  var eli5Ham = document.getElementById('eli5-hamburger');
+  var eli5Menu = document.getElementById('eli5-mobile-menu');
+  if (eli5Ham && eli5Menu) {
+    eli5Ham.addEventListener('click', function() {
+      var open = eli5Menu.classList.toggle('open');
+      eli5Ham.classList.toggle('open', open);
+      eli5Ham.setAttribute('aria-expanded', open);
+    });
+    document.addEventListener('click', function(e) {
+      if (!eli5Ham.contains(e.target) && !eli5Menu.contains(e.target)) {
+        eli5Menu.classList.remove('open');
+        eli5Ham.classList.remove('open');
+        eli5Ham.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
 </script>
 </body>
 </html>
