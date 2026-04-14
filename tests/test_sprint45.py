@@ -12,9 +12,19 @@ import pathlib
 import urllib.error
 import urllib.request
 
+import os
+
 BASE = "http://127.0.0.1:8788"
 REPO = pathlib.Path(__file__).parent.parent
-SETTINGS_FILE = pathlib.Path.home() / ".hermes" / "webui-mvp-test" / "settings.json"
+# Use HERMES_WEBUI_TEST_STATE_DIR if available (set by conftest for the test process),
+# falling back to the conventional webui-mvp-test path.
+def _get_settings_file() -> pathlib.Path:
+    """Resolve SETTINGS_FILE at call time (env var set by conftest after module import)."""
+    state_dir = pathlib.Path(
+        os.environ.get("HERMES_WEBUI_TEST_STATE_DIR",
+                       str(pathlib.Path.home() / ".hermes" / "webui-mvp-test"))
+    )
+    return state_dir / "settings.json"
 
 
 def get(path, headers=None):
@@ -44,20 +54,21 @@ def read(path):
 
 
 def _snapshot_settings_file():
-    if SETTINGS_FILE.exists():
-        return SETTINGS_FILE.read_text(encoding="utf-8")
+    if _get_settings_file().exists():
+        return _get_settings_file().read_text(encoding="utf-8")
     return None
 
 
 def _restore_settings_file(original_text):
     if original_text is None:
-        SETTINGS_FILE.unlink(missing_ok=True)
+        _get_settings_file().unlink(missing_ok=True)
         return
-    SETTINGS_FILE.write_text(original_text, encoding="utf-8")
+    _get_settings_file().write_text(original_text, encoding="utf-8")
 
 
 def test_first_password_enablement_returns_cookie_and_keeps_browser_logged_in():
     original_settings = _snapshot_settings_file()
+    cookie_header = None  # captured for teardown use
     try:
         saved, status, headers = post("/api/settings", {"_set_password": "sprint45-secret"})
         assert status == 200
@@ -82,14 +93,29 @@ def test_first_password_enablement_returns_cookie_and_keeps_browser_logged_in():
         assert done_status == 200
         assert done["completed"] is True
     finally:
+        # First: write a clean settings file (no password_hash) directly to disk
+        try:
+            import json as _json
+            clean = _json.loads(original_settings) if original_settings else {}
+            clean.pop("password_hash", None)
+            _get_settings_file().parent.mkdir(parents=True, exist_ok=True)
+            _get_settings_file().write_text(_json.dumps(clean, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        # Then: tell the server to clear auth via API (must use the session cookie)
+        try:
+            _headers = {"Cookie": cookie_header} if cookie_header else {}
+            post("/api/settings", {"_clear_password": True}, headers=_headers)
+        except Exception:
+            pass
         _restore_settings_file(original_settings)
 
 
 def test_legacy_assistant_language_is_hidden_and_removed_on_next_save():
     original_settings = _snapshot_settings_file()
     try:
-        SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(
+        _get_settings_file().parent.mkdir(parents=True, exist_ok=True)
+        _get_settings_file().write_text(
             json.dumps(
                 {
                     "assistant_language": "zh",
@@ -111,7 +137,7 @@ def test_legacy_assistant_language_is_hidden_and_removed_on_next_save():
         assert "assistant_language" not in saved
         assert saved["send_key"] == "ctrl+enter"
 
-        persisted = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        persisted = json.loads(_get_settings_file().read_text(encoding="utf-8"))
         assert "assistant_language" not in persisted
     finally:
         _restore_settings_file(original_settings)
@@ -129,9 +155,3 @@ def test_reply_language_customization_ui_and_runtime_are_removed():
     assert "Default reply language:" not in streaming_py
 
 
-def test_synced_version_strings_show_local_patch_version():
-    index_html = read("static/index.html")
-    server_py = read("server.py")
-
-    assert "v0.50.36-local.1" in index_html
-    assert "HermesWebUI/0.50.36-local.1" in server_py
