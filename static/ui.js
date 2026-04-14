@@ -258,6 +258,17 @@ function renderModelDropdown(){
 async function selectModelFromDropdown(value){
   const sel=$('modelSelect');
   if(!sel||sel.value===value) { closeModelDropdown(); return; }
+  // If the value isn't in the option list (custom model ID), add a temporary option
+  // so sel.value assignment succeeds and the model chip shows the custom ID.
+  if(!Array.from(sel.options).some(o=>o.value===value)){
+    const opt=document.createElement('option');
+    opt.value=value;
+    opt.textContent=value.split('/').pop()||value;
+    opt.dataset.custom='1';
+    // Remove any previous custom option before adding new one
+    sel.querySelectorAll('option[data-custom]').forEach(o=>o.remove());
+    sel.appendChild(opt);
+  }
   sel.value=value;
   syncModelChip();
   closeModelDropdown();
