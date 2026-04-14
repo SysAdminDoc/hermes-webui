@@ -22,7 +22,7 @@ Three related bugs fixed:
 
 3 tests in `tests/test_issue477.py`.
 
-- Total tests: TBD (was 1130)
+- Total tests: 1150 (was 1130)
 
 ## [v0.50.42] fix: session display + model UX polish (sprint 42)
 
