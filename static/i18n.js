@@ -1205,6 +1205,8 @@ const LOCALES = {
     onboarding_lead: '快速引导将验证 Hermes、保存真实的提供商配置、选择工作区和模型，并可选设置密码保护应用。',
     onboarding_back: '返回',
     onboarding_continue: '继续',
+    onboarding_skip: '跳过设置',
+    onboarding_skipped: '设置已跳过 — 使用现有配置。',
     onboarding_open: '打开 Hermes',
     onboarding_step_system_title: '系统检查',
     onboarding_step_system_desc: '验证 Hermes Agent 与配置可见性。',
