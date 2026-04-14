@@ -587,8 +587,11 @@ function renderSessionListFromCache(){
   // ── Render session items (extracted for group body use) ──
   // Note: declared after the groups loop but available via function hoisting.
   function _formatSourceTag(tag){
+    // #429: return null for unknown/unrecognised tags so callers can suppress display.
+    // Previously returned the raw tag string, causing 'N/A' or other junk values
+    // from older hermes-agent state.db records to surface in the session list.
     const names={telegram:'via Telegram',discord:'via Discord',slack:'via Slack',cli:'CLI',feishu:'via Feishu',weixin:'via WeChat'};
-    return names[tag]||tag;
+    return names[tag]||null;
   }
   function _renderOneSession(s){
     const el=document.createElement('div');
@@ -602,7 +605,7 @@ function renderSessionListFromCache(){
     // Guard: system prompt content must never surface as a visible session title
     const _SOURCE_DISPLAY={telegram:'Telegram',discord:'Discord',slack:'Slack',cli:'CLI',feishu:'Feishu',weixin:'WeChat'};
     if(cleanTitle.startsWith('[SYSTEM:')){
-      cleanTitle=(_SOURCE_DISPLAY[s.source_tag]||s.source_tag||'Gateway')+' session';
+      cleanTitle=(_SOURCE_DISPLAY[s.source_tag]||'Gateway')+' session';
     }
     const sessionText=document.createElement('div');
     sessionText.className='session-text';
@@ -615,7 +618,7 @@ function renderSessionListFromCache(){
     const tsMs=_sessionTimestampMs(s);
     titleRow.appendChild(title);
     const metaBits=[];
-    if(s.is_cli_session && s.source_tag) metaBits.push(_formatSourceTag(s.source_tag));
+    if(s.is_cli_session && s.source_tag){const _stLabel=_formatSourceTag(s.source_tag);if(_stLabel)metaBits.push(_stLabel);}
     if(s.message_count) metaBits.push(t('n_messages', s.message_count));
     if(s.model) metaBits.push(String(s.model).split('/').pop());
     sessionText.appendChild(titleRow);

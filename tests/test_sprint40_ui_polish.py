@@ -182,9 +182,14 @@ class TestFormatSourceTagHelper(unittest.TestCase):
             "sessions.js should map slack -> 'via Slack'")
 
     def test_metabits_uses_format_helper(self):
-        """The metaBits push for source_tag should use _formatSourceTag."""
-        self.assertIn("metaBits.push(_formatSourceTag(s.source_tag))", SESSIONS_JS,
-            "metaBits push should wrap source_tag with _formatSourceTag()")
+        """The metaBits push for source_tag should use _formatSourceTag with a null guard."""
+        # Fix #429: the push now uses a temp variable guard to suppress null/N/A results:
+        #   const _stLabel=_formatSourceTag(s.source_tag); if(_stLabel) metaBits.push(_stLabel)
+        # The old direct push pattern is gone; verify the guarded pattern is present.
+        self.assertIn("_formatSourceTag(s.source_tag)", SESSIONS_JS,
+            "metaBits push should still use _formatSourceTag() for source_tag display")
+        self.assertIn("metaBits.push(_stLabel)", SESSIONS_JS,
+            "metaBits push should use guarded _stLabel variable (fix #429)")
 
     def test_raw_source_tag_not_pushed_directly(self):
         """The old raw metaBits.push(s.source_tag) should not exist."""

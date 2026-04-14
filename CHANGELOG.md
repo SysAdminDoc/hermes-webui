@@ -1,5 +1,34 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.45] fix: suppress N/A source_tag in session list (#429)
+
+Feishu and WeChat sessions (and any session with an unrecognised or legacy
+`source` value in hermes-agent's state.db) were showing "N/A" or raw tag
+strings in the session list sidebar.
+
+Three fixes in `static/sessions.js`:
+
+1. `_formatSourceTag()` now returns `null` for unrecognised tags instead of
+   the raw string. Known platforms (telegram, discord, slack, feishu, weixin,
+   cli) still display their human-readable label. Unknown/legacy values are
+   silently suppressed.
+
+2. The `metaBits` push is guarded: stores the result in `_stLabel` and only
+   pushes if it is non-null. Prevents `null` or unrecognised platform names
+   from appearing in the session metadata line.
+
+3. The `[SYSTEM:]` title fallback now uses `_SOURCE_DISPLAY[s.source_tag] ||
+   'Gateway'` — the raw `s.source_tag` middle term is removed so a session
+   whose source is "N/A" does not use that as its visible title.
+
+No backend changes. The upstream issue (hermes-agent not reliably setting
+`source` for older Feishu/WeChat sessions) is tracked separately.
+
+7 new tests in `tests/test_issue429.py`. Updated 1 existing test in
+`tests/test_sprint40_ui_polish.py` to match the new guarded push pattern.
+
+- Total tests: 1202 (was 1195)
+
 ## [v0.50.44] fix: code-in-table CSS sizing + markdown image rendering (#486, #487)
 
 **CSS: inline code inside table cells** (fixes #486)
