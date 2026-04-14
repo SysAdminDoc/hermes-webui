@@ -1,5 +1,22 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.40] feat: session UI polish + parallel test isolation
+
+**Session sidebar improvements:**
+- `static/sessions.js` + `style.css`: Hide session timestamps to give titles full available width — no more title truncation from inline timestamps (PR #449)
+- `static/style.css`: Active session title now uses `var(--gold)` theme variable instead of hardcoded `#e8a030` — adapts correctly across all 7 themes (PR #451, fixes #440)
+- `api/models.py` + `api/gateway_watcher.py`: Return `None` instead of the string `'unknown'` for missing gateway session model — Telegram sessions no longer show `telegram · unknown` (PR #452, fixes #443)
+- `static/style.css` + `static/sessions.js`: Mute Telegram badge from saturated `#0088cc` to `rgba(0, 136, 204, 0.55)`. Add `_formatSourceTag()` helper mapping platform IDs to display names (`telegram` → `via Telegram`) (PR #453, fixes #442)
+
+**Bug fixes:**
+- `api/config.py` `resolve_model_provider()`: Strip provider prefix from model ID when a custom `base_url` is configured (`openai/gpt-5.4` → `gpt-5.4`) — fixes broken chats after switching to a custom endpoint (PR #454, fixes #433)
+- `static/panels.js` `switchToProfile()`: Apply profile default workspace to new session created during profile switch — workspace chip no longer shows "No active workspace" after switching profiles mid-conversation (PR #455, fixes #424)
+
+**Test infrastructure:**
+- `tests/conftest.py` + `tests/_pytest_port.py` (new): Auto-derive unique port and state dir per worktree from repo path hash (range 20000-29999). Running pytest in two worktrees simultaneously no longer causes port conflicts. All 43 test files updated from hardcoded `BASE = "http://127.0.0.1:8788"` to `from tests._pytest_port import BASE` (PR #456)
+
+- Total tests: 1098 (was 1078)
+
 ## [v0.50.39] fix: orphan gateway sessions + first-password-enablement session continuity
 
 Two bug fixes:
