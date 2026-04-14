@@ -155,11 +155,7 @@ function toggleWorkspacePanel(force){
   openWorkspacePanel(nextMode);
 }
 function mobileSwitchPanel(name){
-  // Switch the panel content view
   switchPanel(name);
-  // For non-chat panels (tasks, skills, memory, spaces), open the sidebar
-  // so the panel is visible. For 'chat', the content is in the main area —
-  // just close the sidebar so the chat view is unobstructed.
   if(name==='chat'){
     closeMobileSidebar();
   } else {
@@ -170,10 +166,6 @@ function mobileSwitchPanel(name){
       if(overlay)overlay.classList.add('visible');
     }
   }
-  // Update bottom nav active state
-  document.querySelectorAll('.mobile-nav-btn').forEach(btn=>{
-    btn.classList.toggle('active',btn.dataset.panel===name);
-  });
 }
 
 $('btnSend').onclick=()=>{
@@ -592,7 +584,45 @@ function applyBotName(){
 (async()=>{
   // Load send key preference
   let _bootSettings={};
-  try{const s=await api('/api/settings');_bootSettings=s;window._sendKey=s.send_key||'enter';window._showTokenUsage=!!s.show_token_usage;window._showCliSessions=!!s.show_cli_sessions;window._soundEnabled=!!s.sound_enabled;window._notificationsEnabled=!!s.notifications_enabled;window._botName=s.bot_name||'Hermes';const _theme=s.theme||'dark';document.documentElement.dataset.theme=_theme;localStorage.setItem('hermes-theme',_theme);document.body.classList.toggle('bubble-layout',!!s.bubble_layout);if(s.language&&typeof setLocale==='function'){setLocale(s.language);if(typeof applyLocaleToDOM==='function')applyLocaleToDOM();}applyBotName();}catch(e){window._sendKey='enter';window._showTokenUsage=false;window._showCliSessions=false;window._soundEnabled=false;window._notificationsEnabled=false;window._botName='Hermes';_bootSettings={check_for_updates:false};document.body.classList.remove('bubble-layout');}
+  try{
+    const s=await api('/api/settings');
+    _bootSettings=s;
+    window._sendKey=s.send_key||'enter';
+    window._showTokenUsage=!!s.show_token_usage;
+    window._showCliSessions=!!s.show_cli_sessions;
+    window._soundEnabled=!!s.sound_enabled;
+    window._notificationsEnabled=!!s.notifications_enabled;
+    window._botName=s.bot_name||'Hermes';
+    const _theme=s.theme||'dark';
+    document.documentElement.dataset.theme=_theme;
+    localStorage.setItem('hermes-theme',_theme);
+    document.body.classList.toggle('bubble-layout',!!s.bubble_layout);
+    if(typeof setLocale==='function'){
+      const _lang=typeof resolvePreferredLocale==='function'
+        ? resolvePreferredLocale(s.language, localStorage.getItem('hermes-lang'))
+        : (s.language || localStorage.getItem('hermes-lang') || 'en');
+      setLocale(_lang);
+      if(typeof applyLocaleToDOM==='function')applyLocaleToDOM();
+    }
+    applyBotName();
+  }catch(e){
+    window._sendKey='enter';
+    window._showTokenUsage=false;
+    window._showCliSessions=false;
+    window._soundEnabled=false;
+    window._notificationsEnabled=false;
+    window._botName='Hermes';
+    _bootSettings={check_for_updates:false};
+    document.body.classList.remove('bubble-layout');
+    if(typeof setLocale==='function'){
+      const _lang=typeof resolvePreferredLocale==='function'
+        ? resolvePreferredLocale(null, localStorage.getItem('hermes-lang'))
+        : (localStorage.getItem('hermes-lang') || 'en');
+      setLocale(_lang);
+      if(typeof applyLocaleToDOM==='function')applyLocaleToDOM();
+    }
+    applyBotName();
+  }
   // Non-blocking update check (fire-and-forget, once per tab session)
   // ?test_updates=1 in URL forces banner display for testing (bypasses sessionStorage guards)
   const _testUpdates=new URLSearchParams(location.search).get('test_updates')==='1';

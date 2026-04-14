@@ -8,7 +8,7 @@
 > Prerequisites: SSH tunnel is active on port 8787. Open http://localhost:8787 in browser.
 > Server health check: curl http://127.0.0.1:8787/health should return {"status":"ok"}.
 >
-> Automated tests: 1063 total (1063 passing, 0 known failures). Includes onboarding coverage for bootstrap/static wizard presence, real provider config persistence (`config.yaml` + `.env`), the `/api/onboarding/*` backend, and the onboarding skip/existing-config guard.
+> Automated tests: 1073 total (1073 passing, 0 known failures). Includes onboarding coverage for bootstrap/static wizard presence, real provider config persistence (`config.yaml` + `.env`), the `/api/onboarding/*` backend, and the onboarding skip/existing-config guard.
 > Run: `pytest tests/ -v --timeout=60`
 
 ---
@@ -1715,12 +1715,13 @@ Each has automated API-level tests in `tests/test_sprint{N}.py`.
 - Open on mobile viewport (<640px): hamburger icon visible in topbar.
 - Tap hamburger → sidebar slides in from left with backdrop overlay.
 - Tap outside sidebar → closes. Tap a session → closes and loads session.
-- Bottom navigation bar: 5 tabs (Chat, Tasks, Skills, Memory, Spaces).
-- Tap "Tasks" in bottom nav → sidebar opens showing Tasks panel.
-- Tap "Chat" in bottom nav → sidebar closes (chat is in main area).
+- Sidebar top nav remains visible inside the mobile drawer; includes Chat/Tasks/Skills/Memory/Spaces/Profile tabs.
+- Tap "Tasks" in the drawer nav → Tasks panel opens in the sidebar drawer.
+- Tap "Chat" in the drawer nav → sidebar closes and chat is unobstructed in the main area.
 - Files button in topbar → right panel slides in from right.
+- No fixed mobile bottom nav; chat transcript and composer use the reclaimed vertical space.
 - All touch targets are at least 44px (session items, buttons, icons).
-- Desktop viewport (>640px): no hamburger, no bottom nav, no mobile elements.
+- Desktop viewport (>640px): no hamburger or mobile overlay; desktop layout unchanged.
 - Docker: `docker compose up -d` starts server on port 8787.
 - Docker: session data persists across container restarts (named volume).
 
