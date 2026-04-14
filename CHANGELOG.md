@@ -15,7 +15,7 @@
 **Test infrastructure:**
 - `tests/conftest.py` + `tests/_pytest_port.py` (new): Auto-derive unique port and state dir per worktree from repo path hash (range 20000-29999). Running pytest in two worktrees simultaneously no longer causes port conflicts. All 43 test files updated from hardcoded `BASE = "http://127.0.0.1:8788"` to `from tests._pytest_port import BASE` (PR #456)
 
-- Total tests: TBD (was 1078)
+- Total tests: 1098 (was 1078)
 
 ## [v0.50.39] fix: orphan gateway sessions + first-password-enablement session continuity
 
