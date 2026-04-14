@@ -477,9 +477,14 @@ function renderMd(raw){
     t=t.replace(/<\/?[a-z][^>]*>/gi,tag=>SAFE_INLINE.test(tag)?tag:esc(tag));
     return t;
   }
+  // Stash <code> tags from the backtick pass above so the outer bold/italic
+  // regexes don't esc() their content (e.g. **`code`** → <strong><code>code</code></strong>)
+  const _ob_stash=[];
+  s=s.replace(/(<code>[^<]*<\/code>)/g,m=>{_ob_stash.push(m);return `\x00O${_ob_stash.length-1}\x00`;});
   s=s.replace(/\*\*\*(.+?)\*\*\*/g,(_,t)=>`<strong><em>${esc(t)}</em></strong>`);
   s=s.replace(/\*\*(.+?)\*\*/g,(_,t)=>`<strong>${esc(t)}</strong>`);
   s=s.replace(/\*([^*\n]+)\*/g,(_,t)=>`<em>${esc(t)}</em>`);
+  s=s.replace(/\x00O(\d+)\x00/g,(_,i)=>_ob_stash[+i]);
   s=s.replace(/^### (.+)$/gm,(_,t)=>`<h3>${inlineMd(t)}</h3>`).replace(/^## (.+)$/gm,(_,t)=>`<h2>${inlineMd(t)}</h2>`).replace(/^# (.+)$/gm,(_,t)=>`<h1>${inlineMd(t)}</h1>`);
   s=s.replace(/^---+$/gm,'<hr>');
   s=s.replace(/^> (.+)$/gm,(_,t)=>`<blockquote>${inlineMd(t)}</blockquote>`);
@@ -504,12 +509,9 @@ function renderMd(raw){
     }
     return html+'</ol>';
   });
-  // Stash existing <a> tags so the autolink pass below does not re-link their href= URLs
-  const _a_stash=[];
-  s=s.replace(/(<a\b[^>]*>[\s\S]*?<\/a>)/g,m=>{_a_stash.push(m);return `\x00A${_a_stash.length-1}\x00`;});
-  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,(_,label,url)=>`<a href="${url.replace(/"/g,'%22')}" target="_blank" rel="noopener">${esc(label)}</a>`);
-  s=s.replace(/\x00A(\d+)\x00/g,(_,i)=>_a_stash[+i]);
   // Tables: | col | col | header row followed by | --- | --- | separator then data rows
+  // NOTE: table pass runs BEFORE outer link pass so [label](url) in table cells
+  // is handled by inlineMd() only — prevents double-linking.
   s=s.replace(/((?:^\|.+\|\n?)+)/gm,block=>{
     const rows=block.trim().split('\n').filter(r=>r.trim());
     if(rows.length<2)return block;
@@ -521,6 +523,13 @@ function renderMd(raw){
     const body=rows.slice(2).map(r=>`<tr>${parseRow(r)}</tr>`).join('');
     return `<table><thead>${header}</thead><tbody>${body}</tbody></table>`;
   });
+  // Outer link pass for labeled links in plain paragraphs (outside table cells).
+  // Runs AFTER the table pass so table cells are processed by inlineMd() only.
+  // Stash existing <a> tags first to avoid re-linking already-linked URLs.
+  const _a_stash=[];
+  s=s.replace(/(<a\b[^>]*>[\s\S]*?<\/a>)/g,m=>{_a_stash.push(m);return `\x00A${_a_stash.length-1}\x00`;});
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,(_,label,url)=>`<a href="${url.replace(/"/g,'%22')}" target="_blank" rel="noopener">${esc(label)}</a>`);
+  s=s.replace(/\x00A(\d+)\x00/g,(_,i)=>_a_stash[+i]);
   // Escape any remaining HTML tags that are NOT from our own markdown output.
   // Our pipeline only emits: <strong>,<em>,<code>,<pre>,<h1-6>,<ul>,<ol>,<li>,
   // <table>,<thead>,<tbody>,<tr>,<th>,<td>,<hr>,<blockquote>,<p>,<br>,<a>,
