@@ -1339,6 +1339,31 @@
       color: var(--text-secondary);
     }
     .hosting-specs-list li strong { color: var(--text-primary); }
+    .hosting-anywhere {
+      margin-top: 16px;
+      padding: 16px 22px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .hosting-anywhere-icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .hosting-anywhere-text {
+      flex: 1;
+      font-size: 0.83rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      min-width: 200px;
+    }
+    .hosting-anywhere-text strong { color: var(--text-primary); }
+    .hosting-anywhere-text a { color: var(--accent); text-decoration: none; }
+    .hosting-anywhere-text a:hover { text-decoration: underline; }
     @media (max-width: 900px) {
       .hosting-grid { grid-template-columns: 1fr; }
     }
@@ -2161,6 +2186,16 @@ hermes doctor         # diagnose any issues</code></pre>
             <li><strong>Model:</strong> Bring your own key &#8212; Claude, OpenAI, Gemini, or local</li>
           </ul>
         </div>
+      </div>
+
+      <!-- Anywhere callout -->
+      <div class="hosting-anywhere">
+        <div class="hosting-anywhere-icon">&#127968;</div>
+        <p class="hosting-anywhere-text">
+          <strong>Runs anywhere Python 3.11+ runs.</strong>
+          Mac Mini, Raspberry Pi, a spare laptop, a homelab NAS &#8212; if it can run Python, it can run Hermes.
+          No GPU needed. See the <a href="https://hermes-agent.nousresearch.com/docs/getting-started/installation" target="_blank" rel="noopener">install docs</a> for full requirements.
+        </p>
       </div>
 
     </div>
