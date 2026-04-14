@@ -344,6 +344,72 @@ function filterSessions(){
   }, 350);
 }
 
+function _sessionTimestampMs(session) {
+  const raw = Number(session && (session.updated_at || session.created_at || 0));
+  return Number.isFinite(raw) ? raw * 1000 : 0;
+}
+
+function _localDayOrdinal(timestampMs) {
+  const date = new Date(timestampMs);
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+}
+
+function _sessionCalendarBoundaries(nowMs = Date.now()) {
+  const now = new Date(nowMs);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+  const startOfLastWeek = new Date(startOfWeek);
+  startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+  return {
+    startOfToday: startOfToday.getTime(),
+    startOfYesterday: startOfYesterday.getTime(),
+    startOfWeek: startOfWeek.getTime(),
+    startOfLastWeek: startOfLastWeek.getTime(),
+  };
+}
+
+function _formatSessionDate(timestampMs, nowMs = Date.now()) {
+  const date = new Date(timestampMs);
+  const now = new Date(nowMs);
+  const options = {month:'short', day:'numeric'};
+  if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric';
+  return date.toLocaleDateString(undefined, options);
+}
+
+function _formatRelativeSessionTime(timestampMs, nowMs = Date.now()) {
+  if (!timestampMs) return t('session_time_unknown');
+  const diffMs = Math.max(0, nowMs - timestampMs);
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const {startOfToday, startOfYesterday, startOfWeek, startOfLastWeek} = _sessionCalendarBoundaries(nowMs);
+  const dayDiff = Math.max(0, _localDayOrdinal(nowMs) - _localDayOrdinal(timestampMs));
+  if (timestampMs >= startOfToday) {
+    if (diffMs < minute) return t('session_time_just_now');
+    if (diffMs < hour) {
+      const minutes = Math.floor(diffMs / minute);
+      return t('session_time_minutes_ago', minutes);
+    }
+    const hours = Math.floor(diffMs / hour);
+    return t('session_time_hours_ago', hours);
+  }
+  if (timestampMs >= startOfYesterday) return t('session_time_bucket_yesterday');
+  if (timestampMs >= startOfWeek) return t('session_time_days_ago', dayDiff);
+  if (timestampMs >= startOfLastWeek) return t('session_time_last_week');
+  return _formatSessionDate(timestampMs, nowMs);
+}
+
+function _sessionTimeBucketLabel(timestampMs, nowMs = Date.now()) {
+  if (!timestampMs) return t('session_time_bucket_older');
+  const {startOfToday, startOfYesterday, startOfWeek, startOfLastWeek} = _sessionCalendarBoundaries(nowMs);
+  if (timestampMs >= startOfToday) return t('session_time_bucket_today');
+  if (timestampMs >= startOfYesterday) return t('session_time_bucket_yesterday');
+  if (timestampMs >= startOfWeek) return t('session_time_bucket_this_week');
+  if (timestampMs >= startOfLastWeek) return t('session_time_bucket_last_week');
+  return t('session_time_bucket_older');
+}
+
 function renderSessionListFromCache(){
   // Don't re-render while user is actively renaming a session (would destroy the input)
   if(_renamingSid) return;
@@ -430,12 +496,12 @@ function renderSessionListFromCache(){
     empty.textContent='No sessions in this project yet.';
     list.appendChild(empty);
   }
+  const orderedSessions=[...sessions].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
   // Separate pinned from unpinned
-  const pinned=sessions.filter(s=>s.pinned);
-  const unpinned=sessions.filter(s=>!s.pinned);
-  // Date grouping: Pinned / Today / Yesterday / Earlier
+  const pinned=orderedSessions.filter(s=>s.pinned);
+  const unpinned=orderedSessions.filter(s=>!s.pinned);
+  // Date grouping: Pinned / Today / Yesterday / This week / Last week / Older
   const now=Date.now();
-  const ONE_DAY=86400000;
   // Collapse state persisted in localStorage
   let _groupCollapsed={};
   try{_groupCollapsed=JSON.parse(localStorage.getItem('hermes-date-groups-collapsed')||'{}');}catch(e){}
@@ -445,8 +511,8 @@ function renderSessionListFromCache(){
   let curLabel=null,curItems=[];
   if(pinned.length) groups.push({label:'\u2605 Pinned',items:pinned,isPinned:true});
   for(const s of unpinned){
-    const ts=(s.updated_at||s.created_at||0)*1000;
-    const label=ts>now-ONE_DAY?'Today':ts>now-2*ONE_DAY?'Yesterday':'Earlier';
+    const ts=_sessionTimestampMs(s);
+    const label=_sessionTimeBucketLabel(ts, now);
     if(label!==curLabel){
       if(curItems.length) groups.push({label:curLabel,items:curItems});
       curLabel=label;curItems=[s];
@@ -491,10 +557,32 @@ function renderSessionListFromCache(){
     const rawTitle=s.title||'Untitled';
     const tags=(rawTitle.match(/#[\w-]+/g)||[]);
     const cleanTitle=tags.length?rawTitle.replace(/#[\w-]+/g,'').trim():rawTitle;
+    const sessionText=document.createElement('div');
+    sessionText.className='session-text';
+    const titleRow=document.createElement('div');
+    titleRow.className='session-title-row';
     const title=document.createElement('span');
     title.className='session-title';
     title.textContent=cleanTitle||'Untitled';
     title.title='Double-click to rename';
+    const tsMs=_sessionTimestampMs(s);
+    const timeLabel=document.createElement('span');
+    timeLabel.className='session-time';
+    timeLabel.textContent=_formatRelativeSessionTime(tsMs, now);
+    if(tsMs) timeLabel.title=new Date(tsMs).toLocaleString();
+    titleRow.appendChild(title);
+    titleRow.appendChild(timeLabel);
+    const metaBits=[];
+    if(s.is_cli_session && s.source_tag) metaBits.push(s.source_tag);
+    if(s.message_count) metaBits.push(t('n_messages', s.message_count));
+    if(s.model) metaBits.push(String(s.model).split('/').pop());
+    sessionText.appendChild(titleRow);
+    if(metaBits.length){
+      const meta=document.createElement('div');
+      meta.className='session-meta';
+      meta.textContent=metaBits.join(' · ');
+      sessionText.appendChild(meta);
+    }
     // Append tag chips after the title text
     for(const tag of tags){
       const chip=document.createElement('span');
@@ -561,7 +649,7 @@ function renderSessionListFromCache(){
         title.appendChild(dot);
       }
     }
-    el.appendChild(title);
+    el.appendChild(sessionText);
     // Single trigger button that opens a shared dropdown menu
     const actions=document.createElement('div');
     actions.className='session-actions';
