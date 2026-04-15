@@ -637,8 +637,12 @@ def resolve_model_provider(model_id: str) -> tuple:
         # just because the model name contains a slash (e.g. google/gemma-4-26b-a4b).
         # The user has explicitly pointed at a base_url, so trust their routing config.
         if config_base_url:
-            # Strip provider prefix (e.g. 'openai/gpt-5.4' -> 'gpt-5.4') so prefixed
-            # model IDs from previous sessions don't break custom endpoint routing.
+            # For explicit custom endpoints, preserve full slash-bearing model IDs
+            # (e.g. "zai-org/GLM-5.1" on DeepInfra). Stripping the prefix causes
+            # model_not_found on providers that require vendor/model format.
+            if (config_provider or "").strip().lower() == "custom":
+                return model_id, config_provider, config_base_url
+            # Non-custom providers with a base_url override can still use bare IDs.
             bare_model = model_id.split('/', 1)[-1]
             return bare_model, config_provider, config_base_url
         # If prefix does NOT match config provider, the user picked a cross-provider model
