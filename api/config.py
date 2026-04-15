@@ -420,9 +420,11 @@ _FALLBACK_MODELS = [
     # DeepSeek
     {"provider": "DeepSeek",  "id": "deepseek/deepseek-chat-v3-0324",     "label": "DeepSeek V3"},
     {"provider": "DeepSeek",  "id": "deepseek/deepseek-r1",               "label": "DeepSeek R1"},
-    # Meta
-    {"provider": "Meta",      "id": "meta-llama/llama-4-scout",           "label": "Llama 4 Scout"},
-    {"provider": "Meta",      "id": "meta-llama/llama-4-maverick",        "label": "Llama 4 Maverick"},
+    # Qwen (Alibaba) — strong coding and general models
+    {"provider": "Qwen",      "id": "qwen/qwen3-coder",                   "label": "Qwen3 Coder"},
+    {"provider": "Qwen",      "id": "qwen/qwen3.6-plus",                  "label": "Qwen3.6 Plus"},
+    # xAI
+    {"provider": "xAI",       "id": "x-ai/grok-4-20",                    "label": "Grok 4.20"},
     # Mistral
     {"provider": "Mistral",   "id": "mistralai/mistral-large-latest",     "label": "Mistral Large"},
 ]
@@ -448,6 +450,8 @@ _PROVIDER_DISPLAY = {
     "opencode-go": "OpenCode Go",
     "lmstudio": "LM Studio",
     "mistralai": "Mistral",
+    "qwen": "Qwen",
+    "x-ai": "xAI",
 }
 
 # Well-known models per provider (used to populate dropdown for direct API providers)
@@ -569,6 +573,15 @@ _PROVIDER_MODELS = {
     "mistralai": [
         {"id": "mistral-large-latest", "label": "Mistral Large"},
         {"id": "mistral-small-latest", "label": "Mistral Small"},
+    ],
+    # Qwen (Alibaba) — prefix used in OpenRouter model IDs (qwen/qwen3-coder)
+    "qwen": [
+        {"id": "qwen3-coder",   "label": "Qwen3 Coder"},
+        {"id": "qwen3.6-plus",  "label": "Qwen3.6 Plus"},
+    ],
+    # xAI — prefix used in OpenRouter model IDs (x-ai/grok-4-20)
+    "x-ai": [
+        {"id": "grok-4-20", "label": "Grok 4.20"},
     ],
 }
 
