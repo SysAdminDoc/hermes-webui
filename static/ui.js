@@ -767,6 +767,7 @@ function _ensureAppDialogBindings(){
       return;
     }
     if(e.key==='Enter'){
+      if(e.isComposing) return;
       const target=e.target;
       const isTextarea=target&&target.tagName==='TEXTAREA';
       if(!isTextarea){
@@ -1399,7 +1400,7 @@ function editMessage(btn) {
   bar.querySelector('.msg-edit-cancel').onclick = () => cancelEdit(row, originalText, body);
 
   ta.addEventListener('keydown', e => {
-    if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); bar.querySelector('.msg-edit-send').click(); }
+    if(e.key==='Enter' && !e.shiftKey) { if(e.isComposing) return; e.preventDefault(); bar.querySelector('.msg-edit-send').click(); }
     if(e.key==='Escape') { e.preventDefault(); cancelEdit(row, originalText, body); }
   });
 }
@@ -1719,7 +1720,11 @@ function _renderTreeItems(container, entries, depth){
         inp.replaceWith(nameEl);
       };
       inp.onkeydown=(e2)=>{
-        if(e2.key==='Enter'){e2.preventDefault();finish(true);}
+        if(e2.key==='Enter'){
+          if(e2.isComposing){return;}
+          e2.preventDefault();
+          finish(true);
+        }
         if(e2.key==='Escape'){e2.preventDefault();finish(false);}
       };
       inp.onblur=()=>finish(false);
