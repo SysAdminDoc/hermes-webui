@@ -404,31 +404,15 @@ CLI_TOOLSETS = get_config().get("platform_toolsets", {}).get("cli", _DEFAULT_TOO
 # ── Model / provider discovery ───────────────────────────────────────────────
 
 # Hardcoded fallback models (used when no config.yaml or agent is available)
+# Also used as the OpenRouter model list — keep this curated to current, widely-used models.
 _FALLBACK_MODELS = [
-    {"provider": "OpenAI", "id": "openai/gpt-5.4-mini", "label": "GPT-5.4 Mini"},
-    {"provider": "OpenAI", "id": "openai/o4-mini", "label": "o4-mini"},
-    {
-        "provider": "Anthropic",
-        "id": "anthropic/claude-sonnet-4.6",
-        "label": "Claude Sonnet 4.6",
-    },
-    {
-        "provider": "Anthropic",
-        "id": "anthropic/claude-sonnet-4-5",
-        "label": "Claude Sonnet 4.5",
-    },
-    {
-        "provider": "Anthropic",
-        "id": "anthropic/claude-haiku-4-5",
-        "label": "Claude Haiku 4.5",
-    },
-    {"provider": "Other", "id": "google/gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
-    {
-        "provider": "Other",
-        "id": "deepseek/deepseek-chat-v3-0324",
-        "label": "DeepSeek V3",
-    },
-    {"provider": "Other", "id": "meta-llama/llama-4-scout", "label": "Llama 4 Scout"},
+    {"provider": "OpenAI",    "id": "openai/gpt-5.4-mini",           "label": "GPT-5.4 Mini"},
+    {"provider": "Anthropic", "id": "anthropic/claude-sonnet-4.6",   "label": "Claude Sonnet 4.6"},
+    {"provider": "Anthropic", "id": "anthropic/claude-haiku-4-5",    "label": "Claude Haiku 4.5"},
+    {"provider": "Google",    "id": "google/gemini-3.1-pro",         "label": "Gemini 3.1 Pro"},
+    {"provider": "Google",    "id": "google/gemini-3-flash",       "label": "Gemini 3 Flash"},
+    {"provider": "DeepSeek",  "id": "deepseek/deepseek-chat-v3-0324","label": "DeepSeek V3"},
+    {"provider": "Meta",      "id": "meta-llama/llama-4-scout",      "label": "Llama 4 Scout"},
 ]
 
 # Provider display names for known Hermes provider IDs
@@ -463,7 +447,7 @@ _PROVIDER_MODELS = {
     ],
     "openai": [
         {"id": "gpt-5.4-mini", "label": "GPT-5.4 Mini"},
-        {"id": "o4-mini", "label": "o4-mini"},
+        {"id": "gpt-5.4",      "label": "GPT-5.4"},
     ],
     "openai-codex": [
         {"id": "gpt-5.4", "label": "GPT-5.4"},
@@ -475,7 +459,8 @@ _PROVIDER_MODELS = {
         {"id": "codex-mini-latest", "label": "Codex Mini (latest)"},
     ],
     "google": [
-        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
+        {"id": "gemini-3.1-pro",   "label": "Gemini 3.1 Pro"},
+        {"id": "gemini-3-flash", "label": "Gemini 3 Flash"},
     ],
     "deepseek": [
         {"id": "deepseek-chat-v3-0324", "label": "DeepSeek V3"},
@@ -485,7 +470,7 @@ _PROVIDER_MODELS = {
         {"id": "claude-opus-4.6", "label": "Claude Opus 4.6 (via Nous)"},
         {"id": "claude-sonnet-4.6", "label": "Claude Sonnet 4.6 (via Nous)"},
         {"id": "gpt-5.4-mini", "label": "GPT-5.4 Mini (via Nous)"},
-        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro (via Nous)"},
+        {"id": "gemini-3.1-pro", "label": "Gemini 2.5 Pro (via Nous)"},
     ],
     "zai": [
         {"id": "glm-5.1", "label": "GLM-5.1"},
@@ -515,7 +500,7 @@ _PROVIDER_MODELS = {
         {"id": "gpt-4o", "label": "GPT-4o"},
         {"id": "claude-opus-4.6", "label": "Claude Opus 4.6"},
         {"id": "claude-sonnet-4.6", "label": "Claude Sonnet 4.6"},
-        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
+        {"id": "gemini-3.1-pro", "label": "Gemini 3.1 Pro"},
     ],
     # OpenCode Zen — curated models via opencode.ai/zen (pay-as-you-go credits)
     "opencode-zen": [
@@ -564,8 +549,8 @@ _PROVIDER_MODELS = {
     ],
     # 'gemini' is the hermes_cli provider ID for Google AI Studio
     "gemini": [
-        {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
-        {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash"},
+        {"id": "gemini-3.1-pro", "label": "Gemini 3.1 Pro"},
+        {"id": "gemini-3-flash", "label": "Gemini 3 Flash"},
     ],
 }
 
