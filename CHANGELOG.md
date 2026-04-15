@@ -1,5 +1,56 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.47] fix/feat: batch fixes — root workspace, custom providers, cron cache, system theme
+
+Synthesized from PRs #506, #507, #508, #509, #510, #514, #515, #519, #521.
+
+### Fixes
+
+**Allow /root as a workspace path** (PRs #510, #521 by @ccqqlo)
+Removes `/root` from `_BLOCKED_SYSTEM_ROOTS` in `api/workspace.py`, so
+deployments running as root (Docker, VPS) can set `/root` as their workspace
+without a "system directory" rejection.
+
+**Guard against split on missing [Attached files:]** (PR #521 by @ccqqlo)
+`base_text` extraction in `api/streaming.py` now guards: `msg_text.split(...)[0]
+if ... in msg_text else msg_text`. Previously split on the empty case returned
+an empty string, causing attachment-matching to silently fail on messages with
+no attachments.
+
+**custom_providers models visible regardless of active provider** (#515, #519 by @shruggr, @cloudyun888)
+`get_available_models()` in `api/config.py` no longer discards the 'custom'
+provider from `detected_providers` when the user has `custom_providers` entries
+in `config.yaml`. Previously, switching active_provider away from 'custom'
+hid all custom model definitions from the picker.
+
+**Cron skill picker cache invalidated on form open and skill save** (PRs #507, #508 by @armorbreak001)
+`toggleCronForm()` now unconditionally nulls `_cronSkillsCache` before fetching,
+so skills created in the same session appear immediately. `submitSkillSave()` also
+nulls `_cronSkillsCache` after a successful write, mirroring the existing
+`_skillsData = null` pattern. Fixes #502.
+
+### Features
+
+**System (auto) theme following OS prefers-color-scheme** (#504 / PRs #506, #509, #514 by @armorbreak001, @cloudyun888)
+New "System (auto)" option in the theme picker follows the OS dark/light preference
+via `window.matchMedia`. Changes:
+- `static/boot.js`: `_applyTheme(name)` helper resolves 'system' via matchMedia,
+  sets `data-theme`, and registers a MQ change listener for live OS tracking.
+  `loadSettings()` calls `_applyTheme()` instead of direct assignment.
+- `static/index.html`: flicker-prevention script resolves 'system' before first
+  paint. Adds "System (auto)" as first theme option. onchange calls `_applyTheme()`.
+- `static/commands.js`: adds 'system' to valid `/theme` names.
+- `static/panels.js`: `_settingsThemeOnOpen` reads from localStorage (preserves
+  'system' string). `_revertSettingsPreview` calls `_applyTheme()`.
+- `static/i18n.js`: cmd_theme description lists 'system' first in all 5 locales.
+
+### Tests
+
+22 new tests in `tests/test_batch_fixes.py`.
+
+Total tests: 1268 (was 1246)
+
+
 ## [v0.50.46] feat: clarify dialog flow and refresh recovery (#520)
 
 Adds a full clarify dialog UX for interactive agent questions — modeled after
