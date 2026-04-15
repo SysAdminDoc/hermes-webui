@@ -568,6 +568,21 @@ window.addEventListener('resize',()=>{
   };
 })();
 
+// ── System theme helper ──────────────────────────────────────────────────────
+function _applyTheme(name){
+  const resolved=(name==='system')
+    ?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')
+    :name;
+  document.documentElement.dataset.theme=resolved||'dark';
+  // Re-register OS change listener whenever system theme is active
+  if(name==='system'){
+    const mq=window.matchMedia('(prefers-color-scheme:dark)');
+    const _onOsChange=()=>{ document.documentElement.dataset.theme=mq.matches?'dark':'light'; };
+    mq.removeEventListener('change',_onOsChange);
+    mq.addEventListener('change',_onOsChange);
+  }
+}
+
 function applyBotName(){
   const name=window._botName||'Hermes';
   document.title=name;
@@ -594,8 +609,8 @@ function applyBotName(){
     window._notificationsEnabled=!!s.notifications_enabled;
     window._botName=s.bot_name||'Hermes';
     const _theme=s.theme||'dark';
-    document.documentElement.dataset.theme=_theme;
     localStorage.setItem('hermes-theme',_theme);
+    _applyTheme(_theme);
     document.body.classList.toggle('bubble-layout',!!s.bubble_layout);
     if(typeof setLocale==='function'){
       const _lang=typeof resolvePreferredLocale==='function'
