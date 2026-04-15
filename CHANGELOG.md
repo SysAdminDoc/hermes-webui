@@ -1,5 +1,10 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.49] — 2026-04-15
+
+### Fixed
+- **IME composition** — `isComposing` guard added to every Enter keydown handler so CJK/Japanese/Korean input method users never accidentally send mid-composition (fixes #531). Covers chat composer, command dropdown, session rename, project create/rename, app dialog, message edit, and workspace rename. Adds 3 regression tests. (PR #537 by @vansour)
+
 ## [v0.50.48] fix: toast when model is switched during active session (#419)
 
 Synthesized from PRs #516 (armorbreak001), #517 and #518 (cloudyun888).
