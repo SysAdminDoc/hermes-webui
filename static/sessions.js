@@ -671,7 +671,12 @@ function renderSessionListFromCache(){
         setTimeout(()=>{ if(_renamingSid===null) renderSessionListFromCache(); },50);
       };
       inp.onkeydown=e2=>{
-        if(e2.key==='Enter'){e2.preventDefault();e2.stopPropagation();finish(true);}
+        if(e2.key==='Enter'){
+          if(e2.isComposing){return;}
+          e2.preventDefault();
+          e2.stopPropagation();
+          finish(true);
+        }
         if(e2.key==='Escape'){e2.preventDefault();e2.stopPropagation();finish(false);}
       };
       // onblur: cancel only -- no accidental saves
@@ -888,7 +893,11 @@ function _startProjectCreate(bar, addBtn){
     }
   };
   inp.onkeydown=(e)=>{
-    if(e.key==='Enter'){e.preventDefault();finish(true);}
+    if(e.key==='Enter'){
+      if(e.isComposing){return;}
+      e.preventDefault();
+      finish(true);
+    }
     if(e.key==='Escape'){e.preventDefault();finish(false);}
   };
   inp.onblur=()=>finish(false);
@@ -910,7 +919,11 @@ function _startProjectRename(proj, chip){
     }
   };
   inp.onkeydown=(e)=>{
-    if(e.key==='Enter'){e.preventDefault();finish(true);}
+    if(e.key==='Enter'){
+      if(e.isComposing){return;}
+      e.preventDefault();
+      finish(true);
+    }
     if(e.key==='Escape'){e.preventDefault();finish(false);}
   };
   inp.onblur=()=>finish(false);

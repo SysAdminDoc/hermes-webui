@@ -446,7 +446,12 @@ $('msg').addEventListener('keydown',e=>{
     if(e.key==='ArrowDown'){e.preventDefault();navigateCmdDropdown(1);return;}
     if(e.key==='Tab'){e.preventDefault();selectCmdDropdownItem();return;}
     if(e.key==='Escape'){e.preventDefault();hideCmdDropdown();return;}
-    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();selectCmdDropdownItem();return;}
+    if(e.key==='Enter'&&!e.shiftKey){
+      if(e.isComposing){return;}
+      e.preventDefault();
+      selectCmdDropdownItem();
+      return;
+    }
   }
   // Send key: respect user preference.
   // On touch-primary devices (software keyboard), default to Enter = newline
@@ -454,6 +459,7 @@ $('msg').addEventListener('keydown',e=>{
   // The 'ctrl+enter' setting also uses this behavior (Enter = newline).
   // Users can override in Settings by explicitly choosing 'enter' mode.
   if(e.key==='Enter'){
+    if(e.isComposing){return;}
     const _mobileDefault=matchMedia('(pointer:coarse)').matches&&window._sendKey==='enter';
     if(window._sendKey==='ctrl+enter'||_mobileDefault){
       if(e.ctrlKey||e.metaKey){e.preventDefault();send();}
