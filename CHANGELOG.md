@@ -1,5 +1,60 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.46] feat: clarify dialog flow and refresh recovery (#520)
+
+Adds a full clarify dialog UX for interactive agent questions — modeled after
+the approval card but for free-form clarification prompts.
+
+### Backend
+
+New `api/clarify.py` module with a per-session pending queue backed by
+`threading.Event` unblocking, gateway notify callbacks, duplicate deduplication
+while unresolved, and resolve/clear helpers.
+
+Three new HTTP endpoints in `api/routes.py`:
+- `GET /api/clarify/pending` — poll for pending clarify prompt
+- `POST /api/clarify/respond` — resolve the pending prompt
+- `GET /api/clarify/inject_test` — loopback-only, for automated tests
+
+`api/streaming.py` wires `clarify_callback` into `AIAgent.run_conversation()`.
+Emits `clarify` SSE events; blocks the tool flow until the user responds, times
+out (120s), or the stream is cancelled. Also adds a 409 guard on `chat/start` so
+page-refresh races return the active stream id instead of starting a duplicate.
+
+### Frontend
+
+`static/messages.js`: clarify card with numbered choices, Other button, and
+free-text input. Composer is locked while clarify is active. DOM self-heals if
+the card node is removed during a rerender. SSE `clarify` event listener plus
+1.5s fallback polling. Session switch and reconnect start/stop clarify polling.
+409 conflict flow reattaches to the active stream and queues the user message.
+`CLARIFY_MIN_VISIBLE_MS = 30000` timer dedup mirrors the approval card pattern.
+
+`static/ui.js`: `lockComposerForClarify()` / `unlockComposerForClarify()` with
+saved-state restore. `updateSendBtn()` respects the disabled state.
+
+`static/sessions.js`: `loadSession()` starts/stops clarify polling on switch
+and inflight reattach.
+
+`static/index.html` / `static/style.css`: clarify card markup with ARIA roles
+and full responsive/mobile styles.
+
+`static/i18n.js`: 6 new keys in all 5 locales (en, es, de, zh-Hans, zh-Hant).
+
+### Tests
+
+- `tests/test_clarify_unblock.py`: 14 new tests covering queue resolution,
+  notify callbacks, clear-on-cancel, and all three HTTP endpoints.
+- `tests/test_sprint30.py`: 31 new clarify tests (HTML markup, CSS classes,
+  i18n keys, messages.js functions, streaming registration flags).
+- `tests/test_sprint36.py`: expand search window for `setBusy` check after
+  additional `stopClarifyPolling()` calls push it past the old 800-char limit.
+
+Total tests: 1246 (was 1209)
+
+Co-authored-by: franksong2702
+
+
 ## [v0.50.45] fix: suppress N/A source_tag in session list (#429)
 
 Feishu and WeChat sessions (and any session with an unrecognised or legacy
