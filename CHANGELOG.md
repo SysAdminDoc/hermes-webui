@@ -1,5 +1,10 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.50] — 2026-04-15
+
+### Fixed
+- **Code block syntax highlighting** — Prism theme now follows the active UI theme. Light mode uses the default Prism light theme; dark mode uses `prism-tomorrow`. Theme swaps happen immediately on toggle including on first load. Adds `id="prism-theme"` to the Prism CSS link so JavaScript can locate and swap it. (Closes #505, PR #530 by @mariosam95)
+
 ## [v0.50.49] — 2026-04-15
 
 ### Fixed
