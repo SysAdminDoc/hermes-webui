@@ -191,6 +191,8 @@ function syncModelChip(){
   const label=$('composerModelLabel');
   const dd=$('composerModelDropdown');
   if(!sel||!chip||!label) return;
+  // Don't show a model label until boot has finished loading to prevent flash of wrong default
+  if(!S._bootReady){ label.textContent=''; chip.title='Conversation model'; return; }
   const opt=_selectedModelOption();
   label.textContent=opt?opt.textContent:getModelLabel(sel.value||'');
   chip.title=sel.value||'Conversation model';
@@ -654,6 +656,8 @@ function updateSendBtn(){
   if(canSend&&!btn.classList.contains('visible')){
     btn.classList.remove('visible');
     requestAnimationFrame(()=>btn.classList.add('visible'));
+  } else if(!canSend){
+    btn.classList.remove('visible');
   }
 }
 function setBusy(v){
@@ -1635,7 +1639,7 @@ function renderMermaidBlocks(){
       script.crossOrigin='anonymous';
       script.onload=()=>{
         if(typeof mermaid!=='undefined'){
-          mermaid.initialize({startOnLoad:false,theme:'dark',themeVariables:{
+          mermaid.initialize({startOnLoad:false,theme:document.documentElement.classList.contains('dark')?'dark':'default',themeVariables:{
             primaryColor:'#4a6fa5',primaryTextColor:'#e2e8f0',lineColor:'#718096',
             secondaryColor:'#2d3748',tertiaryColor:'#1a202c',primaryBorderColor:'#4a5568',
           }});

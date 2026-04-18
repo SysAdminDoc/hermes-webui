@@ -1216,7 +1216,8 @@ _SETTINGS_DEFAULTS = {
     "show_cli_sessions": False,  # merge CLI sessions from state.db into the sidebar
     "sync_to_insights": False,  # mirror WebUI token usage to state.db for /insights
     "check_for_updates": True,  # check if webui/agent repos are behind upstream
-    "theme": "dark",  # active UI theme name (no enum gate -- allows custom themes)
+    "theme": "dark",  # light | dark | system
+    "skin": "default",  # accent color skin: default | ares | mono | slate | poseidon | sisyphus | charizard
     "language": "en",  # UI locale code; must match a key in static/i18n.js LOCALES
     "bot_name": os.getenv(
         "HERMES_WEBUI_BOT_NAME", "Hermes"
@@ -1227,11 +1228,68 @@ _SETTINGS_DEFAULTS = {
     "password_hash": None,  # PBKDF2-HMAC-SHA256 hash; None = auth disabled
 }
 _SETTINGS_LEGACY_DROP_KEYS = {"assistant_language"}
+_SETTINGS_THEME_VALUES = {"light", "dark", "system"}
+_SETTINGS_SKIN_VALUES = {
+    "default",
+    "ares",
+    "mono",
+    "slate",
+    "poseidon",
+    "sisyphus",
+    "charizard",
+}
+_SETTINGS_LEGACY_THEME_MAP = {
+    # Legacy full themes now map onto the closest supported theme + accent skin pair.
+    "slate": ("dark", "slate"),
+    "solarized": ("dark", "poseidon"),
+    "monokai": ("dark", "sisyphus"),
+    "nord": ("dark", "slate"),
+    "oled": ("dark", "default"),
+}
+
+
+def _normalize_appearance(theme, skin) -> tuple[str, str]:
+    """Normalize a (theme, skin) pair, migrating legacy theme names.
+
+    Legacy migration table (from `_SETTINGS_LEGACY_THEME_MAP`):
+
+        slate     → ("dark", "slate")
+        solarized → ("dark", "poseidon")
+        monokai   → ("dark", "sisyphus")
+        nord      → ("dark", "slate")
+        oled      → ("dark", "default")
+
+    Unknown / custom theme names fall back to ("dark", "default").  This is a
+    behavior change vs. the pre-PR-#627 state, where the `theme` field was
+    open-ended ("no enum gate -- allows custom themes").  Users who set a
+    custom CSS theme via `data-theme` will need to re-apply via skin or
+    custom CSS — see CHANGELOG entry for details.
+
+    The same mapping is mirrored in `static/boot.js` (`_LEGACY_THEME_MAP`)
+    so client and server normalize identically; keep them in sync.
+    """
+    raw_theme = theme.strip().lower() if isinstance(theme, str) else ""
+    raw_skin = skin.strip().lower() if isinstance(skin, str) else ""
+    legacy = _SETTINGS_LEGACY_THEME_MAP.get(raw_theme)
+    if legacy:
+        next_theme, legacy_skin = legacy
+    elif raw_theme in _SETTINGS_THEME_VALUES:
+        next_theme, legacy_skin = raw_theme, "default"
+    else:
+        # Unknown themes used to exist; default to dark so upgrades stay visually stable.
+        next_theme, legacy_skin = "dark", "default"
+    next_skin = (
+        raw_skin
+        if raw_skin in _SETTINGS_SKIN_VALUES
+        else legacy_skin
+    )
+    return next_theme, next_skin
 
 
 def load_settings() -> dict:
     """Load settings from disk, merging with defaults for any missing keys."""
     settings = dict(_SETTINGS_DEFAULTS)
+    stored = None
     try:
         settings_exists = SETTINGS_FILE.exists()
     except OSError:
@@ -1252,6 +1310,10 @@ def load_settings() -> dict:
                 )
         except Exception:
             logger.debug("Failed to load settings from %s", SETTINGS_FILE)
+    settings["theme"], settings["skin"] = _normalize_appearance(
+        stored.get("theme") if isinstance(stored, dict) else settings.get("theme"),
+        stored.get("skin") if isinstance(stored, dict) else settings.get("skin"),
+    )
     return settings
 
 
@@ -1276,6 +1338,10 @@ _SETTINGS_LANG_RE = __import__("re").compile(r"^[a-zA-Z]{2,10}(-[a-zA-Z0-9]{2,8}
 def save_settings(settings: dict) -> dict:
     """Save settings to disk. Returns the merged settings. Ignores unknown keys."""
     current = load_settings()
+    pending_theme = current.get("theme")
+    pending_skin = current.get("skin")
+    theme_was_explicit = False
+    skin_was_explicit = False
     # Handle _set_password: hash and store as password_hash
     raw_pw = settings.pop("_set_password", None)
     if raw_pw and isinstance(raw_pw, str) and raw_pw.strip():
@@ -1288,6 +1354,16 @@ def save_settings(settings: dict) -> dict:
         current["password_hash"] = None
     for k, v in settings.items():
         if k in _SETTINGS_ALLOWED_KEYS:
+            if k == "theme":
+                if isinstance(v, str) and v.strip():
+                    pending_theme = v
+                    theme_was_explicit = True
+                continue
+            if k == "skin":
+                if isinstance(v, str) and v.strip():
+                    pending_skin = v
+                    skin_was_explicit = True
+                continue
             # Validate enum-constrained keys
             if k in _SETTINGS_ENUM_VALUES and v not in _SETTINGS_ENUM_VALUES[k]:
                 continue
@@ -1300,6 +1376,13 @@ def save_settings(settings: dict) -> dict:
             if k in _SETTINGS_BOOL_KEYS:
                 v = bool(v)
             current[k] = v
+    theme_value = pending_theme
+    skin_value = pending_skin
+    if theme_was_explicit and not skin_was_explicit:
+        raw_theme = pending_theme.strip().lower() if isinstance(pending_theme, str) else ""
+        if raw_theme not in _SETTINGS_THEME_VALUES:
+            skin_value = None
+    current["theme"], current["skin"] = _normalize_appearance(theme_value, skin_value)
 
     current["default_workspace"] = str(
         resolve_default_workspace(current.get("default_workspace"))

@@ -119,7 +119,7 @@ class TestSystemTheme:
 
     def test_apply_theme_resolves_system(self):
         src = read("static/boot.js")
-        assert "name==='system'" in src or "=== 'system'" in src, (
+        assert "normalized.theme==='system'" in src or "=== 'system'" in src, (
             "_applyTheme must branch on 'system' to resolve via matchMedia"
         )
 
@@ -131,23 +131,23 @@ class TestSystemTheme:
 
     def test_load_settings_calls_apply_theme(self):
         src = read("static/boot.js")
-        assert "_applyTheme(_theme)" in src, (
+        assert "_applyTheme(appearance.theme)" in src, (
             "loadSettings must call _applyTheme() instead of direct data-theme assignment"
         )
 
-    def test_system_option_in_theme_select(self):
+    def test_system_option_in_theme_picker(self):
         html = read("static/index.html")
-        assert 'value="system"' in html, (
-            "Theme <select> must include <option value=\"system\">"
+        assert "_pickTheme('system')" in html, (
+            "Theme picker must include a system theme button"
         )
-        assert "System (auto)" in html, (
-            "Theme picker must show 'System (auto)' label"
+        assert ">System<" in html, (
+            "Theme picker must show 'System' label"
         )
 
-    def test_theme_select_uses_apply_theme_onchange(self):
+    def test_theme_picker_uses_pick_theme(self):
         html = read("static/index.html")
-        assert "_applyTheme(this.value)" in html, (
-            "Theme <select> onchange must call _applyTheme(this.value)"
+        assert "_pickTheme(" in html, (
+            "Theme buttons must call _pickTheme()"
         )
 
     def test_flicker_script_resolves_system(self):
@@ -155,6 +155,9 @@ class TestSystemTheme:
         # The head flicker-prevention IIFE must handle 'system'
         assert "==='system'" in html or "=== 'system'" in html, (
             "Flicker-prevention head script must resolve 'system' before setting data-theme"
+        )
+        assert "legacy={slate:['dark','slate']" in html, (
+            "Flicker-prevention head script must normalize legacy theme names on first paint"
         )
 
     def test_system_in_commands_themes_list(self):
@@ -165,8 +168,14 @@ class TestSystemTheme:
 
     def test_commands_uses_apply_theme(self):
         src = read("static/commands.js")
-        assert "_applyTheme(themeName)" in src, (
-            "cmdTheme must call _applyTheme() to handle system resolution"
+        assert "_applyTheme(appearance.theme)" in src, (
+            "cmdTheme must call _applyTheme() with the normalized canonical theme"
+        )
+
+    def test_commands_accept_legacy_theme_aliases(self):
+        src = read("static/commands.js")
+        assert "const legacyThemes=Object.keys(_LEGACY_THEME_MAP||{});" in src, (
+            "cmdTheme must accept legacy theme aliases and map them onto canonical appearance values"
         )
 
     def test_panels_reverts_via_apply_theme(self):
@@ -196,4 +205,22 @@ class TestSystemTheme:
         assert count >= 5, (
             f"cmd_theme description should mention 'system' in all 5 locales; "
             f"found {count}"
+        )
+
+    def test_theme_listener_cleanup_uses_stable_handler(self):
+        src = read("static/boot.js")
+        assert "_systemThemeMq&&_onSystemThemeChange" in src, (
+            "_applyTheme must track the active OS-theme listener so it can be removed cleanly"
+        )
+        assert "removeEventListener('change',_onSystemThemeChange)" in src, (
+            "_applyTheme must remove the previous OS-theme listener before adding a new one"
+        )
+
+    def test_panels_hydrates_appearance_before_models_fetch(self):
+        src = read("static/panels.js")
+        skin_idx = src.index("const skinVal=(settings.skin||'default').toLowerCase();")
+        models_idx = src.index("const models=await api('/api/models');")
+        assert skin_idx < models_idx, (
+            "loadSettingsPanel must hydrate theme/skin before awaiting /api/models, "
+            "otherwise a slow model fetch can clobber an in-progress skin selection"
         )

@@ -579,29 +579,134 @@ window.addEventListener('resize',()=>{
   };
 })();
 
-// ── System theme helper ──────────────────────────────────────────────────────
+// ── Appearance helpers (theme = light/dark/system, skin = accent color) ──────
+const _SKINS=[
+  {name:'Default',  colors:['#FFD700','#FFBF00','#CD7F32']},
+  {name:'Ares',     colors:['#FF4444','#CC3333','#992222']},
+  {name:'Mono',     colors:['#CCCCCC','#999999','#666666']},
+  {name:'Slate',    colors:['#334155','#475569','#64748b']},
+  {name:'Poseidon', colors:['#0EA5E9','#0284C7','#0369A1']},
+  {name:'Sisyphus', colors:['#A78BFA','#8B5CF6','#7C3AED']},
+  {name:'Charizard',colors:['#FB923C','#F97316','#EA580C']},
+];
+const _VALID_THEMES=new Set(['system','dark','light']);
+const _VALID_SKINS=new Set((_SKINS||[]).map(s=>s.name.toLowerCase()));
+const _LEGACY_THEME_MAP={
+  slate:{theme:'dark',skin:'slate'},
+  solarized:{theme:'dark',skin:'poseidon'},
+  monokai:{theme:'dark',skin:'sisyphus'},
+  nord:{theme:'dark',skin:'slate'},
+  oled:{theme:'dark',skin:'default'},
+};
+let _systemThemeMq=null;
+let _onSystemThemeChange=null;
+
+function _normalizeAppearance(theme,skin){
+  const rawTheme=typeof theme==='string'?theme.trim().toLowerCase():'';
+  const rawSkin=typeof skin==='string'?skin.trim().toLowerCase():'';
+  const legacy=_LEGACY_THEME_MAP[rawTheme];
+  const nextTheme=legacy?legacy.theme:(_VALID_THEMES.has(rawTheme)?rawTheme:'dark');
+  const nextSkin=_VALID_SKINS.has(rawSkin)?rawSkin:(legacy?legacy.skin:'default');
+  return {theme:nextTheme,skin:nextSkin};
+}
+
+function _setResolvedTheme(isDark){
+  document.documentElement.classList.toggle('dark',!!isDark);
+  const link=document.getElementById('prism-theme');
+  if(!link) return;
+  const want=isDark
+    ?'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css'
+    :'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css';
+  if(link.href!==want){ link.href=want; }
+}
+
 function _applyTheme(name){
-  const resolved=(name==='system')
-    ?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')
-    :name;
-  document.documentElement.dataset.theme=resolved||'dark';
-  // Swap Prism syntax-highlighting theme to match UI theme
-  (function(){
-    const link=document.getElementById('prism-theme');
-    if(!link) return;
-    const isDark=(resolved!=='light');
-    const want=isDark
-      ?'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css'
-      :'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css';
-    if(link.href!==want){ link.href=want; }
-  })();
-  // Re-register OS change listener whenever system theme is active
-  if(name==='system'){
-    const mq=window.matchMedia('(prefers-color-scheme:dark)');
-    const _onOsChange=()=>{ document.documentElement.dataset.theme=mq.matches?'dark':'light'; };
-    mq.removeEventListener('change',_onOsChange);
-    mq.addEventListener('change',_onOsChange);
+  const normalized=_normalizeAppearance(name,'default');
+  if(_systemThemeMq&&_onSystemThemeChange){
+    _systemThemeMq.removeEventListener('change',_onSystemThemeChange);
+    _systemThemeMq=null;
+    _onSystemThemeChange=null;
   }
+  if(normalized.theme==='system'){
+    _systemThemeMq=window.matchMedia('(prefers-color-scheme:dark)');
+    _onSystemThemeChange=()=>_setResolvedTheme(_systemThemeMq.matches);
+    _setResolvedTheme(_systemThemeMq.matches);
+    _systemThemeMq.addEventListener('change',_onSystemThemeChange);
+    return;
+  }
+  _setResolvedTheme(normalized.theme==='dark');
+}
+
+function _applySkin(name){
+  const key=(name||'default').toLowerCase();
+  if(key==='default') delete document.documentElement.dataset.skin;
+  else document.documentElement.dataset.skin=key;
+}
+
+function _pickTheme(name){
+  const currentSkin=localStorage.getItem('hermes-skin');
+  const appearance=_normalizeAppearance(name,currentSkin);
+  localStorage.setItem('hermes-theme',appearance.theme);
+  localStorage.setItem('hermes-skin',appearance.skin);
+  _applyTheme(appearance.theme);
+  _applySkin(appearance.skin);
+  _syncThemePicker(appearance.theme);
+  _syncSkinPicker(appearance.skin);
+  if(typeof _markSettingsDirty==='function') _markSettingsDirty();
+  const hidden=$('settingsTheme');
+  if(hidden) hidden.value=appearance.theme;
+  const skinHidden=$('settingsSkin');
+  if(skinHidden) skinHidden.value=appearance.skin;
+}
+
+function _pickSkin(name){
+  const appearance=_normalizeAppearance(localStorage.getItem('hermes-theme'),name);
+  localStorage.setItem('hermes-theme',appearance.theme);
+  localStorage.setItem('hermes-skin',appearance.skin);
+  _applyTheme(appearance.theme);
+  _applySkin(appearance.skin);
+  _syncThemePicker(appearance.theme);
+  _syncSkinPicker(appearance.skin);
+  if(typeof _markSettingsDirty==='function') _markSettingsDirty();
+  const hidden=$('settingsSkin');
+  if(hidden) hidden.value=appearance.skin;
+  const themeHidden=$('settingsTheme');
+  if(themeHidden) themeHidden.value=appearance.theme;
+}
+
+function _syncThemePicker(active){
+  document.querySelectorAll('#themePickerGrid .theme-pick-btn').forEach(btn=>{
+    const sel=btn.dataset.themeVal===active;
+    btn.style.borderColor=sel?'var(--accent)':'var(--border2)';
+    btn.style.boxShadow=sel?'0 0 0 1px var(--accent-bg-strong)':'none';
+  });
+}
+
+function _syncSkinPicker(active){
+  document.querySelectorAll('#skinPickerGrid .skin-pick-btn').forEach(btn=>{
+    const sel=btn.dataset.skinVal===active;
+    btn.style.borderColor=sel?'var(--accent)':'var(--border2)';
+    btn.style.boxShadow=sel?'0 0 0 1px var(--accent-bg-strong)':'none';
+  });
+}
+
+function _buildSkinPicker(activeSkin){
+  const grid=$('skinPickerGrid');
+  if(!grid) return;
+  grid.innerHTML='';
+  for(const skin of _SKINS){
+    const key=skin.name.toLowerCase();
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='skin-pick-btn';
+    btn.dataset.skinVal=key;
+    btn.style.cssText='border:1px solid var(--border2);border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;background:none;transition:all .15s';
+    btn.onclick=()=>_pickSkin(skin.name);
+    const dots=skin.colors.map(c=>`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c}"></span>`).join('');
+    btn.innerHTML=`<div style="display:flex;gap:3px;justify-content:center;margin-bottom:4px">${dots}</div><span style="font-size:11px;color:var(--text)">${skin.name}</span>`;
+    grid.appendChild(btn);
+  }
+  _syncSkinPicker((activeSkin||'default').toLowerCase());
 }
 
 function applyBotName(){
@@ -629,9 +734,11 @@ function applyBotName(){
     window._soundEnabled=!!s.sound_enabled;
     window._notificationsEnabled=!!s.notifications_enabled;
     window._botName=s.bot_name||'Hermes';
-    const _theme=s.theme||'dark';
-    localStorage.setItem('hermes-theme',_theme);
-    _applyTheme(_theme);
+    const appearance=_normalizeAppearance(s.theme,s.skin);
+    localStorage.setItem('hermes-theme',appearance.theme);
+    _applyTheme(appearance.theme);
+    localStorage.setItem('hermes-skin',appearance.skin);
+    _applySkin(appearance.skin);
     document.body.classList.toggle('bubble-layout',!!s.bubble_layout);
     if(typeof setLocale==='function'){
       const _lang=typeof resolvePreferredLocale==='function'
@@ -695,10 +802,12 @@ function applyBotName(){
       if(S.session&&S.session.workspace&&localStorage.getItem('hermes-webui-workspace-panel')==='open'){
         _workspacePanelMode='browse';
       }
-      syncWorkspacePanelState();await renderSessionList();if(typeof startGatewaySSE==='function')startGatewaySSE();await checkInflightOnBoot(saved);return;}
+      S._bootReady=true;
+      syncTopbar();syncWorkspacePanelState();await renderSessionList();if(typeof startGatewaySSE==='function')startGatewaySSE();await checkInflightOnBoot(saved);return;}
     catch(e){localStorage.removeItem('hermes-webui-session');}
   }
   // no saved session - show empty state, wait for user to hit +
+  S._bootReady=true;
   syncTopbar();
   syncWorkspacePanelState();
   $('emptyState').style.display='';
