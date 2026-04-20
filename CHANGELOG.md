@@ -1,9 +1,42 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.108] — 2026-04-20
+
+### Fixed
+- **Kimi K2.5 added to Kimi/Moonshot provider model list** — `kimi-k2.5` was present in `hermes_cli` but missing from the WebUI's `api/config.py` kimi-coding provider, making it unavailable in the model selector. (Fixes #740)
+
+## [v0.50.107] — 2026-04-20
+
+### Added
+- **Three-container UID/GID alignment guide in README** — new subsection explains why UIDs must match across containers sharing a bind-mounted volume, documents the variable name asymmetry (`HERMES_UID`/`HERMES_GID` for the agent image vs `WANTED_UID`/`WANTED_GID` for the WebUI image), gives the recommended `.env` setup for standard Linux and NAS/Unraid deployments, provides the one-time `chown` fix for existing installs, and notes that the dashboard volume must be read-write. (Fixes #645)
+
+### Fixed
+- **`HERMES_UID`/`HERMES_GID` forwarded to agent and dashboard containers** — `docker-compose.three-container.yml` now declares `HERMES_UID=${HERMES_UID:-10000}` and `HERMES_GID=${HERMES_GID:-10000}` in the environment blocks for `hermes-agent` and `hermes-dashboard`, making the documented `.env` recipe functional.
+
+## [v0.50.106] — 2026-04-20
+
+### Fixed
+- **`PermissionError` in auth signing key no longer crashes every HTTP request** — `key_file.exists()` in `api/auth.py`'s `_signing_key()` was called outside the try/except block. In three-container bind-mount setups where the agent container initialises the state directory under a different UID, `pathlib.Path.exists()` raises `PermissionError`, which escaped up through `is_auth_enabled()` → `check_auth()` and crashed every HTTP request with HTTP 500. The `exists()` call is now inside the try block so `PermissionError` is caught and falls back to an in-memory key. (PR #625)
+
+## [v0.50.105] — 2026-04-20
+
+### Fixed
+- **Profile deletion warning now leads with destructive impact** — the confirmation dialog now reads: "All sessions, config, skills, and memory for this profile will be permanently deleted. This cannot be undone." Updated across all 6 supported locales. (Fixes #637)
+
+## [v0.50.104] — 2026-04-20
+
+### Fixed
+- **Agent image URLs rewritten to actual server base** — when an agent emits a `MEDIA:http://localhost:8787/...` URL, the WebUI now rewrites the `localhost`/`127.0.0.1` host to the page's `document.baseURI` before inserting it as an `<img src>`. Fixes broken images for remote users (VPN, Docker, deployed servers) and preserves subpath mounts (e.g. `/hermes/`). (Fixes #642)
+
+## [v0.50.103] — 2026-04-20
+
+### Fixed
+- **Windows `.env` encoding fix** — `write_text()` calls in `api/profiles.py` were missing `encoding='utf-8'`, causing failures on Windows systems with non-UTF-8 locale encodings. All file I/O in `api/` now explicitly specifies `encoding='utf-8'`. (Fixes #741)
+
 ## [v0.50.102] — 2026-04-20
 
 ### Fixed
-- **Code blocks no longer lose newlines when not preceded by a blank line** — `renderMd()` in `static/ui.js` now stashes `<pre>` blocks (including language-labelled blocks with `<div class="pre-header">` wrappers), mermaid diagrams, and katex blocks before the paragraph-splitting pass, then restores them. Previously, if a fenced code block was not separated from surrounding text by a double newline, all `\n` inside it were replaced with `<br>`, causing Prism.js to collapse the entire block to one line and misidentify everything after a `//` comment as a comment. (Fixes #745, reported by @qqxpee)
+- **Code blocks no longer lose newlines when not preceded by a blank line** — `renderMd()` now stashes `<pre>` blocks (including language-labelled wrappers), mermaid diagrams, and katex blocks before the paragraph-splitting pass, then restores them. Previously, if a fenced code block was not separated from surrounding text by a blank line, all `\n` inside it were replaced with `<br>`, collapsing the entire block to one line. (Fixes #745)
 
 ## [v0.50.101] — 2026-04-20
 

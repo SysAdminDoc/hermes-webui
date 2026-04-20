@@ -28,6 +28,8 @@ services:
       - hermes-agent-src:/opt/hermes
     environment:
       - HERMES_HOME=/root/.hermes
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
     restart: unless-stopped
     deploy:
       resources:
@@ -47,6 +49,8 @@ services:
       - hermes-home:/root/.hermes
     environment:
       - HERMES_HOME=/root/.hermes
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
       # Dashboard connects to the gateway for health/session data
       - GATEWAY_HEALTH_URL=http://hermes-agent:8642
     depends_on:
@@ -90,6 +94,12 @@ services:
       #   echo "UID=$(id -u)" >> .env && echo "GID=$(id -g)" >> .env
       - WANTED_UID=${UID:-1000}
       - WANTED_GID=${GID:-1000}
+      # NOTE: When using bind-mount volumes shared across containers, ALL containers
+      # that write to the same host directory must run as the same UID/GID.
+      # If hermes-agent initialises the state dir as root (UID 0), hermes-webui
+      # will get a PermissionError accessing those paths — including a crash on every
+      # HTTP request if the auth signing-key file is unreadable. Either set WANTED_UID
+      # to match the agent container's UID, or use a named Docker volume (preferred).
       # Optional: set a password for remote access
       # - HERMES_WEBUI_PASSWORD=your-secret-password
     restart: unless-stopped
