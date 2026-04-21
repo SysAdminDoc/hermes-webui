@@ -18,6 +18,7 @@ from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
 from api.helpers import j
 from api.routes import handle_get, handle_post
 from api.startup import auto_install_agent_deps, fix_credential_permissions
+from api.updates import WEBUI_VERSION
 
 
 class QuietHTTPServer(ThreadingHTTPServer):
@@ -44,7 +45,8 @@ class QuietHTTPServer(ThreadingHTTPServer):
 
 class Handler(BaseHTTPRequestHandler):
     timeout = 30  # seconds — kills idle/incomplete connections to prevent thread exhaustion
-    server_version = 'HermesWebUI/0.50.38'
+    _ver_suffix = WEBUI_VERSION.removeprefix('v')
+    server_version = ('HermesWebUI/' + _ver_suffix) if _ver_suffix != 'unknown' else 'HermesWebUI'
     def log_message(self, fmt, *args): pass  # suppress default Apache-style log
 
     def log_request(self, code: str='-', size: str='-') -> None:

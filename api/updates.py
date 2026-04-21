@@ -53,6 +53,48 @@ def _run_git(args, cwd, timeout=10):
         return f'git failed to start: {exc}', False
 
 
+def _detect_webui_version() -> str:
+    """Detect the running WebUI version from git or a baked-in fallback file.
+
+    Resolution order:
+      1. ``git describe --tags --always --dirty`` — works in any git checkout.
+         Returns the exact tag on tagged commits (e.g. ``v0.50.124``), a
+         post-tag descriptor between releases (e.g. ``v0.50.124-1-ge91325d``),
+         or a bare SHA when no tags exist (shallow clones, fresh forks).
+      2. ``api/_version.py`` — a fallback written by the Docker / CI release
+         workflow when ``.git`` is not present in the image.  Expected to define
+         ``__version__ = 'vX.Y.Z'``.
+      3. ``'unknown'`` — last resort; displayed as-is in the settings badge.
+    """
+    # Timeout capped at 3s: git describe on a healthy local repo is <50ms;
+    # a 10s stall on import (NFS-mounted .git, broken git binary) is unacceptable.
+    out, ok = _run_git(['describe', '--tags', '--always', '--dirty'], REPO_ROOT, timeout=3)
+    if ok and out:
+        return out
+
+    # Docker / baked-image fallback: api/_version.py written by CI at build time.
+    # Parse with regex rather than exec() — the file holds exactly one assignment
+    # and regex is sufficient; exec() on a build artifact is an unnecessary surface.
+    version_file = REPO_ROOT / 'api' / '_version.py'
+    if version_file.exists():
+        try:
+            import re as _re
+            m = _re.search(
+                r"""__version__\s*=\s*['"]([^'"]+)['"]""",
+                version_file.read_text(encoding='utf-8'),
+            )
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
+
+    return 'unknown'
+
+
+# Resolved once at import time — tags cannot change without a process restart.
+WEBUI_VERSION: str = _detect_webui_version()
+
+
 def _split_remote_ref(ref):
     """Split 'origin/branch-name' into ('origin', 'branch-name').
 
