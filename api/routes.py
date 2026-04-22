@@ -2028,6 +2028,14 @@ def _handle_live_models(handler, parsed):
         if not provider:
             return j(handler, {"error": "no_provider", "models": []})
 
+        # Normalize provider alias so 'z.ai' -> 'zai', 'x.ai' -> 'xai', etc.
+        # The browser sends whatever active_provider the static endpoint returned;
+        # without normalization, provider_model_ids() misses the alias and returns [].
+        # Uses the WebUI-owned table (api/config._resolve_provider_alias) which
+        # works even when hermes_cli is not on sys.path.
+        from api.config import _resolve_provider_alias
+        provider = _resolve_provider_alias(provider)
+
         # Delegate to the agent's live-fetch + fallback resolver.
         # provider_model_ids() tries live endpoints first and falls back to
         # the static _PROVIDER_MODELS list — it never raises.
@@ -2048,7 +2056,23 @@ def _handle_live_models(handler, parsed):
             ids = [m["id"] for m in _pm.get(provider, [])]
 
         if not ids:
-            return j(handler, {"provider": provider, "models": [], "count": 0})
+            # For 'custom' provider, provider_model_ids() returns [] because
+            # 'custom' isn't a real endpoint.  Fall back to the custom_providers
+            # entries from config.yaml so the live-model enrichment step can
+            # add any models that weren't already in the static list.
+            if provider == "custom":
+                try:
+                    _cp_entries = cfg.get("custom_providers", [])
+                    if isinstance(_cp_entries, list):
+                        ids = [
+                            _cp.get("model", "")
+                            for _cp in _cp_entries
+                            if isinstance(_cp, dict) and _cp.get("model", "")
+                        ]
+                except Exception:
+                    pass
+            if not ids:
+                return j(handler, {"provider": provider, "models": [], "count": 0})
 
         # Normalise to {id, label} — provider_model_ids() returns plain string IDs
         def _make_label(mid):
