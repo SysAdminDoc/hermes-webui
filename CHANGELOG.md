@@ -1,5 +1,15 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.146] — 2026-04-22
+
+### Fixed
+- **Slash command input now shown as user message in chat** — commands like `/help`,
+  `/skills`, `/status` previously produced a response with no visible user input above
+  it, making the conversation appear to start from nowhere. Added a `noEcho` flag to
+  action-only commands (`/clear`, `/new`, `/stop`, etc.) and echo the user's input as
+  a message bubble for commands that produce a chat response. User message is pushed
+  BEFORE the handler runs to ensure correct ordering in `S.messages`. Closes #840. (#841)
+
 ## [v0.50.145] — 2026-04-22
 
 ### Fixed
