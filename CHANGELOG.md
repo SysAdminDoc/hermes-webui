@@ -1,5 +1,36 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.151] — 2026-04-22
+
+### Added
+- **Ollama Cloud support** — added `ollama-cloud` display name + dynamic model-list
+  handler backed by `hermes_cli.models.provider_model_ids()`. Live-models endpoint
+  routes `ollama-cloud` through the same formatter. Server-side `_format_ollama_label()`
+  and matching client-side `_fmtOllamaLabel()` turn Ollama tag IDs into readable
+  labels (e.g. `qwen3-vl:235b-instruct` → `Qwen3 VL (235B Instruct)`). (#820 by @starship-s, #860)
+
+### Fixed
+- **`credential_pool` providers now visible in the model dropdown** —
+  `get_available_models()` previously only read `active_provider` from the auth
+  store. Providers added via `credential_pool` (e.g. an Ollama Cloud key stored by
+  the auth layer without a matching shell env var) were silently invisible. The
+  fix loads `credential_pool` entries and adds any provider with at least one
+  non-ambient credential to `detected_providers`. Ambient gh-cli tokens (source
+  `gh_cli` / label `gh auth token`) are explicitly excluded so Copilot doesn't
+  appear merely because `gh` is installed. Two-tier detection: primary via
+  `agent.credential_pool.load_pool()`, fallback via raw field inspection when
+  the upstream module isn't importable. (#820 by @starship-s, #860)
+- **`_apply_provider_prefix()` helper extracted** — removes ~15 lines of
+  duplicated inline `@provider:` prefixing logic for non-active providers.
+  Semantics unchanged; one fewer place for drift. (#860)
+- **Model chip shows friendly labels for bare Ollama IDs** —
+  `static/ui.js:getModelLabel()` now routes Ollama tag-format IDs (e.g.
+  `kimi-k2.6` or `@ollama-cloud:glm5.1`) through `_fmtOllamaLabel()`. Custom
+  `<option>` text uses the same helper. `looksLikeBareOllamaId` narrowed to
+  `@ollama*` or colon-tag patterns — does not reformat generic IDs like
+  `gpt-5.4-mini`. `syncModelChip()` is now called after localStorage restore
+  so the chip reflects the saved selection on first paint. (#860)
+
 ## [v0.50.150] — 2026-04-22
 
 ### Fixed
