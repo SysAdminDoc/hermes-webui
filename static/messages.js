@@ -384,6 +384,9 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
   function _smdEndParser(){
     if(_smdParser&&window.smd){
       try{window.smd.parser_end(_smdParser);}catch(_){}
+      // parser_end may flush remaining markdown that creates new links/images —
+      // re-sanitize the body before the DOM is handed off to highlightCode / renderMessages.
+      if(assistantBody){_sanitizeSmdLinks(assistantBody);}
     }
     _smdParser=null;
     _smdWrittenLen=0;
@@ -396,6 +399,31 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     if(!delta) return;
     try{window.smd.parser_write(_smdParser,delta);}catch(_){}
     _smdWrittenLen=displayText.length;
+    // streaming-markdown does NOT sanitize URL schemes — `[click](javascript:...)`
+    // and `![alt](javascript:...)` survive as href/src.  Strip any unsafe schemes
+    // from anchors/images that were just added to the live DOM.  The existing
+    // renderMd() path filters these via its http(s)-only regex; we need a matching
+    // guard here so the live-stream path isn't an XSS vector for agent-echoed
+    // prompt-injection content.  The final renderMessages() call at `done` uses
+    // renderMd which is already safe, but during streaming the user could click
+    // a malicious link before that replacement happens.
+    if(assistantBody){_sanitizeSmdLinks(assistantBody);}
+  }
+  // Allowed URL schemes for anchors and images rendered from agent-streamed markdown.
+  // Matches the effective allowlist of renderMd() (http/https via regex + relative).
+  const _SMD_SAFE_URL_RE=/^(?:https?:|mailto:|tel:|\/|#|\?|\.)/i;
+  function _sanitizeSmdLinks(root){
+    if(!root||!root.querySelectorAll) return;
+    const _a=root.querySelectorAll('a[href]');
+    for(let i=0;i<_a.length;i++){
+      const n=_a[i],v=n.getAttribute('href')||'';
+      if(!_SMD_SAFE_URL_RE.test(v)){n.removeAttribute('href');n.setAttribute('data-blocked-scheme','1');}
+    }
+    const _im=root.querySelectorAll('img[src]');
+    for(let i=0;i<_im.length;i++){
+      const n=_im[i],v=n.getAttribute('src')||'';
+      if(!_SMD_SAFE_URL_RE.test(v)){n.removeAttribute('src');n.setAttribute('data-blocked-scheme','1');}
+    }
   }
   function _scheduleRender(){
     if(_renderPending) return;

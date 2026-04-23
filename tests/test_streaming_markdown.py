@@ -449,3 +449,77 @@ class TestExistingStreamingGuardsIntact:
         assert fn and (
             "_freshSegment=true" in fn or "_freshSegment = true" in fn
         ), "_freshSegment must still be set on tool events"
+
+
+# ── XSS: smd does NOT sanitize URL schemes — we must do it ourselves ──────────
+
+class TestSmdUrlSchemeSanitization:
+    """streaming-markdown@0.2.15 preserves `javascript:`, `vbscript:`, and dangerous
+    `data:` URLs in href/src attributes. Verified via Node + jsdom harness:
+
+        [click](javascript:alert(1))  →  <a href="javascript:alert(1">click</a>
+
+    The existing renderMd() path filters these via its http(s)-only regex. When
+    streaming with smd, we must walk the live DOM after each parser_write and
+    remove unsafe schemes, otherwise agent-echoed prompt-injection content
+    becomes a click-to-XSS vector in the webui origin.
+    """
+
+    def test_sanitize_helper_exists(self):
+        assert "_sanitizeSmdLinks" in MESSAGES_JS, (
+            "messages.js must define _sanitizeSmdLinks() to strip javascript:/data:/vbscript: "
+            "URLs from smd-rendered anchors and images (agent output is untrusted)"
+        )
+
+    def test_sanitize_uses_scheme_allowlist(self):
+        # The allowlist regex must permit the safe schemes that the legacy
+        # renderMd path emitted (http/https + relative/anchor paths + mailto/tel)
+        # and reject everything else — including javascript:, data:, vbscript:, file:.
+        assert "_SMD_SAFE_URL_RE" in MESSAGES_JS, (
+            "Expected a _SMD_SAFE_URL_RE regex defining the safe-scheme allowlist"
+        )
+        # Find the regex definition
+        import re as _re
+        m = _re.search(r"_SMD_SAFE_URL_RE\s*=\s*/([^/]+)/i?", MESSAGES_JS)
+        assert m, "_SMD_SAFE_URL_RE regex literal not found in messages.js"
+        pattern = m.group(1)
+        # Must mention https? and must NOT mention javascript/vbscript/data
+        assert "https?" in pattern, "allowlist must permit https?:"
+        for bad in ("javascript", "vbscript", "data:"):
+            assert bad not in pattern, (
+                f"allowlist must NOT mention {bad!r} — schemes are denied by default"
+            )
+
+    def test_sanitize_called_after_smd_write(self):
+        # _smdWrite must invoke _sanitizeSmdLinks on assistantBody after feeding the parser,
+        # so anchors/images created mid-stream get their javascript:/data:/vbscript:
+        # hrefs/srcs stripped before the user can click them.
+        fn = extract_fn(MESSAGES_JS, "_smdWrite")
+        assert fn, "_smdWrite function not found"
+        assert "_sanitizeSmdLinks" in fn, (
+            "_smdWrite must call _sanitizeSmdLinks(assistantBody) after parser_write "
+            "so unsafe URL schemes are stripped from newly-added anchors/images "
+            "before the user can click them"
+        )
+
+    def test_sanitize_called_at_parser_end(self):
+        # _smdEndParser flushes any remaining markdown — that flush can create new links,
+        # so we must re-sanitize before the DOM is handed off to highlightCode / renderMessages.
+        fn = extract_fn(MESSAGES_JS, "_smdEndParser")
+        assert fn, "_smdEndParser function not found"
+        assert "_sanitizeSmdLinks" in fn, (
+            "_smdEndParser must call _sanitizeSmdLinks(assistantBody) after parser_end "
+            "so any links flushed at end-of-stream are also scheme-sanitized"
+        )
+
+    def test_sanitize_strips_href_and_src(self):
+        # The sanitizer must guard BOTH <a href> and <img src> — smd uses the same
+        # href/src pipeline for markdown links and images respectively, and images
+        # with javascript: src (e.g., ![alt](javascript:...)) are equally risky.
+        fn = extract_fn(MESSAGES_JS, "_sanitizeSmdLinks")
+        assert fn, "_sanitizeSmdLinks function not found"
+        assert "a[href]" in fn, "_sanitizeSmdLinks must query for a[href]"
+        assert "img[src]" in fn, "_sanitizeSmdLinks must query for img[src]"
+        assert "removeAttribute" in fn, (
+            "_sanitizeSmdLinks must removeAttribute('href'/'src') on unsafe schemes"
+        )
