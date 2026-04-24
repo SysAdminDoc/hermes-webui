@@ -5,6 +5,11 @@
 ### Fixed
 - **Reasoning chip now appears after the model chip** in the composer toolbar — model is a more fundamental choice and should be stable in position regardless of whether reasoning is active. Order: Profile → Workspace → Model → Reasoning. (`static/index.html`)
 
+## v0.50.194 — 2026-04-24
+
+### Fixed
+- **Prevent dropped characters in incremental streaming-markdown path** — detects parser/text prefix desync in `_smdWrite()` (which can occur after stream sanitization strips content mid-stream) and rebuilds the parser from the full current display text rather than continuing to slice from a stale offset. Adds `_smdWrittenText` tracking variable for accurate prefix-alignment checks. (`static/messages.js`) By @bsgdigital. [#960]
+
 ## v0.50.193 — 2026-04-24
 
 ### Fixed
