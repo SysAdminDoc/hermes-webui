@@ -1332,6 +1332,7 @@ function attachBtwStream(parentSid, streamId, question){
   const src=new EventSource('/api/stream?stream_id='+encodeURIComponent(streamId));
   let answer='';
   let btwRow=null;
+  let _streamDone=false;
   function _ensureBtwRow(){
     if(btwRow&&btwRow.isConnected) return;
     const inner=$('msgInner');
@@ -1363,10 +1364,12 @@ function attachBtwStream(parentSid, streamId, question){
   });
   src.addEventListener('done',e=>{
     src.close();
+    _streamDone=true;
     try{
       const d=JSON.parse(e.data);
       if(d.answer&&!answer) answer=d.answer;
     }catch(_){}
+    _ensureBtwRow();
     if(btwRow&&btwRow.isConnected){
       const ansEl=btwRow.querySelector('.msg-btw-answer');
       if(ansEl) ansEl.innerHTML=renderMd(answer||t('btw_no_answer'));
@@ -1375,6 +1378,7 @@ function attachBtwStream(parentSid, streamId, question){
   });
   src.addEventListener('apperror',e=>{
     src.close();
+    _streamDone=true;
     try{
       const d=JSON.parse(e.data);
       showToast(t('btw_failed')+(d.message||''));
@@ -1382,7 +1386,7 @@ function attachBtwStream(parentSid, streamId, question){
     if(btwRow&&btwRow.isConnected) btwRow.remove();
   });
   src.addEventListener('stream_end',()=>{src.close();});
-  src.onerror=()=>{src.close();if(btwRow&&btwRow.isConnected) btwRow.remove();};
+  src.onerror=()=>{src.close();if(!_streamDone&&btwRow&&btwRow.isConnected) btwRow.remove();};
 }
 
 // ── /background task tracking ────────────────────────────────────────────────
