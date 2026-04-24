@@ -29,6 +29,11 @@
   workspace subtree) and never enumerate blocked system roots. (`api/routes.py`,
   `api/workspace.py`, `static/panels.js`, `static/style.css`) (partial for #616)
 
+## [v0.50.181] — 2026-04-24
+
+### Changed
+- **Vendor streaming-markdown@0.2.15** — self-hosts the incremental markdown parser instead of loading it from jsDelivr CDN. The library (12.6 KB) is committed to `static/vendor/smd.min.js` so the app works fully offline / air-gapped, and the exact bytes are pinned in version control. SHA-384 hash preserved in an HTML comment for manual audit. (`static/vendor/smd.min.js`, `static/index.html`) Co-authored by @bsgdigital.
+
 ## [v0.50.180] — 2026-04-23
 
 ### Added
