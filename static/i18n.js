@@ -308,11 +308,10 @@ const LOCALES = {
     new_conversation: 'New conversation',
     filter_conversations: 'Filter conversations...',
     session_time_unknown: 'Unknown',
-    session_time_just_now: 'just now',
-    session_time_minutes_ago: (n) => `${n} minute${n === 1 ? '' : 's'} ago`,
-    session_time_hours_ago: (n) => `${n} hour${n === 1 ? '' : 's'} ago`,
-    session_time_days_ago: (n) => `${n} day${n === 1 ? '' : 's'} ago`,
-    session_time_last_week: 'last week',
+    session_time_minutes_ago: (n) => `${n}m`,
+    session_time_hours_ago: (n) => `${n}h`,
+    session_time_days_ago: (n) => `${n}d`,
+    session_time_last_week: '1w',
     session_time_bucket_today: 'Today',
     session_time_bucket_yesterday: 'Yesterday',
     session_time_bucket_this_week: 'This week',
@@ -340,6 +339,12 @@ const LOCALES = {
     settings_sidebar_density_compact: 'Compact',
     settings_sidebar_density_detailed: 'Detailed',
     settings_desc_sidebar_density: 'Controls how much metadata the session list shows in the left sidebar.',
+    settings_label_auto_title_refresh: 'Adaptive title refresh',
+    settings_auto_title_refresh_off: 'Off',
+    settings_auto_title_refresh_5: 'Every 5 exchanges',
+    settings_auto_title_refresh_10: 'Every 10 exchanges',
+    settings_auto_title_refresh_20: 'Every 20 exchanges',
+    settings_desc_auto_title_refresh: 'Automatically re-generates the session title based on the latest exchange, keeping it relevant as the conversation evolves. Requires an LLM title generation model to be configured.',
     settings_desc_cli_sessions: 'Merges sessions from the Hermes CLI (state.db) into the session list. Click a CLI session to import it and continue the conversation.',
     settings_desc_sync_insights: 'Mirrors WebUI token usage to state.db so hermes /insights includes browser session data. Off by default.',
     settings_desc_check_updates: 'Show a banner when newer versions of the WebUI or Agent are available. Runs a background git fetch periodically.',
@@ -811,38 +816,10 @@ const LOCALES = {
     new_conversation: 'Новая беседа',
     filter_conversations: 'Фильтр бесед...',
     session_time_unknown: 'Неизвестно',
-    session_time_just_now: 'только что',
-    session_time_minutes_ago: (n) => {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    const word = mod10 === 1 && mod100 !== 11
-      ? 'минута'
-      : (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
-        ? 'минуты'
-        : 'минут');
-    return `${n} ${word} назад`;
-  },
-    session_time_hours_ago: (n) => {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    const word = mod10 === 1 && mod100 !== 11
-      ? 'час'
-      : (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
-        ? 'часа'
-        : 'часов');
-    return `${n} ${word} назад`;
-  },
-    session_time_days_ago: (n) => {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    const word = mod10 === 1 && mod100 !== 11
-      ? 'день'
-      : (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
-        ? 'дня'
-        : 'дней');
-    return `${n} ${word} назад`;
-  },
-    session_time_last_week: 'на прошлой неделе',
+    session_time_minutes_ago: (n) => `${n}м`,
+    session_time_hours_ago: (n) => `${n}ч`,
+    session_time_days_ago: (n) => `${n}д`,
+    session_time_last_week: '1н',
     session_time_bucket_today: 'Сегодня',
     session_time_bucket_yesterday: 'Вчера',
     session_time_bucket_this_week: 'На этой неделе',
@@ -869,6 +846,12 @@ const LOCALES = {
     settings_sidebar_density_compact: 'Компактно',
     settings_sidebar_density_detailed: 'Подробно',
     settings_desc_sidebar_density: 'Управляет тем, сколько метаданных показывается в списке сеансов на левой панели.',
+    settings_label_auto_title_refresh: 'Адаптивное обновление заголовка',
+    settings_auto_title_refresh_off: 'Выкл',
+    settings_auto_title_refresh_5: 'Каждые 5 обменов',
+    settings_auto_title_refresh_10: 'Каждые 10 обменов',
+    settings_auto_title_refresh_20: 'Каждые 20 обменов',
+    settings_desc_auto_title_refresh: 'Автоматически переформулирует заголовок сессии на основе последнего обмена, чтобы он оставался актуальным по мере развития беседы. Требует настроенную модель генерации заголовков.',
     settings_desc_cli_sessions: 'Объединяет сеансы из Hermes CLI (state.db) в список сеансов. Нажмите на CLI-сеанс, чтобы импортировать его и продолжить разговор.',
     settings_desc_sync_insights: 'Синхронизирует использование токенов WebUI в state.db, чтобы Hermes /insights включал данные браузерных сеансов. Выключено по умолчанию.',
     settings_desc_check_updates: 'Показывает баннер, когда доступны более новые версии WebUI или Agent. Периодически выполняет git fetch в фоне.',
@@ -1412,11 +1395,10 @@ const LOCALES = {
     new_conversation: 'Nueva conversación',
     filter_conversations: 'Filtrar conversaciones...',
     session_time_unknown: 'Desconocido',
-    session_time_just_now: 'justo ahora',
-    session_time_minutes_ago: (n) => `hace ${n} minuto${n === 1 ? '' : 's'}`,
-    session_time_hours_ago: (n) => `hace ${n} hora${n === 1 ? '' : 's'}`,
-    session_time_days_ago: (n) => `hace ${n} día${n === 1 ? '' : 's'}`,
-    session_time_last_week: 'la semana pasada',
+    session_time_minutes_ago: (n) => `${n}m`,
+    session_time_hours_ago: (n) => `${n}h`,
+    session_time_days_ago: (n) => `${n}d`,
+    session_time_last_week: '1sem',
     session_time_bucket_today: 'Hoy',
     session_time_bucket_yesterday: 'Ayer',
     session_time_bucket_this_week: 'Esta semana',
@@ -1444,6 +1426,12 @@ const LOCALES = {
     settings_sidebar_density_compact: 'Compacta',
     settings_sidebar_density_detailed: 'Detallada',
     settings_desc_sidebar_density: 'Controla cuántos metadatos muestra la lista de sesiones en la barra lateral izquierda.',
+    settings_label_auto_title_refresh: 'Actualización adaptativa del título',
+    settings_auto_title_refresh_off: 'Desactivado',
+    settings_auto_title_refresh_5: 'Cada 5 intercambios',
+    settings_auto_title_refresh_10: 'Cada 10 intercambios',
+    settings_auto_title_refresh_20: 'Cada 20 intercambios',
+    settings_desc_auto_title_refresh: 'Regenera automáticamente el título de la sesión basándose en el último intercambio, manteniéndolo relevante a medida que evoluciona la conversación. Requiere un modelo LLM de generación de títulos configurado.',
     settings_desc_cli_sessions: 'Fusiona las sesiones del CLI de Hermes (state.db) en la lista de sesiones. Haz clic en una sesión de CLI para importarla y continuar la conversación.',
     settings_desc_sync_insights: 'Refleja el uso de tokens de la WebUI en state.db para que hermes /insights incluya datos de sesiones del navegador. Desactivado por defecto.',
     settings_desc_check_updates: 'Muestra un banner cuando haya versiones más nuevas de la WebUI o del Agent. Ejecuta periódicamente un git fetch en segundo plano.',
@@ -1997,6 +1985,12 @@ const LOCALES = {
     settings_sidebar_density_compact: 'Kompakt',
     settings_sidebar_density_detailed: 'Detailliert',
     settings_desc_sidebar_density: 'Steuert, wie viele Metadaten die Sitzungsliste in der linken Seitenleiste anzeigt.',
+    settings_label_auto_title_refresh: 'Adaptive Titelaktualisierung',
+    settings_auto_title_refresh_off: 'Aus',
+    settings_auto_title_refresh_5: 'Alle 5 Antworten',
+    settings_auto_title_refresh_10: 'Alle 10 Antworten',
+    settings_auto_title_refresh_20: 'Alle 20 Antworten',
+    settings_desc_auto_title_refresh: 'Generiert den Sitzungstitel automatisch anhand des letzten Austauschs neu und hält ihn so aktuell, während sich das Gespräch entwickelt. Erfordert ein konfiguriertes LLM-Titelgenerierungsmodell.',
     settings_desc_cli_sessions: 'Fügt Sitzungen aus der Hermes CLI (state.db) in die Sitzungsliste ein. Klicken Sie auf eine CLI-Sitzung, um sie zu importieren und das Gespräch fortzusetzen.',
     settings_desc_sync_insights: 'Spiegelt den WebUI-Token-Verbrauch in die state.db, sodass hermes /insights Browser-Sitzungsdaten enthält. Standardmäßig aus.',
     settings_desc_check_updates: 'Zeigt ein Banner an, wenn neuere Versionen der WebUI oder des Agenten verfügbar sind. Führt regelmäßig einen Git-Fetch im Hintergrund aus.',
@@ -2314,11 +2308,10 @@ const LOCALES = {
     new_conversation: '新建对话',
     filter_conversations: '筛选对话…',
     session_time_unknown: '未知',
-    session_time_just_now: '刚刚',
-    session_time_minutes_ago: (n) => `${n} 分钟前`,
-    session_time_hours_ago: (n) => `${n} 小时前`,
-    session_time_days_ago: (n) => `${n} 天前`,
-    session_time_last_week: '上周',
+    session_time_minutes_ago: (n) => `${n}分`,
+    session_time_hours_ago: (n) => `${n}小时`,
+    session_time_days_ago: (n) => `${n}天`,
+    session_time_last_week: '1周',
     session_time_bucket_today: '今天',
     session_time_bucket_yesterday: '昨天',
     session_time_bucket_this_week: '本周',
@@ -2377,6 +2370,12 @@ const LOCALES = {
     settings_sidebar_density_compact: '紧凑',
     settings_sidebar_density_detailed: '详细',
     settings_desc_sidebar_density: '控制左侧会话列表展示多少元信息。',
+    settings_label_auto_title_refresh: '\u81ea\u9002\u5e94\u6807\u9898\u66f4\u65b0',
+    settings_auto_title_refresh_off: '\u5173\u95ed',
+    settings_auto_title_refresh_5: '\u6bcf 5 \u8f6e\u5bf9\u8bdd',
+    settings_auto_title_refresh_10: '\u6bcf 10 \u8f6e\u5bf9\u8bdd',
+    settings_auto_title_refresh_20: '\u6bcf 20 \u8f6e\u5bf9\u8bdd',
+    settings_desc_auto_title_refresh: '\u57fa\u4e8e\u6700\u65b0\u5bf9\u8bdd\u81ea\u52a8\u91cd\u65b0\u751f\u6210\u4f1a\u8bdd\u6807\u9898\uff0c\u4f7f\u5176\u968f\u5bf9\u8bdd\u53d1\u5c55\u4fdd\u6301\u76f8\u5173\u3002\u9700\u8981\u914d\u7f6e LLM \u6807\u9898\u751f\u6210\u6a21\u578b\u3002',
     settings_desc_cli_sessions: '将 Hermes CLI（state.db）中的会话合并到会话列表。点击某个 CLI 会话可导入并继续对话。',
     settings_desc_sync_insights: '将 WebUI token 使用情况同步到 state.db，使 hermes /insights 包含浏览器会话数据。默认关闭。',
     settings_desc_check_updates: '当有更新的 WebUI 或助手版本时显示横幅。会在后台定期执行 git fetch。',
@@ -2943,6 +2942,12 @@ const LOCALES = {
     settings_sidebar_density_compact: '精簡',
     settings_sidebar_density_detailed: '詳細',
     settings_desc_sidebar_density: '控制左側對話清單要顯示多少額外資訊。',
+    settings_label_auto_title_refresh: '\u81ea\u9002\u61c9\u6a19\u984c\u66f4\u65b0',
+    settings_auto_title_refresh_off: '\u95dc\u9589',
+    settings_auto_title_refresh_5: '\u6bcf 5 \u8f2a\u5c0d\u8a71',
+    settings_auto_title_refresh_10: '\u6bcf 10 \u8f2a\u5c0d\u8a71',
+    settings_auto_title_refresh_20: '\u6bcf 20 \u8f2a\u5c0d\u8a71',
+    settings_desc_auto_title_refresh: '\u57fa\u65bc\u6700\u65b0\u5c0d\u8a71\u81ea\u52d5\u91cd\u65b0\u751f\u6210\u6703\u8a71\u6a19\u984c\uff0c\u4f7f\u5176\u968f\u5c0d\u8a71\u767c\u5c55\u4fdd\u6301\u76f8\u95dc\u3002\u9700\u8981\u914d\u7f6e LLM \u6a19\u984c\u751f\u6210\u6a21\u578b\u3002',
     settings_desc_cli_sessions: '將 Hermes CLI (的 state.db) 中的會話添加到會話清單。點擊一個 CLI 會話將導入它並繼續對話。',
     settings_desc_sync_insights: '將 WebUI token 使用情況同步到 state.db，使 hermes /insights 包含瀏覽器會話數據。預設未啟用。',
     settings_desc_check_updates: '當有更新的 WebUI 或助手版本時顯示標記。將在後台正常執行 Git-Fetch。',
@@ -3151,11 +3156,10 @@ const LOCALES = {
     session_time_bucket_this_week: '\u672c\u9031',
     session_time_bucket_today: '\u4eca\u5929',
     session_time_bucket_yesterday: '\u6628\u5929',
-    session_time_days_ago: (d) => `${d} 天前`,
-    session_time_hours_ago: (h) => `${h} 小時前`,
-    session_time_just_now: '\u525b\u525b',
-    session_time_last_week: '\u4e0a\u9031',
-    session_time_minutes_ago: (m) => `${m} 分鐘前`,
+    session_time_days_ago: (d) => `${d}\u5929`,
+    session_time_hours_ago: (h) => `${h}\u5c0f\u6642`,
+    session_time_last_week: '1\u9031',
+    session_time_minutes_ago: (m) => `${m}\u5206`,
     session_time_unknown: '\u672a\u77e5',
     settings_unsaved_changes: '\u60a8\u6709\u672a\u5132\u5b58\u7684\u8b8a\u66f4\u3002',
     sign_out_failed: '\u767b\u51fa\u5931\u6557\uff1a',

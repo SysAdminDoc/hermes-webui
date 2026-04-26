@@ -1793,6 +1793,7 @@ _SETTINGS_DEFAULTS = {
     "notifications_enabled": False,  # browser notification when tab is in background
     "show_thinking": True,  # show/hide thinking/reasoning blocks in chat view
     "sidebar_density": "compact",  # compact | detailed
+    "auto_title_refresh_every": "0",  # adaptive title refresh: 0=off, 5/10/20=every N exchanges
     "password_hash": None,  # PBKDF2-HMAC-SHA256 hash; None = auth disabled
 }
 _SETTINGS_LEGACY_DROP_KEYS = {"assistant_language", "bubble_layout", "default_model"}
@@ -1893,6 +1894,7 @@ _SETTINGS_ALLOWED_KEYS = set(_SETTINGS_DEFAULTS.keys()) - {
 _SETTINGS_ENUM_VALUES = {
     "send_key": {"enter", "ctrl+enter"},
     "sidebar_density": {"compact", "detailed"},
+    "auto_title_refresh_every": {"0", "5", "10", "20"},
 }
 _SETTINGS_BOOL_KEYS = {
     "onboarding_completed",
@@ -1961,6 +1963,7 @@ def save_settings(settings: dict) -> dict:
         resolve_default_workspace(current.get("default_workspace"))
     )
     persisted = {k: v for k, v in current.items() if k != "default_model"}
+    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(
         json.dumps(persisted, ensure_ascii=False, indent=2),
         encoding="utf-8",
