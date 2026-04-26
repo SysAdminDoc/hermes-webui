@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## v0.50.213 — 2026-04-26
+
+### Fixed
+- **Models disk cache now isolated per server instance** — moved from `/dev/shm/hermes_webui_models_cache.json` (shared across all processes) to `STATE_DIR/models_cache.json`. Each server instance (port 8787 production, port 8789 QA, test runs) has its own cache file, so test/staging environments can no longer overwrite the production model list on the next restart. Also fixes macOS/Windows where `/dev/shm` doesn't exist. (`api/config.py`) [#1064]
+
 ## v0.50.212 — 2026-04-26
 
 ### Performance
