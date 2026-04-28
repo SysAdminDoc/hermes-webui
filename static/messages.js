@@ -230,7 +230,7 @@ async function send(){
     stopClarifyPolling();
     // Only hide approval card if it belongs to the session that just finished
     if(!_approvalSessionId || _approvalSessionId===activeSid) hideApprovalCard(true);removeThinking();
-    if(!_clarifySessionId || _clarifySessionId===activeSid) hideClarifyCard(true);
+    if(!_clarifySessionId || _clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
     S.messages.push({role:'assistant',content:`**Error:** ${errMsg}`});
     _queueDrainSid=activeSid;renderMessages();setBusy(false);setComposerStatus(`Error: ${errMsg}`);
     return;
@@ -785,7 +785,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       stopApprovalPolling();
       stopClarifyPolling();
       if(!_approvalSessionId || _approvalSessionId===activeSid) hideApprovalCard(true);
-      if(!_clarifySessionId || _clarifySessionId===activeSid) hideClarifyCard(true);
+      if(!_clarifySessionId || _clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
       if(isActiveSession){
         S.activeStreamId=null;
       }
@@ -932,7 +932,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       source.close();
       delete INFLIGHT[activeSid];clearInflight();clearInflightState(activeSid);stopApprovalPolling();stopClarifyPolling();
       if(!_approvalSessionId||_approvalSessionId===activeSid) hideApprovalCard(true);
-      if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true);
+      if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
       if(S.session&&S.session.session_id===activeSid){
         S.activeStreamId=null;
         clearLiveToolCards();if(!assistantText)removeThinking();
@@ -1010,7 +1010,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       source.close();
       delete INFLIGHT[activeSid];clearInflight();clearInflightState(activeSid);stopApprovalPolling();stopClarifyPolling();
       if(!_approvalSessionId||_approvalSessionId===activeSid) hideApprovalCard(true);
-      if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true);
+      if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
       if(S.session&&S.session.session_id===activeSid){
         S.activeStreamId=null;
       }
@@ -1050,7 +1050,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       delete INFLIGHT[activeSid];clearInflight();clearInflightState(activeSid);stopApprovalPolling();stopClarifyPolling();
       _closeSource();
       if(!_approvalSessionId||_approvalSessionId===activeSid) hideApprovalCard(true);
-      if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true);
+      if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
       const isSessionViewed=_isSessionActivelyViewed(activeSid);
       const completedSid=session.session_id||activeSid;
       if(!isSessionViewed && typeof _markSessionCompletionUnread==='function'){
@@ -1091,7 +1091,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     delete INFLIGHT[activeSid];clearInflight();clearInflightState(activeSid);stopApprovalPolling();stopClarifyPolling();
     _closeSource();
     if(!_approvalSessionId||_approvalSessionId===activeSid) hideApprovalCard(true);
-    if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true);
+    if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
     if(S.session&&S.session.session_id===activeSid){
       S.activeStreamId=null;
       clearLiveToolCards();if(!assistantText)removeThinking();
@@ -1119,7 +1119,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
           stopApprovalPolling();
           stopClarifyPolling();
           if(!_approvalSessionId||_approvalSessionId===activeSid) hideApprovalCard(true);
-          if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true);
+          if(!_clarifySessionId||_clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
           if(S.session&&S.session.session_id===activeSid){
             S.activeStreamId=null;
             clearLiveToolCards();
@@ -1331,6 +1331,8 @@ let _clarifyVisibleSince = 0;
 let _clarifySignature = '';
 let _clarifySessionId = null;
 let _clarifyMissingEndpointWarned = false;
+let _clarifyCountdownTimer = null;
+let _clarifyExpiresAt = 0;
 const CLARIFY_MIN_VISIBLE_MS = 30000;
 
 function _ensureClarifyCardDom() {
@@ -1349,6 +1351,7 @@ function _ensureClarifyCardDom() {
       <div class="clarify-header">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17h.01"/><path d="M9.09 9a3 3 0 1 1 5.82 1c0 2-3 2-3 4"/><circle cx="12" cy="12" r="10"/></svg>
         <span id="clarifyHeading" data-i18n="clarify_heading">Clarification needed</span>
+        <span class="clarify-countdown" id="clarifyCountdown"></span>
       </div>
       <div class="clarify-question" id="clarifyQuestion"></div>
       <div class="clarify-choices" id="clarifyChoices"></div>
@@ -1373,13 +1376,84 @@ function _clearClarifyHideTimer() {
   }
 }
 
+function _clearClarifyCountdownTimer() {
+  if (_clarifyCountdownTimer) {
+    clearInterval(_clarifyCountdownTimer);
+    _clarifyCountdownTimer = null;
+  }
+  _clarifyExpiresAt = 0;
+  const countdown = $("clarifyCountdown");
+  if (countdown) {
+    countdown.textContent = "";
+    countdown.classList.remove("urgent");
+  }
+}
+
+function _clarifyExpiryMs(pending) {
+  const expiresAt = Number(pending && pending.expires_at);
+  if (Number.isFinite(expiresAt) && expiresAt > 0) return expiresAt * 1000;
+  const requestedAt = Number(pending && pending.requested_at);
+  const timeoutSeconds = Number(pending && pending.timeout_seconds);
+  if (Number.isFinite(requestedAt) && Number.isFinite(timeoutSeconds)) {
+    return (requestedAt + timeoutSeconds) * 1000;
+  }
+  return 0;
+}
+
+function _updateClarifyCountdown() {
+  const countdown = $("clarifyCountdown");
+  if (!countdown || !_clarifyExpiresAt) return;
+  const remaining = Math.max(0, Math.ceil((_clarifyExpiresAt - Date.now()) / 1000));
+  countdown.textContent = `${remaining}s`;
+  countdown.classList.toggle("urgent", remaining <= 10);
+}
+
+function _startClarifyCountdown(pending) {
+  _clearClarifyCountdownTimer();
+  _clarifyExpiresAt = _clarifyExpiryMs(pending);
+  if (!_clarifyExpiresAt) return;
+  _updateClarifyCountdown();
+  _clarifyCountdownTimer = setInterval(_updateClarifyCountdown, 1000);
+}
+
+function _stashClarifyDraft(reason) {
+  if (reason !== "expired" && reason !== "terminal") return false;
+  const input = $("clarifyInput");
+  const draft = String((input && input.value) || "").trim();
+  if (!draft) return false;
+  const sid = _clarifySessionId || (S.session && S.session.session_id) || "unknown";
+  const key = `hermes-clarify-draft-${sid}-${_clarifySignature || "unknown"}`;
+  try {
+    sessionStorage.setItem(key, JSON.stringify({
+      draft,
+      reason,
+      saved_at: Date.now(),
+    }));
+  } catch (_) {}
+  const composer = $('msg');
+  if (composer) {
+    const current = String(composer.value || "");
+    composer.value = current.trim() ? `${current.replace(/\s+$/, "")}\n\n${draft}` : draft;
+    if (typeof autoResize === "function") autoResize();
+    if (typeof updateSendBtn === "function") updateSendBtn();
+  }
+  const notice = reason === "expired"
+    ? "Clarification timed out. Your draft was kept in the composer."
+    : "Clarification closed. Your draft was kept in the composer.";
+  if (typeof setComposerStatus === "function") setComposerStatus(notice);
+  else if (typeof setStatus === "function") setStatus(notice);
+  if (typeof showToast === "function") showToast(notice, 5000);
+  return true;
+}
+
 function _resetClarifyCardState() {
   _clearClarifyHideTimer();
+  _clearClarifyCountdownTimer();
   _clarifyVisibleSince = 0;
   _clarifySignature = '';
 }
 
-function hideClarifyCard(force=false) {
+function hideClarifyCard(force=false, reason="dismissed") {
   const card = $("clarifyCard");
   if (!card) {
     _clarifySessionId = null;
@@ -1387,7 +1461,7 @@ function hideClarifyCard(force=false) {
     if (typeof unlockComposerForClarify === "function") unlockComposerForClarify();
     return;
   }
-  if (!force && _clarifyVisibleSince) {
+  if (!force && reason !== "expired" && _clarifyVisibleSince) {
     const remaining = CLARIFY_MIN_VISIBLE_MS - (Date.now() - _clarifyVisibleSince);
     if (remaining > 0) {
       const scheduledSignature = _clarifySignature;
@@ -1395,11 +1469,12 @@ function hideClarifyCard(force=false) {
       _clarifyHideTimer = setTimeout(() => {
         _clarifyHideTimer = null;
         if (_clarifySignature !== scheduledSignature) return;
-        hideClarifyCard(true);
+        hideClarifyCard(true, reason);
       }, remaining);
       return;
     }
   }
+  _stashClarifyDraft(reason);
   _clarifySessionId = null;
   _resetClarifyCardState();
   card.classList.remove("visible");
@@ -1450,6 +1525,7 @@ function showClarifyCard(pending) {
   const sameClarify = card.classList.contains("visible") && _clarifySignature === sig;
   _clarifySessionId = pending._session_id || (S.session && S.session.session_id) || null;
   _clarifySignature = sig;
+  _startClarifyCountdown(pending);
   if (!sameClarify) {
     _clarifyVisibleSince = Date.now();
     _clearClarifyHideTimer();
@@ -1529,7 +1605,7 @@ async function respondClarify(response) {
   }
   _clarifySessionId = null;
   _clarifySetControlsDisabled(true, true);
-  hideClarifyCard(true);
+  hideClarifyCard(true, 'sent');
   try {
     await api("/api/clarify/respond", {
       method: "POST",
@@ -1543,12 +1619,12 @@ function startClarifyPolling(sid) {
   _clarifyMissingEndpointWarned = false;
   _clarifyPollTimer = setInterval(async () => {
     if (!S.session || S.session.session_id !== sid) {
-      stopClarifyPolling(); hideClarifyCard(true); return;
+      stopClarifyPolling(); hideClarifyCard(true, 'session'); return;
     }
     try {
       const data = await api("/api/clarify/pending?session_id=" + encodeURIComponent(sid));
       if (data.pending) { data.pending._session_id=sid; showClarifyCard(data.pending); }
-      else { hideClarifyCard(); }
+      else { hideClarifyCard(false, 'expired'); }
     } catch(e) {
       const msg = String((e && e.message) || "");
       if (!_clarifyMissingEndpointWarned && /(^|\b)(404|not found)(\b|$)/i.test(msg)) {
