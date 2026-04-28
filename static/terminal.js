@@ -1,5 +1,6 @@
 const TERMINAL_UI={
   open:false,
+  collapsed:false,
   sessionId:null,
   workspace:null,
   source:null,
@@ -14,10 +15,14 @@ const TERMINAL_UI={
 function _terminalEls(){
   return {
     panel:$('composerTerminalPanel'),
+    inner:$('composerTerminalPanel')&&$('composerTerminalPanel').querySelector('.composer-terminal-inner'),
+    dock:$('composerTerminalDock'),
+    handle:$('terminalResizeHandle'),
     viewport:$('terminalViewport'),
     surface:$('terminalSurface'),
     toggle:$('btnTerminalToggle'),
     workspace:$('terminalWorkspaceLabel'),
+    dockWorkspace:$('terminalDockWorkspaceLabel'),
   };
 }
 
@@ -303,6 +308,7 @@ function _syncTerminalTranscriptSpace(open,opts){
 function _fitTerminal(){
   const term=TERMINAL_UI.term;
   if(!term)return;
+  if(TERMINAL_UI.collapsed)return;
   try{
     if(TERMINAL_UI.fitAddon)TERMINAL_UI.fitAddon.fit();
   }catch(_){}
@@ -311,11 +317,9 @@ function _fitTerminal(){
 
 function _setTerminalChromeState(state){
   const {panel,inner,dock,workspace,dockWorkspace}= _terminalEls();
-  const composerWrap=$('composerWrap');
   if(!panel)return;
   const collapsed=state==='collapsed';
   const expanded=state==='expanded';
-  if(composerWrap)composerWrap.classList.toggle('terminal-dock-visible',collapsed);
   panel.hidden=!(collapsed||expanded);
   panel.classList.toggle('is-open',expanded);
   panel.classList.toggle('is-collapsed',collapsed);
@@ -338,7 +342,7 @@ function syncTerminalButton(){
   toggle.disabled=!hasWorkspace;
   toggle.classList.toggle('active',TERMINAL_UI.open);
   toggle.setAttribute('aria-pressed',TERMINAL_UI.open?'true':'false');
-  toggle.title=hasWorkspace?t('terminal_open_title'):t('terminal_no_workspace_title');
+  toggle.title=hasWorkspace?(TERMINAL_UI.collapsed?t('terminal_expand'):t('terminal_open_title')):t('terminal_no_workspace_title');
   toggle.setAttribute('aria-label',toggle.title);
 }
 
@@ -408,16 +412,24 @@ async function _startComposerTerminal(restart=false){
 async function toggleComposerTerminal(force){
   const next=typeof force==='boolean'?force:!TERMINAL_UI.open;
   if(next){
-    const {panel,workspace}= _terminalEls();
+    if(TERMINAL_UI.open){
+      if(TERMINAL_UI.collapsed)expandComposerTerminal();
+      else focusComposerTerminalInput();
+      return;
+    }
+    const {panel,inner}= _terminalEls();
     if(!panel)return;
     clearTimeout(TERMINAL_UI.closeTimer);
-    panel.hidden=false;
+    _initTerminalResizeHandle();
+    _resetTerminalHeightForViewport();
+    _setTerminalChromeState('expanded');
     requestAnimationFrame(()=>{
       panel.classList.add('is-open');
       window.setTimeout(_fitTerminal,80);
     });
     TERMINAL_UI.open=true;
-    if(workspace)workspace.textContent=_terminalWorkspaceName();
+    TERMINAL_UI.collapsed=false;
+    _syncTerminalTranscriptSpace(true);
     syncTerminalButton();
     if(!TERMINAL_UI.resizeObserver&&window.ResizeObserver){
       TERMINAL_UI.resizeObserver=new ResizeObserver(()=>_fitTerminal());
@@ -444,18 +456,14 @@ function collapseComposerTerminal(){
 
 function expandComposerTerminal(){
   if(!TERMINAL_UI.open)return;
-  const {panel}= _terminalEls();
   TERMINAL_UI.collapsed=false;
   clearTimeout(TERMINAL_UI.closeTimer);
-  _syncTerminalTranscriptSpace(true,{immediate:true});
   _setTerminalChromeState('expanded');
   _resetTerminalHeightForViewport();
+  _syncTerminalTranscriptSpace(true);
   requestAnimationFrame(()=>{
     _fitTerminal();
     focusComposerTerminalInput();
-    setTimeout(()=>{
-      if(panel)panel.classList.remove('is-expanding-from-dock');
-    },120);
   });
   syncTerminalButton();
 }
@@ -483,7 +491,7 @@ async function closeComposerTerminal(sessionId,opts){
   }
   const {panel}= _terminalEls();
   if(panel){
-    panel.classList.remove('is-open','is-collapsed','is-expanding-from-dock');
+    panel.classList.remove('is-open','is-collapsed');
     _syncTerminalTranscriptSpace(false);
     clearTimeout(TERMINAL_UI.closeTimer);
     TERMINAL_UI.closeTimer=setTimeout(()=>{
@@ -495,15 +503,13 @@ async function closeComposerTerminal(sessionId,opts){
   }
   TERMINAL_UI.open=false;
   TERMINAL_UI.collapsed=false;
-  const composerWrap=$('composerWrap');
-  if(composerWrap)composerWrap.classList.remove('terminal-dock-visible');
   TERMINAL_UI.sessionId=null;
   TERMINAL_UI.workspace=null;
   syncTerminalButton();
 }
 
 async function restartComposerTerminal(){
-  if(!TERMINAL_UI.open)return;
+  if(!TERMINAL_UI.open||TERMINAL_UI.collapsed)return;
   if(TERMINAL_UI.source){
     try{TERMINAL_UI.source.close();}catch(_){}
     TERMINAL_UI.source=null;
@@ -549,7 +555,7 @@ function _scheduleTerminalResize(){
 }
 
 async function _resizeComposerTerminal(){
-  if(!TERMINAL_UI.open)return;
+  if(!TERMINAL_UI.open||TERMINAL_UI.collapsed)return;
   const sid=TERMINAL_UI.sessionId||_terminalSessionId();
   if(!sid)return;
   const dims=_terminalDimensions();
@@ -573,6 +579,15 @@ window.addEventListener('beforeunload',()=>{
       try{fetch(url,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body,keepalive:true});}catch(__){}
     }
   }
+});
+
+window.addEventListener('resize',()=>{
+  if(!TERMINAL_UI.open)return;
+  if(TERMINAL_UI.collapsed){
+    _syncTerminalTranscriptSpace('collapsed');
+    return;
+  }
+  _resetTerminalHeightForViewport();
 });
 
 if(window.MutationObserver){
