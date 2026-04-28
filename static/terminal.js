@@ -160,106 +160,6 @@ function _terminalDimensions(){
   return {rows:18,cols:80};
 }
 
-function _terminalHeightBounds(){
-  const mobile=window.matchMedia&&window.matchMedia('(max-width: 700px)').matches;
-  const min=mobile?TERMINAL_MOBILE_HEIGHT_MIN:TERMINAL_HEIGHT_MIN;
-  const maxByViewport=Math.floor(window.innerHeight*(mobile?0.44:0.5));
-  const hardMax=mobile?TERMINAL_MOBILE_HEIGHT_MAX:TERMINAL_HEIGHT_MAX;
-  return {
-    min,
-    max:Math.max(min,Math.min(hardMax,maxByViewport)),
-    defaultHeight:mobile?TERMINAL_MOBILE_HEIGHT_DEFAULT:TERMINAL_HEIGHT_DEFAULT,
-  };
-}
-
-function _clampTerminalHeight(height){
-  const bounds=_terminalHeightBounds();
-  const n=Number(height);
-  const fallback=TERMINAL_UI.height||bounds.defaultHeight;
-  return Math.max(bounds.min,Math.min(bounds.max,Number.isFinite(n)?n:fallback));
-}
-
-function _applyTerminalHeight(height){
-  const {inner,handle}= _terminalEls();
-  const next=_clampTerminalHeight(height);
-  TERMINAL_UI.height=next;
-  if(inner)inner.style.setProperty('--composer-terminal-height',next+'px');
-  if(handle){
-    const bounds=_terminalHeightBounds();
-    handle.setAttribute('aria-valuemin',String(bounds.min));
-    handle.setAttribute('aria-valuemax',String(bounds.max));
-    handle.setAttribute('aria-valuenow',String(next));
-  }
-  if(TERMINAL_UI.open&&!TERMINAL_UI.collapsed){
-    _fitTerminal();
-    _syncTerminalTranscriptSpace(true);
-  }
-  return next;
-}
-
-function _resetTerminalHeightForViewport(){
-  const bounds=_terminalHeightBounds();
-  _applyTerminalHeight(TERMINAL_UI.height||bounds.defaultHeight);
-}
-
-function _startTerminalHeightResize(ev){
-  if(ev.pointerType==='touch')return;
-  const {inner,handle}= _terminalEls();
-  if(!inner||!handle)return;
-  ev.preventDefault();
-  TERMINAL_UI.resizing=true;
-  TERMINAL_UI.resizeStartY=ev.clientY;
-  TERMINAL_UI.resizeStartHeight=TERMINAL_UI.height||inner.getBoundingClientRect().height||_terminalHeightBounds().defaultHeight;
-  inner.classList.add('is-resizing');
-  try{handle.setPointerCapture(ev.pointerId);}catch(_){}
-}
-
-function _moveTerminalHeightResize(ev){
-  if(!TERMINAL_UI.resizing)return;
-  ev.preventDefault();
-  _applyTerminalHeight(TERMINAL_UI.resizeStartHeight+(TERMINAL_UI.resizeStartY-ev.clientY));
-}
-
-function _endTerminalHeightResize(ev){
-  if(!TERMINAL_UI.resizing)return;
-  TERMINAL_UI.resizing=false;
-  const {inner,handle}= _terminalEls();
-  if(inner)inner.classList.remove('is-resizing');
-  if(handle&&ev&&ev.pointerId!==undefined)try{handle.releasePointerCapture(ev.pointerId);}catch(_){}
-  _fitTerminal();
-}
-
-function _handleTerminalResizeKey(ev){
-  let delta=0;
-  if(ev.key==='ArrowUp')delta=16;
-  else if(ev.key==='ArrowDown')delta=-16;
-  else if(ev.key==='PageUp')delta=64;
-  else if(ev.key==='PageDown')delta=-64;
-  else if(ev.key==='Home'){
-    ev.preventDefault();
-    return _applyTerminalHeight(_terminalHeightBounds().min);
-  }
-  else if(ev.key==='End'){
-    ev.preventDefault();
-    return _applyTerminalHeight(_terminalHeightBounds().max);
-  }
-  else return;
-  ev.preventDefault();
-  _applyTerminalHeight((TERMINAL_UI.height||_terminalHeightBounds().defaultHeight)+delta);
-}
-
-function _initTerminalResizeHandle(){
-  if(TERMINAL_UI.resizeHandleReady)return;
-  const {handle}= _terminalEls();
-  if(!handle)return;
-  TERMINAL_UI.resizeHandleReady=true;
-  handle.addEventListener('pointerdown',_startTerminalHeightResize);
-  handle.addEventListener('pointermove',_moveTerminalHeightResize);
-  handle.addEventListener('pointerup',_endTerminalHeightResize);
-  handle.addEventListener('pointercancel',_endTerminalHeightResize);
-  handle.addEventListener('keydown',_handleTerminalResizeKey);
-}
-
 function _terminalMessagesEl(){
   return document.getElementById('messages');
 }
@@ -269,38 +169,24 @@ function _terminalIsMessagesNearBottom(el){
   return el.scrollHeight-el.scrollTop-el.clientHeight<150;
 }
 
-function _syncTerminalTranscriptSpace(open,opts){
-  opts=opts||{};
+function _syncTerminalTranscriptSpace(open){
   const messages=_terminalMessagesEl();
   if(!messages)return;
   const wasNearBottom=_terminalIsMessagesNearBottom(messages);
   if(!open){
     messages.classList.remove('terminal-open');
-    messages.classList.remove('terminal-collapsed');
     messages.style.removeProperty('--terminal-card-height');
-    messages.style.removeProperty('--terminal-dock-height');
     if(wasNearBottom&&typeof scrollToBottom==='function')requestAnimationFrame(scrollToBottom);
     return;
   }
-  if(open==='collapsed'){
-    messages.classList.remove('terminal-open');
-    messages.classList.add('terminal-collapsed');
-  }else{
-    messages.classList.add('terminal-open');
-    messages.classList.remove('terminal-collapsed');
-  }
+  messages.classList.add('terminal-open');
   const measure=()=>{
     if(!TERMINAL_UI.open)return;
-    const {panel,inner,dock}= _terminalEls();
-    const target=open==='collapsed'?(dock||panel):(inner||panel);
-    const h=target&&target.getBoundingClientRect().height;
-    if(h>0){
-      if(open==='collapsed')messages.style.setProperty('--terminal-dock-height',Math.ceil(h+24)+'px');
-      else messages.style.setProperty('--terminal-card-height',Math.ceil(h+24)+'px');
-    }
+    const {panel,inner}= _terminalEls();
+    const h=(inner||panel)&&((inner||panel).getBoundingClientRect().height);
+    if(h>0)messages.style.setProperty('--terminal-card-height',Math.ceil(h+24)+'px');
     if(wasNearBottom&&typeof scrollToBottom==='function')scrollToBottom();
   };
-  if(opts.immediate)measure();
   requestAnimationFrame(measure);
   setTimeout(measure,420);
 }
@@ -312,6 +198,7 @@ function _fitTerminal(){
   try{
     if(TERMINAL_UI.fitAddon)TERMINAL_UI.fitAddon.fit();
   }catch(_){}
+  _syncTerminalTranscriptSpace(true);
   _scheduleTerminalResize();
 }
 
@@ -428,8 +315,8 @@ async function toggleComposerTerminal(force){
       window.setTimeout(_fitTerminal,80);
     });
     TERMINAL_UI.open=true;
-    TERMINAL_UI.collapsed=false;
     _syncTerminalTranscriptSpace(true);
+    if(workspace)workspace.textContent=_terminalWorkspaceName();
     syncTerminalButton();
     if(!TERMINAL_UI.resizeObserver&&window.ResizeObserver){
       TERMINAL_UI.resizeObserver=new ResizeObserver(()=>_fitTerminal());
@@ -491,7 +378,7 @@ async function closeComposerTerminal(sessionId,opts){
   }
   const {panel}= _terminalEls();
   if(panel){
-    panel.classList.remove('is-open','is-collapsed');
+    panel.classList.remove('is-open');
     _syncTerminalTranscriptSpace(false);
     clearTimeout(TERMINAL_UI.closeTimer);
     TERMINAL_UI.closeTimer=setTimeout(()=>{
@@ -499,6 +386,7 @@ async function closeComposerTerminal(sessionId,opts){
       _disposeXterm();
     },280);
   }else{
+    _syncTerminalTranscriptSpace(false);
     _disposeXterm();
   }
   TERMINAL_UI.open=false;
