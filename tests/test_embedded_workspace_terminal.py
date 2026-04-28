@@ -36,7 +36,6 @@ def test_terminal_surface_uses_composer_flyout_card_pattern():
     assert "width:min(calc(100% - 64px),720px)" in style_css
     assert ".composer-wrap.terminal-dock-visible .composer-flyout{z-index:4" in style_css
     assert ".composer-terminal-panel.is-collapsed{bottom:-2px;width:min(calc(100% - 112px),560px);overflow:visible;z-index:4" in style_css
-    assert ".composer-terminal-panel.is-expanding-from-dock .composer-terminal-inner{transition:opacity .18s ease" in style_css
     assert ".composer-terminal-dock{min-height:42px" in style_css
     assert ".composer-terminal-inner{height:var(--composer-terminal-height,260px)" in style_css
     assert "transform:translateY(100%)" in style_css

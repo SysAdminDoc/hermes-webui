@@ -309,6 +309,23 @@ function _fitTerminal(){
   _scheduleTerminalResize();
 }
 
+function _setTerminalChromeState(state){
+  const {panel,inner,dock,workspace,dockWorkspace}= _terminalEls();
+  const composerWrap=$('composerWrap');
+  if(!panel)return;
+  const collapsed=state==='collapsed';
+  const expanded=state==='expanded';
+  if(composerWrap)composerWrap.classList.toggle('terminal-dock-visible',collapsed);
+  panel.hidden=!(collapsed||expanded);
+  panel.classList.toggle('is-open',expanded);
+  panel.classList.toggle('is-collapsed',collapsed);
+  if(inner)inner.setAttribute('aria-hidden',collapsed?'true':'false');
+  if(dock)dock.hidden=!collapsed;
+  const label=_terminalWorkspaceName();
+  if(workspace)workspace.textContent=label;
+  if(dockWorkspace)dockWorkspace.textContent=label;
+}
+
 function syncTerminalButton(){
   const {toggle}= _terminalEls();
   if(!toggle)return;
@@ -477,6 +494,9 @@ async function closeComposerTerminal(sessionId,opts){
     _disposeXterm();
   }
   TERMINAL_UI.open=false;
+  TERMINAL_UI.collapsed=false;
+  const composerWrap=$('composerWrap');
+  if(composerWrap)composerWrap.classList.remove('terminal-dock-visible');
   TERMINAL_UI.sessionId=null;
   TERMINAL_UI.workspace=null;
   syncTerminalButton();
