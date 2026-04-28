@@ -272,6 +272,33 @@ async function toggleComposerTerminal(force){
   }
 }
 
+function collapseComposerTerminal(){
+  if(!TERMINAL_UI.open||TERMINAL_UI.collapsed)return;
+  TERMINAL_UI.collapsed=true;
+  _setTerminalChromeState('collapsed');
+  _syncTerminalTranscriptSpace('collapsed');
+  syncTerminalButton();
+}
+
+function expandComposerTerminal(){
+  if(!TERMINAL_UI.open)return;
+  const {panel}= _terminalEls();
+  TERMINAL_UI.collapsed=false;
+  clearTimeout(TERMINAL_UI.closeTimer);
+  if(panel)panel.classList.add('is-expanding-from-dock');
+  _syncTerminalTranscriptSpace(true,{immediate:true});
+  _setTerminalChromeState('expanded');
+  _resetTerminalHeightForViewport();
+  requestAnimationFrame(()=>{
+    _fitTerminal();
+    focusComposerTerminalInput();
+    setTimeout(()=>{
+      if(panel)panel.classList.remove('is-expanding-from-dock');
+    },120);
+  });
+  syncTerminalButton();
+}
+
 function _disposeXterm(){
   if(TERMINAL_UI.term){
     try{TERMINAL_UI.term.dispose();}catch(_){}
@@ -295,7 +322,8 @@ async function closeComposerTerminal(sessionId,opts){
   }
   const {panel}= _terminalEls();
   if(panel){
-    panel.classList.remove('is-open');
+    panel.classList.remove('is-open','is-collapsed','is-expanding-from-dock');
+    _syncTerminalTranscriptSpace(false);
     clearTimeout(TERMINAL_UI.closeTimer);
     TERMINAL_UI.closeTimer=setTimeout(()=>{
       if(!TERMINAL_UI.open)panel.hidden=true;
