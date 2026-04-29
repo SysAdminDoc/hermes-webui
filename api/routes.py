@@ -1221,6 +1221,10 @@ def handle_get(handler, parsed) -> bool:
             {"name": get_active_profile_name(), "path": str(get_active_hermes_home())},
         )
 
+    # ── MCP Servers (GET) ──
+    if parsed.path == "/api/mcp/servers":
+        return _handle_mcp_servers_list(handler)
+
     return False  # 404
 
 
@@ -1631,19 +1635,6 @@ def handle_post(handler, parsed) -> bool:
 
     if parsed.path == "/api/workspaces/reorder":
         return _handle_workspace_reorder(handler, body)
-
-    # ── MCP Servers ──
-    if parsed.path == "/api/mcp/servers":
-        return _handle_mcp_servers_list(handler)
-
-    if parsed.path.startswith("/api/mcp/servers/") and parsed.path.count("/") == 4:
-        # DELETE /api/mcp/servers/<name>
-        name = parsed.path.split("/")[-1]
-        if handler.command == "DELETE":
-            return _handle_mcp_server_delete(handler, name)
-        # PUT /api/mcp/servers/<name>
-        if handler.command == "PUT":
-            return _handle_mcp_server_update(handler, name, body)
 
     # ── Approval (POST) ──
     if parsed.path == "/api/approval/respond":
