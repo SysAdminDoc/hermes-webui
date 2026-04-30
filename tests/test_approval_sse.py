@@ -90,9 +90,15 @@ class TestSSEStaticAnalysis:
             "SSE handler must send 'approval' events when pushing notifications"
 
     def test_notify_called_from_submit_pending(self):
-        """submit_pending must call _approval_sse_notify."""
-        assert "_approval_sse_notify(session_key, entry, total)" in ROUTES_SRC, \
-            "submit_pending() must call _approval_sse_notify() to push SSE events"
+        """submit_pending must call _approval_sse_notify_locked."""
+        # Pinned to the inner-lock variant: must run inside the same `with _lock:`
+        # block as the queue mutation so two parallel submit_pending calls can't
+        # deliver out-of-order with stale pending_count. Tracks the v0.50.248
+        # MUST-FIX A fix.
+        assert "_approval_sse_notify_locked(session_key, head, total)" in ROUTES_SRC, \
+            ("submit_pending() must call _approval_sse_notify_locked(session_key, head, total) "
+             "from inside the `with _lock:` block — not the unlocked _approval_sse_notify wrapper, "
+             "and head must be queue_list[0] (the head, not the just-appended entry).")
 
     def test_unsubscribe_in_finally(self):
         """SSE handler must unsubscribe in a finally block."""
@@ -164,9 +170,9 @@ class TestFrontendSSEImplementation:
             "SSE onerror handler must call _startApprovalFallbackPoll"
 
     def test_fallback_poll_interval(self):
-        """Fallback polling interval must be reasonable (3s)."""
-        assert "3000" in MESSAGES_JS, \
-            "Fallback polling interval must be set (3000ms)"
+        """Fallback polling interval must match v0.50.247's 1500ms cadence."""
+        assert "1500" in MESSAGES_JS, \
+            "Fallback polling interval must be 1500ms to match degraded-mode parity with v0.50.247"
 
     def test_fallback_closes_eventsource(self):
         """onerror handler must close the EventSource before falling back."""

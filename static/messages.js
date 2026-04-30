@@ -1367,7 +1367,7 @@ function _startApprovalFallbackPoll(sid) {
       if (data.pending) { data.pending._session_id=sid; showApprovalCard(data.pending, data.pending_count||1); }
       else { hideApprovalCard(); }
     } catch(e) { /* ignore poll errors */ }
-  }, 3000);  // 3s fallback interval (was 1.5s when it was the primary path)
+  }, 1500);  // matches the v0.50.247 polling cadence so degraded-mode users see the same responsiveness
 }
 
 function stopApprovalPolling() {
