@@ -213,6 +213,57 @@ class TestIssue1298CancelPreservesUserMessage:
         assert len(user_messages) == 1
         assert user_messages[0].get("content") == "earlier turn"
 
+    def test_cancel_synthesizes_when_prior_turn_content_is_substring_of_pending(self):
+        """Regression for Opus pre-release review of v0.50.246 (PR #1338):
+
+        The substring guard in cancel_stream() was symmetric — it would skip
+        synthesis if the prior user turn's content was a substring of the new
+        pending message. Common confirmation replies ("ok", "yes", "go") would
+        match longer follow-up prompts ("ok please continue") and the
+        synthesis would be skipped, re-introducing the data-loss bug.
+
+        The fix: gate the substring check on a timestamp comparison —
+        only treat the latest user turn as "already merged by the streaming
+        thread" if its timestamp is at or after pending_started_at. Earlier
+        turns whose content happens to be a substring must not short-circuit
+        the synthesis path.
+        """
+        import time as _time
+        # Prior reply was "ok" (a common short reply).
+        prior_ts = int(_time.time()) - 60  # 1 minute ago
+        prior_user = {
+            "role": "user",
+            "content": "ok",
+            "timestamp": prior_ts,
+        }
+        s = _make_pending_session(
+            session_id="cancel_sid_substring_collision",
+            pending_msg="ok please continue with the analysis",
+            messages=[prior_user],
+        )
+        # The pending turn started AFTER the prior turn was logged.
+        s.pending_started_at = prior_ts + 10
+        s.save()
+        models.SESSIONS[s.session_id] = s
+
+        stream_id, _agent = _setup_cancel_stream_state(s.session_id)
+        cancel_stream(stream_id)
+
+        s2 = models.SESSIONS[s.session_id]
+        user_messages = [m for m in s2.messages
+                         if isinstance(m, dict) and m.get("role") == "user"]
+        contents = [m.get("content") for m in user_messages]
+
+        assert "ok please continue with the analysis" in contents, (
+            "Pending user message must be synthesized — the substring 'ok' from a prior turn "
+            "must NOT cause the synthesis to be skipped. "
+            f"Got contents={contents}"
+        )
+        assert len(user_messages) == 2, (
+            "Expected both the original prior turn AND the synthesized new turn — "
+            f"got {len(user_messages)} user messages"
+        )
+
 
 # ── Client-side: ui.js source-level guards for activity-group state ─────────
 

@@ -2607,6 +2607,7 @@ def cancel_stream(stream_id: str) -> bool:
                     _pending_user = getattr(_cs, 'pending_user_message', None)
                     _pending_atts_raw = getattr(_cs, 'pending_attachments', None)
                     _pending_atts = list(_pending_atts_raw) if isinstance(_pending_atts_raw, (list, tuple)) else []
+                    _pending_started = getattr(_cs, 'pending_started_at', None) or 0
                     _msgs_for_recovery = _cs.messages if isinstance(_cs.messages, list) else None
                     if _pending_user and _msgs_for_recovery is not None:
                         _last_user = None
@@ -2617,9 +2618,16 @@ def cancel_stream(stream_id: str) -> bool:
                         _already_persisted = False
                         if _last_user is not None:
                             _last_content = _last_user.get('content')
-                            if isinstance(_last_content, str):
+                            _last_ts = _last_user.get('timestamp') or 0
+                            # Only treat as already-persisted if the latest user turn
+                            # was created AT OR AFTER the current turn's pending_started_at.
+                            # An earlier turn whose content happens to be a substring
+                            # (e.g. prior reply was "ok", user now types "ok please continue")
+                            # must NOT short-circuit synthesis — that would re-introduce
+                            # the data-loss bug this guard is supposed to prevent.
+                            if isinstance(_last_content, str) and _last_ts >= _pending_started:
                                 # Tolerate the workspace prefix the streaming thread prepends.
-                                if _pending_user in _last_content or _last_content in _pending_user:
+                                if _pending_user == _last_content or _pending_user in _last_content:
                                     _already_persisted = True
                         if not _already_persisted:
                             _user_turn: dict = {
