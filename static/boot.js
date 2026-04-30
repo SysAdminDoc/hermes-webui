@@ -531,7 +531,12 @@ document.addEventListener('keydown',async e=>{
     // If the current session has no messages, just focus the composer rather than
     // creating another empty session that will clutter the sidebar list (#1171).
     if(S.session&&(S.session.message_count||0)===0){$('msg').focus();return;}
-    if(!S.busy){await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();}
+    // Cmd/Ctrl+K should always create a new conversation, even while the current
+    // one is still streaming. The old !S.busy guard meant users had to wait for
+    // a long generation to finish before they could start something new — exactly
+    // the moment they want to switch context. newSession() leaves the in-flight
+    // stream running on its own session; the user just gets a fresh blank one.
+    await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
   }
   if(e.key==='Escape'){
     // Close onboarding overlay if open (skip/dismiss the wizard)
@@ -639,6 +644,7 @@ const _SKINS=[
   {name:'Poseidon', colors:['#0EA5E9','#0284C7','#0369A1']},
   {name:'Sisyphus', colors:['#A78BFA','#8B5CF6','#7C3AED']},
   {name:'Charizard',colors:['#FB923C','#F97316','#EA580C']},
+  {name:'Sienna',   colors:['#D97757','#C06A49','#9A523A']},
 ];
 const _VALID_THEMES=new Set((_THEMES||[]).map(t=>t.value));
 const _VALID_SKINS=new Set((_SKINS||[]).map(s=>s.name.toLowerCase()));
@@ -845,6 +851,8 @@ function applyBotName(){
       if(typeof applyLocaleToDOM==='function')applyLocaleToDOM();
     }
     applyBotName();
+    // TTS: apply enabled state on boot so buttons show/hide correctly (#499)
+    if(typeof _applyTtsEnabled==='function') _applyTtsEnabled(localStorage.getItem('hermes-tts-enabled')==='true');
   }catch(e){
     window._sendKey='enter';
     window._showTokenUsage=false;
@@ -865,6 +873,7 @@ function applyBotName(){
       if(typeof applyLocaleToDOM==='function')applyLocaleToDOM();
     }
     applyBotName();
+    if(typeof _applyTtsEnabled==='function') _applyTtsEnabled(localStorage.getItem('hermes-tts-enabled')==='true');
   }
   // Non-blocking update check (fire-and-forget, once per tab session)
   // ?test_updates=1 in URL forces banner display for testing (bypasses sessionStorage guards)
