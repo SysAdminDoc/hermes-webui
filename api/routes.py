@@ -643,10 +643,13 @@ try:
         submit_pending as submit_clarify_pending,
         get_pending as get_clarify_pending,
         resolve_clarify,
+        sse_subscribe as clarify_sse_subscribe,
+        sse_unsubscribe as clarify_sse_unsubscribe,
     )
 except ImportError:
     submit_clarify_pending = lambda *a, **k: None
     get_clarify_pending = lambda *a, **k: None
+    clarify_sse_subscribe = None
     resolve_clarify = lambda *a, **k: 0
 
 
@@ -1270,6 +1273,9 @@ def handle_get(handler, parsed) -> bool:
 
     if parsed.path == "/api/clarify/pending":
         return _handle_clarify_pending(handler, parsed)
+
+    if parsed.path == "/api/clarify/stream":
+        return _handle_clarify_sse_stream(handler, parsed)
 
     if parsed.path == "/api/clarify/inject_test":
         # Loopback-only: used by automated tests; blocked from any remote client
@@ -2877,6 +2883,78 @@ def _handle_clarify_pending(handler, parsed):
     if pending:
         return j(handler, {"pending": pending})
     return j(handler, {"pending": None})
+
+
+def _handle_clarify_sse_stream(handler, parsed):
+    """SSE endpoint for real-time clarify notifications.
+
+    Long-lived connection that pushes clarify events the moment they arrive,
+    replacing the 1.5s polling loop.  The frontend uses EventSource and falls
+    back to HTTP polling if the connection fails.
+    """
+    if clarify_sse_subscribe is None:
+        return bad(handler, "clarify SSE not available")
+
+    sid = parse_qs(parsed.query).get("session_id", [""])[0]
+    if not sid:
+        return bad(handler, "session_id is required")
+
+    # Subscribe AND snapshot atomically.  We import clarify's _lock so that
+    # subscribe and the snapshot read happen under the same mutex — same
+    # pattern as the approval SSE handler.
+    #
+    # NOTE: We must NOT call clarify.get_pending() here — it acquires _lock
+    # internally, which would deadlock since clarify._lock is a non-reentrant
+    # threading.Lock.  Instead, read _gateway_queues / _pending inline under
+    # the lock we already hold.
+    from api.clarify import (
+        _lock as _clarify_lock,
+        _clarify_sse_subscribers as _clarify_subs,
+        _gateway_queues as _clarify_gateway_queues,
+        _pending as _clarify_pending,
+    )
+    q = queue.Queue(maxsize=16)
+    initial_pending = None
+    initial_count = 0
+    with _clarify_lock:
+        _clarify_subs.setdefault(sid, []).append(q)
+        gw_q = _clarify_gateway_queues.get(sid) or []
+        if gw_q:
+            initial_pending = dict(gw_q[0].data)
+            initial_count = len(gw_q)
+        else:
+            _legacy = _clarify_pending.get(sid)
+            if _legacy:
+                initial_pending = dict(_legacy)
+                initial_count = 1
+
+    handler.send_response(200)
+    handler.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+    handler.send_header('Cache-Control', 'no-cache')
+    handler.send_header('X-Accel-Buffering', 'no')
+    handler.send_header('Connection', 'keep-alive')
+    handler.end_headers()
+
+    from api.streaming import _sse
+
+    # Push initial state immediately so the client doesn't miss anything.
+    _sse(handler, 'initial', {"pending": initial_pending, "pending_count": initial_count})
+
+    try:
+        while True:
+            try:
+                payload = q.get(timeout=30)
+            except queue.Empty:
+                handler.wfile.write(b': keepalive\n\n')
+                handler.wfile.flush()
+                continue
+            if payload is None:
+                break
+            _sse(handler, 'clarify', payload)
+    except _CLIENT_DISCONNECT_ERRORS:
+        pass
+    finally:
+        clarify_sse_unsubscribe(sid, q)
 
 
 def _handle_clarify_inject(handler, parsed):
