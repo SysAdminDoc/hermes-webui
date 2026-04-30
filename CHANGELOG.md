@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v0.50.248] — 2026-04-30
+
+### Added
+- **Real-time approval notifications via SSE long-connection** — replaces the 1.5s HTTP polling loop with a Server-Sent Events endpoint at `/api/approval/stream?session_id=` that pushes approval events to the browser the instant they fire. Cuts approval latency from up to 1.5s down to near-instant and eliminates the "always polling" network noise users observed. Backend uses a thread-safe subscriber registry (`_approval_sse_subscribers` dict, bounded `queue.Queue(maxsize=16)` per subscriber, silent drop on full to prevent leaks from slow tabs). 30s keepalive comments prevent proxy/CDN timeouts; `_CLIENT_DISCONNECT_ERRORS` + `finally` block guarantee subscriber cleanup on any exit path. **Subscribe and snapshot are taken atomically under a single `_lock` acquisition** so a `submit_pending()` arriving in the gap can't be lost. Frontend uses `EventSource` with automatic 3s HTTP polling fallback on `onerror`. 42 new tests cover wiring, lifecycle, multi-subscriber, cross-session isolation, queue overflow, and concurrent subscribe/notify stress. (`api/routes.py`, `static/messages.js`, `tests/test_approval_sse.py`) @fxd-jason — PR #1350
+
+### Fixed
+- **Context indicator percentage shows even without explicit `context_length`** — frontend companion to the v0.50.246 backend fix. The context ring used to display `·` (no data) whenever `context_length` was 0 or missing — fresh agents, interrupted streams, or models without compressor state. Now defaults to **128K** when `usage.context_length` is falsy and labels the indicator with `(est. 128K)` so users can tell apparent vs. measured. Falls back to `input_tokens` for `last_prompt_tokens` so the ring lights up immediately on the first user message. (`static/ui.js`) @fxd-jason — PR #1349
+
 ## [v0.50.247] — 2026-04-30
 
 ### Added

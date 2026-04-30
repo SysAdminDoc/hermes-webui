@@ -2773,10 +2773,17 @@ def _handle_approval_sse_stream(handler, parsed):
     if not sid:
         return bad(handler, "session_id is required")
 
-    # Send initial snapshot (any approval already queued before SSE connected).
+    # Subscribe AND snapshot atomically under a single _lock acquisition so a
+    # submit_pending() that fires between the two cannot be lost. If we
+    # snapshot first then subscribe (the naive ordering), an approval that
+    # arrives in the gap is appended to _pending (after our snapshot) AND
+    # notified to subscribers (before we joined) — leaving the client unaware
+    # until the next event arrives.
+    q = queue.Queue(maxsize=16)
     initial_pending = None
     initial_count = 0
     with _lock:
+        _approval_sse_subscribers.setdefault(sid, []).append(q)
         q_list = _pending.get(sid)
         if isinstance(q_list, list):
             initial_pending = dict(q_list[0]) if q_list else None
@@ -2797,7 +2804,6 @@ def _handle_approval_sse_stream(handler, parsed):
     # Push initial state immediately so the client doesn't miss anything.
     _sse(handler, 'initial', {"pending": initial_pending, "pending_count": initial_count})
 
-    q = _approval_sse_subscribe(sid)
     try:
         while True:
             try:
