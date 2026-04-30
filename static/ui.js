@@ -3172,6 +3172,11 @@ function renderMessages(){
     seg.dataset.rawText=String(content).trim();
     if(m._live){
       currentAssistantTurn.id='liveAssistantTurn';
+      // Stamp the session id on the live turn so finalizeThinkingCard()
+      // and other late callbacks can verify they're operating on the
+      // right session's DOM (the user may have switched tabs/sessions
+      // while this stream is still streaming). See #1366.
+      if(S.session) currentAssistantTurn.dataset.sessionId=S.session.session_id;
       seg.setAttribute('data-live-assistant','1');
     }
     if(_ERR_MSG_RE.test(String(content||'').trim())) seg.dataset.error='1';
@@ -3543,6 +3548,7 @@ function appendLiveToolCard(tc){
   if(!turn){
     turn=_createAssistantTurn();
     turn.id='liveAssistantTurn';
+    if(S.session) turn.dataset.sessionId=S.session.session_id;  // see #1366
     $('msgInner').appendChild(turn);
   }
   const inner=_assistantTurnBlocks(turn);
@@ -4330,6 +4336,7 @@ function appendThinking(text=''){
   if(!turn){
     turn=_createAssistantTurn();
     turn.id='liveAssistantTurn';
+    if(S.session) turn.dataset.sessionId=S.session.session_id;  // see #1366
     $('msgInner').appendChild(turn);
   }
   const blocks=_assistantTurnBlocks(turn);

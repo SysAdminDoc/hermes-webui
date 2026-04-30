@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v0.50.250] — 2026-04-30
+
+### Fixed
+- **Cross-tab thinking-card cleanup no longer touches the wrong session's DOM** — switching browser tabs while a stream is running could leave `finalizeThinkingCard()` operating on a stale `liveAssistantTurn` node — the thinking card belonged to the stream that started it, not the session currently displayed in the active tab. The guard early-returns when the live turn's `dataset.sessionId` does not match `S.session.session_id`. Per-site stamps were also added: every place that creates `liveAssistantTurn` (3 sites in `static/ui.js`) now writes the current session id onto `dataset.sessionId` so the guard has the data it needs to compare. Without the stamps the guard would always early-return (because `undefined !== "<sid>"` is always true), breaking the streaming UI completely — caught during pre-release review of #1366. Plus a regression test that fails any future `liveAssistantTurn` creation site that forgets the stamp. (`static/ui.js`, `tests/test_pr1366_finalize_thinking_card_guard.py`) @JKJameson — PR #1366
+- **Clarify SSE health timer is now an actual stale-detector, not an unconditional 60s force-reconnect** — the timer at `static/messages.js:1715` shipped in v0.50.249 / PR #1355 closed and re-opened the EventSource every 60s regardless of activity, with a comment that wrongly claimed it was a "no event in 60s" detector. Effects on healthy connections: one TCP/SSE setup+teardown per minute per active session, plus a `clarify._lock` round-trip and fresh `initial` snapshot push from the server. Now tracks `lastEventAt` on `initial`/`clarify` event arrivals; only reconnects when the gap exceeds 60s. Under healthy conditions (server keepalives every 30s, real events on submit/resolve) the timer never fires. Originally pulled out of the v0.50.249 batch as out-of-scope; brought back per the rule that small correctness-improving fixes ship even when flagged out-of-scope. (`static/messages.js`) — PR #1367 (Opus pre-release review of v0.50.249, SHOULD-FIX #2)
+
 ## [v0.50.249] — 2026-04-30
 
 ### Added
