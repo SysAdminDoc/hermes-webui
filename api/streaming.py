@@ -1701,19 +1701,25 @@ def _run_agent_streaming(session_id, msg_text, model, workspace, stream_id, atta
             _toolsets = _resolve_cli_toolsets(_cfg)
 
             # Fallback model from profile config (e.g. for rate-limit recovery)
-            _fallback = _cfg.get('fallback_model') or None
+            _fallback = _cfg.get('fallback_model') or _cfg.get('fallback_providers') or None
+            _fallback_resolved = None
             if _fallback:
-                # Resolve the fallback through our provider logic too
-                fb_model = _fallback.get('model', '')
-                fb_provider = _fallback.get('provider', '')
-                fb_base_url = _fallback.get('base_url')
-                _fallback_resolved = {
-                    'model': fb_model,
-                    'provider': fb_provider,
-                    'base_url': fb_base_url,
-                }
-            else:
-                _fallback_resolved = None
+                # Normalize: support both single dict (legacy) and list (chained fallback).
+                # Use the first valid entry as the fallback passed to AIAgent.
+                _fb_entry = None
+                if isinstance(_fallback, list):
+                    for _entry in _fallback:
+                        if isinstance(_entry, dict) and _entry.get('model'):
+                            _fb_entry = _entry
+                            break
+                elif isinstance(_fallback, dict) and _fallback.get('model'):
+                    _fb_entry = _fallback
+                if _fb_entry:
+                    _fallback_resolved = {
+                        'model': _fb_entry.get('model', ''),
+                        'provider': _fb_entry.get('provider', ''),
+                        'base_url': _fb_entry.get('base_url'),
+                    }
 
             # Build kwargs defensively — guard newer params so the WebUI
             # degrades gracefully when run against an older hermes-agent build.
@@ -2179,6 +2185,17 @@ def _run_agent_streaming(session_id, msg_text, model, workspace, stream_id, atta
                         if isinstance(_rm, dict) and _rm.get('role') == 'assistant':
                             _rm['reasoning'] = _reasoning_text
                             break
+                # Persist context window data on the session so the context-ring
+                # indicator survives a page reload (#1318). Must run BEFORE
+                # s.save() for the same reason as the reasoning trace above.
+                # The fields are captured into the SSE usage payload below; this
+                # block writes them to the session itself so GET /api/session
+                # returns them on reload instead of falling back to 0.
+                _cc_for_save = getattr(agent, 'context_compressor', None)
+                if _cc_for_save:
+                    s.context_length = getattr(_cc_for_save, 'context_length', 0) or 0
+                    s.threshold_tokens = getattr(_cc_for_save, 'threshold_tokens', 0) or 0
+                    s.last_prompt_tokens = getattr(_cc_for_save, 'last_prompt_tokens', 0) or 0
                 s.save()
             # Sync to state.db for /insights (opt-in setting)
             try:
@@ -2197,7 +2214,9 @@ def _run_agent_streaming(session_id, msg_text, model, workspace, stream_id, atta
             except Exception:
                 logger.debug("Failed to sync session to insights")
             usage = {'input_tokens': input_tokens, 'output_tokens': output_tokens, 'estimated_cost': estimated_cost}
-            # Include context window data from the agent's compressor for the UI indicator
+            # Include context window data from the agent's compressor for the UI indicator.
+            # The session-level persistence happens above (before s.save()) so the values
+            # survive a page reload; this block only populates the live SSE usage payload.
             _cc = getattr(agent, 'context_compressor', None)
             if _cc:
                 usage['context_length'] = getattr(_cc, 'context_length', 0) or 0
@@ -2580,6 +2599,63 @@ def cancel_stream(stream_id: str) -> bool:
         with _get_session_agent_lock(_cancel_session_id):
             try:
                 _cs = get_session(_cancel_session_id)
+                # ── Preserve the user's typed message before clearing pending state (#1298) ──
+                # The agent's internal messages list (where the user message was appended at
+                # the start of run_conversation()) may not have been merged back into
+                # _cs.messages yet — cancel_stream() races with the streaming thread's final
+                # _merge_display_messages_after_agent_result() call. Without this guard, the
+                # user's message is lost: pending_user_message gets cleared below, and
+                # _cs.messages still only contains messages from prior turns. The reporter
+                # of #1298 sees their typed text vanish from chat after clicking Stop.
+                #
+                # Recovery rule: if pending_user_message is set AND the latest message in
+                # _cs.messages isn't already a matching user turn, synthesize one. The
+                # match check guards against double-append when the streaming thread DID
+                # reach its merge step before cancel_stream() got the session lock.
+                #
+                # Wrapped in its own try/except so an unexpected _cs.messages shape (e.g.
+                # in unit tests using Mock sessions) cannot escape and skip the rest of
+                # the cleanup.
+                try:
+                    _pending_user = getattr(_cs, 'pending_user_message', None)
+                    _pending_atts_raw = getattr(_cs, 'pending_attachments', None)
+                    _pending_atts = list(_pending_atts_raw) if isinstance(_pending_atts_raw, (list, tuple)) else []
+                    _pending_started = getattr(_cs, 'pending_started_at', None) or 0
+                    _msgs_for_recovery = _cs.messages if isinstance(_cs.messages, list) else None
+                    if _pending_user and _msgs_for_recovery is not None:
+                        _last_user = None
+                        for _m in reversed(_msgs_for_recovery):
+                            if isinstance(_m, dict) and _m.get('role') == 'user':
+                                _last_user = _m
+                                break
+                        _already_persisted = False
+                        if _last_user is not None:
+                            _last_content = _last_user.get('content')
+                            _last_ts = _last_user.get('timestamp') or 0
+                            # Only treat as already-persisted if the latest user turn
+                            # was created AT OR AFTER the current turn's pending_started_at.
+                            # An earlier turn whose content happens to be a substring
+                            # (e.g. prior reply was "ok", user now types "ok please continue")
+                            # must NOT short-circuit synthesis — that would re-introduce
+                            # the data-loss bug this guard is supposed to prevent.
+                            if isinstance(_last_content, str) and _last_ts >= _pending_started:
+                                # Tolerate the workspace prefix the streaming thread prepends.
+                                if _pending_user == _last_content or _pending_user in _last_content:
+                                    _already_persisted = True
+                        if not _already_persisted:
+                            _user_turn: dict = {
+                                'role': 'user',
+                                'content': _pending_user,
+                                'timestamp': int(time.time()),
+                            }
+                            if _pending_atts:
+                                _user_turn['attachments'] = _pending_atts
+                            _msgs_for_recovery.append(_user_turn)
+                except Exception:
+                    logger.debug(
+                        "Failed to recover pending user message on cancel for %s",
+                        _cancel_session_id,
+                    )
                 _cs.active_stream_id = None
                 _cs.pending_user_message = None
                 _cs.pending_attachments = []
