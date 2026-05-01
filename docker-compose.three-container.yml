@@ -34,8 +34,10 @@ services:
       - hermes-agent-src:/opt/hermes
     environment:
       - HERMES_HOME=/home/hermes/.hermes
-      - HERMES_UID=${HERMES_UID:-10000}
-      - HERMES_GID=${HERMES_GID:-10000}
+      # Align UID/GID across containers sharing the hermes-home volume.
+      # Defaults to 1000 to match WANTED_UID/WANTED_GID in the webui service.
+      - HERMES_UID=${UID:-1000}
+      - HERMES_GID=${GID:-1000}
     restart: unless-stopped
     deploy:
       resources:
@@ -55,8 +57,10 @@ services:
       - hermes-home:/home/hermes/.hermes
     environment:
       - HERMES_HOME=/home/hermes/.hermes
-      - HERMES_UID=${HERMES_UID:-10000}
-      - HERMES_GID=${HERMES_GID:-10000}
+      # Align UID/GID across containers sharing the hermes-home volume.
+      # Defaults to 1000 to match WANTED_UID/WANTED_GID in the webui service.
+      - HERMES_UID=${UID:-1000}
+      - HERMES_GID=${GID:-1000}
       # Dashboard connects to the gateway for health/session data
       - GATEWAY_HEALTH_URL=http://hermes-agent:8642
     depends_on:
