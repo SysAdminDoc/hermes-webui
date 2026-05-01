@@ -905,6 +905,13 @@
   .composer-mobile-config-action{box-sizing:border-box;display:inline-flex;align-items:center;gap:10px;min-width:0;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--muted);font:inherit;text-align:left;cursor:pointer;overflow:hidden;}
   .composer-mobile-config-action.active{background:var(--accent-bg);border-color:var(--accent-bg-strong);color:var(--text);}
   .composer-mobile-config-copy{display:flex;flex-direction:column;gap:1px;min-width:0;line-height:1.2;}
+  /* The kicker labels (WORKSPACE / MODEL / REASONING / CONTEXT) duplicate the
+     meaning the row icon already conveys, and at iPhone 14 width (390px) the
+     ~60px copy column truncates them. Hide them inside the open panel — the
+     icon + value gives a cleaner two-row layout per pill. The .context row
+     keeps its kicker because it stretches to 100% width and has more value
+     content (usage / tokens / threshold). See #1381 review feedback. */
+  .composer-mobile-config-action:not(.composer-mobile-context-action) .composer-mobile-config-kicker{display:none;}
   .composer-mobile-config-kicker{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
   .composer-mobile-config-value{font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .composer-mobile-context-action{flex:1 0 100%;align-items:flex-start;cursor:default;overflow:visible;}
@@ -1253,6 +1260,20 @@
     .empty-state p{font-size:13px;}
     .suggestion-grid{max-width:100%!important;}
     .suggestion{font-size:12px;padding:10px 12px;}
+  }
+
+  @media (max-width: 340px){
+    /* Extreme legacy-phone widths (e.g. 320px) cannot fit five 44px
+       left-side touch targets plus the fixed send button with the normal
+       phone spacing. Keep the single-row hierarchy and 44px targets, but
+       tighten only the inter-button gutters so the config button remains
+       fully visible instead of sliding under the send button. */
+    .composer-wrap{padding-left:8px!important;padding-right:8px!important;}
+    .composer-footer{gap:4px;}
+    .composer-left{gap:2px;}
+  }
+
+  @media (max-width: 640px){
     /* Approval card */
     .approval-card{padding-left:10px;padding-right:10px;}
     .approval-btns{gap:6px;}
