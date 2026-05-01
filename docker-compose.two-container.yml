@@ -45,6 +45,10 @@ services:
       - hermes-agent-src:/opt/hermes
     environment:
       - HERMES_HOME=/home/hermes/.hermes
+      # Align UID/GID across containers sharing the hermes-home volume.
+      # Defaults to 1000 to match WANTED_UID/WANTED_GID in the webui service.
+      - HERMES_UID=${UID:-1000}
+      - HERMES_GID=${GID:-1000}
     restart: unless-stopped
     networks:
       - hermes-net
