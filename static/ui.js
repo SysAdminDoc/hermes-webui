@@ -928,7 +928,7 @@ function _applyToolsetsChip(toolsets) {
   const label = $('composerToolsetsLabel');
   const chip = $('composerToolsetsChip');
   if (!wrap || !label) return;
-  // Temporarily hidden — composer footer is too cramped (#1430). State is still
+  // Temporarily hidden — composer footer is too cramped (#1431). State is still
   // tracked so /api/session/toolsets continues to work; just the chip UI is hidden
   // until we redesign the footer layout.
   wrap.style.display = 'none';
