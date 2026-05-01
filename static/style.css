@@ -893,7 +893,10 @@
   .composer-model-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .composer-model-icon,.composer-model-chevron{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;}
   .composer-model-select{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;}
-  .composer-mobile-config-btn{display:none;}
+  /* Increased specificity (.icon-btn.composer-mobile-config-btn) to win the cascade
+     against the later-in-source `.icon-btn { display:flex }` rule that this element
+     also matches. Without this, the button shows at desktop width — see #1381 review. */
+  .icon-btn.composer-mobile-config-btn{display:none;}
   .composer-mobile-config-btn.active{background:var(--accent-bg);border-color:var(--accent-bg-strong);color:var(--text);opacity:1;}
   .composer-mobile-ctx-badge{position:absolute;right:2px;bottom:2px;display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 3px;border-radius:999px;background:var(--surface);border:1px solid var(--border2);color:var(--muted);font-size:8px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;box-shadow:0 1px 4px rgba(0,0,0,.28);pointer-events:none;}
   .composer-mobile-ctx-badge.ctx-mid{color:var(--warning);border-color:var(--warning);}
