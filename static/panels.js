@@ -2233,6 +2233,10 @@ async function switchToProfile(name) {
     const data = await api('/api/profile/switch', { method: 'POST', body: JSON.stringify({ name }) });
     S.activeProfile = data.active || name;
 
+    // Update composer placeholder and title bar while the core profile-switch
+    // state is still close to the profile API response.
+    if (typeof applyBotName === 'function') applyBotName();
+
     // ── Model + Workspace (parallelized) ───────────────────────────────────
     // populateModelDropdown hits /api/models; loadWorkspaceList hits /api/workspaces.
     // They are fully independent — run both simultaneously to cut switch time ~50%.
@@ -2322,9 +2326,6 @@ async function switchToProfile(name) {
     if (_currentPanel === 'tasks') await loadCrons();
     if (_currentPanel === 'profiles') await loadProfilesPanel();
     if (_currentPanel === 'workspaces') await loadWorkspacesPanel();
-
-    // Update composer placeholder and title bar to reflect profile name
-    if (typeof applyBotName === 'function') applyBotName();
 
   } catch (e) {
     // Revert the optimistic name update on error
