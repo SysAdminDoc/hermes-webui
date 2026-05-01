@@ -1908,7 +1908,19 @@ def _run_agent_streaming(
                         SESSION_AGENT_CACHE.move_to_end(session_id)  # LRU: mark as recently used
                         from api.config import SESSION_AGENT_CACHE_MAX
                         while len(SESSION_AGENT_CACHE) > SESSION_AGENT_CACHE_MAX:
-                            evicted_sid, _ = SESSION_AGENT_CACHE.popitem(last=False)
+                            evicted_sid, evicted_entry = SESSION_AGENT_CACHE.popitem(last=False)
+                            # Same FD-leak shape as the cached-agent reuse path
+                            # in #1421: the evicted agent's _session_db won't be
+                            # released until GC finalizes the agent, which on a
+                            # long-running server may be never. Close it
+                            # explicitly so the WAL handles release immediately.
+                            # (Opus pre-release follow-up to #1421.)
+                            try:
+                                _evicted_agent = evicted_entry[0] if isinstance(evicted_entry, tuple) else None
+                                if _evicted_agent is not None and getattr(_evicted_agent, '_session_db', None) is not None:
+                                    _evicted_agent._session_db.close()
+                            except Exception:
+                                pass
                             logger.debug('[webui] Evicted LRU agent from cache: %s', evicted_sid)
                     logger.debug('[webui] Created new agent for session %s', session_id)
 
