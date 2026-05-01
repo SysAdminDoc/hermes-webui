@@ -160,7 +160,12 @@ def _build_redact_fn():
     def _combined_redact(text: str) -> str:
         if not isinstance(text, str) or not text:
             return text
-        return _fallback_redact(redact_sensitive_text(text))
+        # WebUI API responses are a hard safety boundary — pass force=True so the
+        # agent's broader patterns (Stripe sk_live_, Google AIza…, JWT eyJ…, DB
+        # connection strings, Telegram bot tokens) run regardless of the user's
+        # HERMES_REDACT_SECRETS opt-in. The local fallback then handles the
+        # common short-prefix shapes the agent omits (ghp_, sk-, hf_, AKIA).
+        return _fallback_redact(redact_sensitive_text(text, force=True))
 
     return _combined_redact
 

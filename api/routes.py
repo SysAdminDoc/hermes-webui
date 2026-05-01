@@ -154,7 +154,11 @@ def _active_profile_for_live_models_cache() -> str:
         from api.profiles import get_active_profile_name
 
         return get_active_profile_name() or "default"
-    except Exception:
+    except Exception as _e:
+        # A transient profile-resolution error mis-scopes the cache for up to
+        # 60s ("default" gets the wrong payload). Log so we can detect it; the
+        # blast radius stays small because the TTL caps the bad-cache window.
+        logger.debug("_active_profile_for_live_models_cache fell back to 'default': %s", _e)
         return "default"
 
 
