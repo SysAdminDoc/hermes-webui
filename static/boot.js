@@ -502,7 +502,7 @@ window._micPendingSend=window._micPendingSend||false;
         }
         return;
       }
-      if(event.error==='not-allowed'){
+      if(event.error==='not-allowed'||event.error==='service-not-allowed'||event.error==='audio-capture'){
         _deactivate();
         showToast(t('mic_denied'));
         return;

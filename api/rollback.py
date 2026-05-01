@@ -46,13 +46,29 @@ def _checkpoint_root() -> Path:
 
 
 def _resolve_workspace(workspace: str) -> str:
-    """Validate and return the canonical workspace path."""
+    """Validate and return the canonical workspace path.
+
+    Security: workspace must match a known configured workspace
+    (from workspaces.json or session-attached workspaces).
+    """
     if not workspace or not isinstance(workspace, str):
         raise ValueError("workspace is required")
     # Basic path validation
     resolved = os.path.realpath(workspace)
     if not os.path.isdir(resolved):
         raise ValueError(f"Workspace does not exist: {workspace}")
+    # Security: confirm workspace is in the known list
+    try:
+        from api.workspace import load_workspaces
+        known_paths = set()
+        for ws in load_workspaces():
+            p = ws.get("path", "")
+            if p:
+                known_paths.add(os.path.realpath(p))
+        if resolved not in known_paths:
+            raise ValueError(f"Workspace not in configured list: {workspace}")
+    except ImportError:
+        logger.warning("Could not load workspace list for rollback validation")
     return resolved
 
 
