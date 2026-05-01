@@ -66,4 +66,22 @@ document.addEventListener('DOMContentLoaded', function () {
       doLogin(e);
     }
   });
+
+  // On page load, probe the server so we can distinguish "can't reach server"
+  // (Tailscale off, wrong network) from "session expired / need to log in".
+  // Uses /health — a public endpoint, no auth required.
+  (function checkConnectivity() {
+    fetch('health', { method: 'GET', credentials: 'omit' })
+      .then(function (r) {
+        if (!r.ok) showErr(connFailed + ' (server error ' + r.status + ')');
+      })
+      .catch(function () {
+        showErr('Cannot reach server — check your VPN / Tailscale connection.');
+        // Disable the form so the user doesn't waste time trying a password
+        // that will never reach the server.
+        if (input) input.disabled = true;
+        var btn = form.querySelector('button');
+        if (btn) btn.disabled = true;
+      });
+  })();
 });
