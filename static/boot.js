@@ -813,6 +813,14 @@ $('msg').addEventListener('input',()=>{
 // manual flag and reset it on the next tick to swallow that trailing Enter.
 // Also reset on blur so the flag can never get stuck in a true state if
 // compositionend never fires (focus loss with some IME implementations).
+//
+// The `_imeComposing` flag is bound to the chat composer (`#msg`); other
+// inputs (session/project rename, app dialog, message edit, workspace rename)
+// rely on the state-free `e.isComposing || e.keyCode === 229` part of
+// `_isImeEnter`, which is sufficient for the Safari race because keyCode 229
+// is the canonical "still composing" signal regardless of which field is
+// focused. Promote `_isImeEnter` to `window` so other modules can reuse it
+// without duplicating the full IIFE per input (issue #1443).
 let _imeComposing=false;
 (()=>{const _c=$('msg');if(!_c)return;
   _c.addEventListener('compositionstart',()=>{_imeComposing=true;});
@@ -820,6 +828,7 @@ let _imeComposing=false;
   _c.addEventListener('blur',()=>{_imeComposing=false;});
 })();
 function _isImeEnter(e){return e.isComposing||e.keyCode===229||_imeComposing;}
+window._isImeEnter=_isImeEnter;
 $('msg').addEventListener('keydown',e=>{
   // Autocomplete navigation when dropdown is open
   const dd=$('cmdDropdown');

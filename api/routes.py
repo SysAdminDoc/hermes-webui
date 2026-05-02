@@ -906,6 +906,36 @@ _LOGIN_LOCALE = {
         "invalid_pw": "\u5bc6\u78bc\u932f\u8aa4",
         "conn_failed": "\u9023\u63a5\u5931\u6557",
     },
+    # Strings mirror static/i18n.js login_* keys for the corresponding locale.
+    # See issue #1442. When adding a new locale to LOCALES in i18n.js, also add
+    # the matching entry here — tests/test_login_locale_parity.py enforces this.
+    "ja": {
+        "lang": "ja-JP",
+        "title": "\u30b5\u30a4\u30f3\u30a4\u30f3",
+        "subtitle": "\u30d1\u30b9\u30ef\u30fc\u30c9\u3092\u5165\u529b\u3057\u3066\u7d9a\u884c",
+        "placeholder": "\u30d1\u30b9\u30ef\u30fc\u30c9",
+        "btn": "\u30b5\u30a4\u30f3\u30a4\u30f3",
+        "invalid_pw": "\u30d1\u30b9\u30ef\u30fc\u30c9\u304c\u7121\u52b9\u3067\u3059",
+        "conn_failed": "\u63a5\u7d9a\u5931\u6557",
+    },
+    "pt": {
+        "lang": "pt-BR",
+        "title": "Entrar",
+        "subtitle": "Digite sua senha para continuar",
+        "placeholder": "Senha",
+        "btn": "Entrar",
+        "invalid_pw": "Senha inv\u00e1lida",
+        "conn_failed": "Falha na conex\u00e3o",
+    },
+    "ko": {
+        "lang": "ko-KR",
+        "title": "\ub85c\uadf8\uc778",
+        "subtitle": "\uacc4\uc18d\ud558\ub824\uba74 \ube44\ubc00\ubc88\ud638\ub97c \uc785\ub825\ud558\uc138\uc694",
+        "placeholder": "\ube44\ubc00\ubc88\ud638",
+        "btn": "\ub85c\uadf8\uc778",
+        "invalid_pw": "\ube44\ubc00\ubc88\ud638\uac00 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4",
+        "conn_failed": "\uc5f0\uacb0 \uc2e4\ud328",
+    },
 }
 
 

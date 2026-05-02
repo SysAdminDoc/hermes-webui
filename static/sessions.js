@@ -1692,7 +1692,7 @@ function renderSessionListFromCache(){
       };
       inp.onkeydown=e2=>{
         if(e2.key==='Enter'){
-          if(e2.isComposing){return;}
+          if(window._isImeEnter&&window._isImeEnter(e2)){return;}
           e2.preventDefault();
           e2.stopPropagation();
           finish(true);
@@ -1986,7 +1986,7 @@ function _startProjectCreate(bar, addBtn){
   };
   inp.onkeydown=(e)=>{
     if(e.key==='Enter'){
-      if(e.isComposing){return;}
+      if(window._isImeEnter&&window._isImeEnter(e)){return;}
       e.preventDefault();
       finish(true);
     }
@@ -2014,7 +2014,7 @@ function _startProjectRename(proj, chip){
   };
   inp.onkeydown=(e)=>{
     if(e.key==='Enter'){
-      if(e.isComposing){return;}
+      if(window._isImeEnter&&window._isImeEnter(e)){return;}
       e.preventDefault();
       finish(true);
     }

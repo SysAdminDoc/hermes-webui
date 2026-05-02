@@ -1629,6 +1629,31 @@ function renderMd(raw){
   s=s.replace(/<code>([^<]*?)<\/code>/gi,(_,t)=>'`'+t+'`');
   s=s.replace(/<br\s*\/?>/gi,'\n');
   s=s.replace(/\x00R(\d+)\x00/g,(_,i)=>rawPreStash[+i]);
+  // ── Glued-bold-heading lift (issue #1446) ────────────────────────────────
+  // LLMs in thinking/reasoning mode frequently emit a "section header" glued
+  // to the end of the previous paragraph with no whitespace, like:
+  //
+  //   Para 1 text.**Heading to Para 2**
+  //
+  //   Para 2 text.**Heading to Para 3**
+  //
+  // CommonMark renders that correctly as paragraph-end inline bold, but the
+  // visual effect is a run-on label rather than a section break. Lift the
+  // glued bold into its own paragraph when it follows a sentence terminator
+  // and is followed by a blank line.
+  //
+  // Constraints (avoid false positives):
+  //   - Trigger only on a sentence terminator (.!?) IMMEDIATELY before `**`
+  //     (no space) — that pattern is almost always a glued heading, not
+  //     intentional emphasis.
+  //   - Inner text length ≤ 80 chars — long bold runs are usually emphasis
+  //     prose, not headings.
+  //   - Trailing `\n\n` required — preserves mid-paragraph emphasis like
+  //     "this is **important**." untouched.
+  //   - Inner text must not contain newlines or `*` (single-line bold only).
+  //   - Runs after fenced code, math, and raw <pre> are stashed, so code
+  //     content is protected (see pipeline notes).
+  s=s.replace(/([.!?])\*\*([^*\n]{1,80})\*\*\n\n/g,'$1\n\n**$2**\n\n');
   // Inline backtick spans: restore <code> tags produced in the stash callback above.
   // Must happen BEFORE bold/italic so **`code`** → <strong><code>code</code></strong>.
   s=s.replace(/\x00F(\d+)\x00/g,(_,i)=>fence_stash[+i]);
@@ -2487,7 +2512,7 @@ function _ensureAppDialogBindings(){
       return;
     }
     if(e.key==='Enter'){
-      if(e.isComposing) return;
+      if(window._isImeEnter&&window._isImeEnter(e)) return;
       const target=e.target;
       const isTextarea=target&&target.tagName==='TEXTAREA';
       if(!isTextarea){
@@ -4104,7 +4129,7 @@ function editMessage(btn) {
   bar.querySelector('.msg-edit-cancel').onclick = () => cancelEdit(row, originalText, body);
 
   ta.addEventListener('keydown', e => {
-    if(e.key==='Enter' && !e.shiftKey) { if(e.isComposing) return; e.preventDefault(); bar.querySelector('.msg-edit-send').click(); }
+    if(e.key==='Enter' && !e.shiftKey) { if(window._isImeEnter&&window._isImeEnter(e)) return; e.preventDefault(); bar.querySelector('.msg-edit-send').click(); }
     if(e.key==='Escape') { e.preventDefault(); cancelEdit(row, originalText, body); }
   });
 }
@@ -5006,7 +5031,7 @@ function _renderTreeItems(container, entries, depth){
       };
       inp.onkeydown=(e2)=>{
         if(e2.key==='Enter'){
-          if(e2.isComposing){return;}
+          if(window._isImeEnter&&window._isImeEnter(e2)){return;}
           e2.preventDefault();
           finish(true);
         }
