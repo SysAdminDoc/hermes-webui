@@ -70,24 +70,50 @@ def _optional_col(name: str, columns: set[str], fallback: str = "NULL") -> str:
     return f"s.{name}" if name in columns else f"{fallback} AS {name}"
 
 
-def _is_compression_continuation(parent: dict | None, child: dict) -> bool:
-    """Mirror Hermes Agent's compression-child guard.
+def _is_continuation_session(parent: dict | None, child: dict | None) -> bool:
+    """Return True when ``child`` is the next segment of the same conversation.
 
-    A child is a continuation only when the parent ended because of compression
-    and the child started after that compression boundary. Plain parent/child
-    relationships are left alone for future subagent-tree work.
+    Compression rotates session ids automatically. A manual CLI close followed
+    by ``hermes -c`` also records a new child session; for sidebar projection it
+    should continue the same visible conversation rather than becoming a
+    separate child-session row. Plain parent/child links that started before the
+    parent's ended boundary remain child sessions.
     """
-    if not parent:
+    if not parent or not child:
         return False
-    if parent.get('end_reason') != 'compression':
+    if parent.get('end_reason') not in {'compression', 'cli_close'}:
         return False
     ended_at = parent.get('ended_at')
     if ended_at is None:
-        return False
+        # Older state.db rows/tests may not have ended_at populated. Preserve
+        # the historical contract that compression/cli_close parent links are
+        # continuations when no boundary timestamp is available.
+        return True
     try:
         return float(child.get('started_at') or 0) >= float(ended_at)
     except (TypeError, ValueError):
         return False
+
+
+def _continuation_root_id(rows_by_id: dict[str, dict], session_id: str | None) -> str | None:
+    """Return the visible lineage root for ``session_id`` by walking continuations."""
+    if not session_id:
+        return None
+    root_id = str(session_id)
+    current_id = root_id
+    seen = {current_id}
+    for _ in range(len(rows_by_id) + 1):
+        current = rows_by_id.get(current_id)
+        parent_id = current.get('parent_session_id') if current else None
+        parent = rows_by_id.get(parent_id) if parent_id else None
+        if not parent or not _is_continuation_session(parent, current):
+            return root_id
+        if parent_id in seen:
+            return root_id
+        root_id = str(parent_id)
+        current_id = str(parent_id)
+        seen.add(current_id)
+    return root_id
 
 
 def _project_agent_session_rows(rows: list[dict]) -> list[dict]:
@@ -106,8 +132,13 @@ def _project_agent_session_rows(rows: list[dict]) -> list[dict]:
         if not parent_id:
             continue
         children_by_parent.setdefault(parent_id, []).append(row)
-        if _is_compression_continuation(rows_by_id.get(parent_id), row):
+        if _is_continuation_session(rows_by_id.get(parent_id), row):
             continuation_child_ids.add(row['id'])
+        else:
+            row['relationship_type'] = 'child_session'
+            parent_root = _continuation_root_id(rows_by_id, parent_id)
+            if parent_root:
+                row['_parent_lineage_root_id'] = parent_root
 
     for children in children_by_parent.values():
         children.sort(key=lambda row: row.get('started_at') or 0, reverse=True)
@@ -120,7 +151,7 @@ def _project_agent_session_rows(rows: list[dict]) -> list[dict]:
         for _ in range(len(rows_by_id) + 1):
             candidates = [
                 child for child in children_by_parent.get(current['id'], [])
-                if child['id'] not in seen and _is_compression_continuation(current, child)
+                if child['id'] not in seen and _is_continuation_session(current, child)
             ]
             if not candidates:
                 return latest_importable, segment_count
@@ -138,7 +169,7 @@ def _project_agent_session_rows(rows: list[dict]) -> list[dict]:
 
         segment_count = 1
         tip = row
-        if row.get('end_reason') == 'compression':
+        if row.get('end_reason') in {'compression', 'cli_close'}:
             tip, segment_count = compression_tip(row)
         if not tip or (tip.get('actual_message_count') or 0) <= 0:
             continue
@@ -314,7 +345,11 @@ def read_session_lineage_metadata(db_path: Path, session_ids: list[str] | set[st
                     chunk = fetch_list[i:i + IN_CHUNK]
                     placeholders = ','.join('?' * len(chunk))
                     cur.execute(
-                        f"SELECT id, parent_session_id, end_reason FROM sessions WHERE id IN ({placeholders})",
+                        f"""
+                        SELECT id, source, title, started_at, parent_session_id, ended_at, end_reason
+                        FROM sessions
+                        WHERE id IN ({placeholders})
+                        """,
                         chunk,
                     )
                     for row in cur.fetchall():
@@ -334,20 +369,18 @@ def read_session_lineage_metadata(db_path: Path, session_ids: list[str] | set[st
             continue
 
         parent_id = row.get('parent_session_id')
-        # Only expose parent_session_id when:
-        #   1) the parent actually exists in state.db (orphan refs would
-        #      otherwise leak through and the frontend would treat them as
-        #      sidebar grouping keys via #1358's _sessionLineageKey
-        #      fall-through)
-        #   2) the parent's end_reason is one of {compression, cli_close} —
-        #      i.e. only TRUE continuations. Without this, two distinct
-        #      WebUI sessions sharing a `user_stop` parent would get
-        #      collapsed into a single sidebar row by #1358's helper
-        #      (it groups by parent_session_id as the third-fallback key).
-        # (Opus pre-release review of v0.50.251, SHOULD-FIX 1.)
         parent_row = rows.get(parent_id) if parent_id else None
-        if parent_row and parent_row.get('end_reason') in {'compression', 'cli_close'}:
-            metadata.setdefault(sid, {})['parent_session_id'] = parent_id
+        if parent_id and parent_row:
+            entry = metadata.setdefault(sid, {})
+            entry['parent_session_id'] = parent_id
+            if not _is_continuation_session(parent_row, row):
+                entry['relationship_type'] = 'child_session'
+                entry['parent_title'] = parent_row.get('title')
+                entry['parent_source'] = parent_row.get('source')
+                parent_root = _continuation_root_id(rows, parent_id)
+                if parent_root:
+                    entry['_parent_lineage_root_id'] = parent_root
+                continue
 
         root_id = sid
         current_id = sid
@@ -359,7 +392,7 @@ def read_session_lineage_metadata(db_path: Path, session_ids: list[str] | set[st
             parent = rows.get(parent_id) if parent_id else None
             if not parent or parent_id in seen:
                 break
-            if parent.get('end_reason') not in {'compression', 'cli_close'}:
+            if not _is_continuation_session(parent, current):
                 break
             root_id = parent_id
             current_id = parent_id

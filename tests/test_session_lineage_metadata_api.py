@@ -121,13 +121,56 @@ def test_non_compression_state_db_parent_does_not_create_sidebar_lineage(_isolat
 
         rows = {row["session_id"]: row for row in all_sessions()}
 
-        # parent_session_id must NOT be exposed when the parent's end_reason
-        # is not a continuation (compression / cli_close). The frontend's
-        # _sessionLineageKey would otherwise group two children sharing a
-        # `user_stop` parent under the same key — incorrect collapse.
-        # (Tightened in v0.50.251 per Opus SHOULD-FIX 1.)
-        assert "parent_session_id" not in rows["lineage_api_plain_child"]
-        assert "_lineage_root_id" not in rows["lineage_api_plain_child"]
+        # Non-continuation parents should remain visible child-session links,
+        # not compression lineage. The frontend must nest them under the parent
+        # without collapsing sibling child sessions into one lineage row.
+        child = rows["lineage_api_plain_child"]
+        assert child.get("parent_session_id") == "lineage_api_plain_parent"
+        assert child.get("relationship_type") == "child_session"
+        assert child.get("parent_title") == "lineage_api_plain_parent"
+        assert child.get("_parent_lineage_root_id") == "lineage_api_plain_parent"
+        assert "_lineage_root_id" not in child
+    finally:
+        conn.close()
+
+
+
+def test_child_of_hidden_compression_segment_exposes_parent_lineage_root(_isolate):
+    conn = _ensure_state_db(_isolate)
+    t0 = time.time() - 100
+    try:
+        _save_webui_session("lineage_api_root", title="Visible root", updated_at=t0)
+        _save_webui_session("lineage_api_tip", title="Visible tip", updated_at=t0 + 10)
+        _save_webui_session("lineage_api_subtask", title="Subtask", updated_at=t0 + 20)
+        _insert_state_row(
+            conn,
+            "lineage_api_root",
+            started_at=t0,
+            ended_at=t0 + 5,
+            end_reason="compression",
+        )
+        _insert_state_row(
+            conn,
+            "lineage_api_tip",
+            parent="lineage_api_root",
+            started_at=t0 + 6,
+            ended_at=t0 + 15,
+            end_reason="user_stop",
+        )
+        _insert_state_row(
+            conn,
+            "lineage_api_subtask",
+            parent="lineage_api_tip",
+            started_at=t0 + 12,
+        )
+
+        rows = {row["session_id"]: row for row in all_sessions()}
+
+        child = rows["lineage_api_subtask"]
+        assert child.get("relationship_type") == "child_session"
+        assert child.get("parent_session_id") == "lineage_api_tip"
+        assert child.get("_parent_lineage_root_id") == "lineage_api_root"
+        assert "_lineage_root_id" not in child
     finally:
         conn.close()
 
