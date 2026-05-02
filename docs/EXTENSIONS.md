@@ -4,6 +4,14 @@ Hermes WebUI supports a small, opt-in extension surface for self-hosted installs
 It lets an administrator serve local static assets and inject same-origin CSS or
 JavaScript into the app shell without editing the WebUI source tree.
 
+> **Trust model — read this first.** Extensions execute with full WebUI session
+> authority. An extension JS file can call any API the logged-in user can call,
+> including reading conversation history, sending messages, modifying settings,
+> and triggering tool actions. **Only enable extensions you wrote yourself or
+> from sources you trust as much as the WebUI source itself.** If your WebUI is
+> shared with users you do not fully trust, do not enable extensions.
+> Do not point `HERMES_WEBUI_EXTENSION_DIR` at a user-writable directory.
+
 This is intentionally not a plugin marketplace or dependency system. It is a
 safe escape hatch for local dashboards, internal tooling, and workflow-specific
 panels that should not live in core Hermes WebUI.

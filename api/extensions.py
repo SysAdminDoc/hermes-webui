@@ -6,12 +6,25 @@ It is disabled by default and never executes or fetches third-party URLs.
 """
 
 import html
+import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import unquote, urlsplit
 
 from api.helpers import _security_headers, j
+
+_log = logging.getLogger(__name__)
+
+# Sane bound on configured URLs — real extensions ship 1-3 files. Higher values
+# typically indicate a misconfiguration (one giant unsplit string, or a runaway
+# generator script that wrote an env-var template without filtering). Capping
+# avoids rendering tens of thousands of <script> tags into every page load.
+_MAX_URL_LIST = 32
+
+# Tracks rejected URL strings we've already warned about so a misconfigured env
+# var doesn't spam the log on every request that re-reads it.
+_warned_urls: set = set()
 
 EXTENSION_ROUTE_PREFIX = "/extensions/"
 _EXTENSION_DIR_ENV = "HERMES_WEBUI_EXTENSION_DIR"
@@ -32,6 +45,9 @@ _EXTENSION_MIME = {
     "webp": "image/webp",
     "woff": "font/woff",
     "woff2": "font/woff2",
+    "ttf": "font/ttf",
+    "otf": "font/otf",
+    "wasm": "application/wasm",
 }
 _TEXT_MIME_TYPES = {"text/css", "application/javascript", "text/html", "image/svg+xml", "text/plain"}
 
@@ -52,9 +68,15 @@ def _extension_root() -> Optional[Path]:
 
 
 def _fully_unquote_path(path: str) -> str:
-    """Decode percent-encoding until stable so encoded dot-segments cannot hide."""
+    """Decode percent-encoding until stable so encoded dot-segments cannot hide.
+
+    Iterates up to 10 times so even quadruple-encoded inputs like
+    ``%2525252e%2525252e`` collapse to literal ``..`` and are rejected by
+    the segment-level safety check downstream. URL strings stabilize in
+    fewer than 5 iterations in practice; the cap is defensive.
+    """
     previous = path
-    for _ in range(3):
+    for _ in range(10):
         current = unquote(previous)
         if current == previous:
             return current
@@ -90,8 +112,30 @@ def _read_url_list(env_name: str) -> List[str]:
     urls = []
     for item in raw.split(","):
         value = item.strip()
-        if value and _is_safe_asset_url(value):
+        if not value:
+            continue
+        if _is_safe_asset_url(value):
             urls.append(value)
+            if len(urls) >= _MAX_URL_LIST:
+                # Stop accumulating after the cap. Anything past this point
+                # would be silently dropped anyway; logging once makes the
+                # truncation visible to a confused operator.
+                if env_name not in _warned_urls:
+                    _warned_urls.add(env_name)
+                    _log.warning(
+                        "Extension URL list %s truncated at %d entries",
+                        env_name, _MAX_URL_LIST,
+                    )
+                break
+        elif value not in _warned_urls:
+            # First-time-seen invalid URL: log once per process so a typo
+            # in HERMES_WEBUI_EXTENSION_*_URLS doesn't disappear silently.
+            _warned_urls.add(value)
+            _log.warning(
+                "Rejected extension URL %r from %s (not a same-origin "
+                "/extensions/ or /static/ path, or contains unsafe chars)",
+                value, env_name,
+            )
     return urls
 
 
