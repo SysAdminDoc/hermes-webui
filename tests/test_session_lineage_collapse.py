@@ -44,6 +44,7 @@ function extractFunc(name) {{
   return src.slice(start, i);
 }}
 eval(extractFunc('_sessionTimestampMs'));
+eval(extractFunc('_isChildSession'));
 eval(extractFunc('_sessionLineageKey'));
 eval(extractFunc('_collapseSessionLineageForSidebar'));
 const sessions = [
@@ -105,6 +106,7 @@ function extractFunc(name) {{
   return src.slice(start, i);
 }}
 eval(extractFunc('_sessionTimestampMs'));
+eval(extractFunc('_isChildSession'));
 eval(extractFunc('_sessionLineageKey'));
 eval(extractFunc('_collapseSessionLineageForSidebar'));
 eval(extractFunc('_sessionLineageContainsSession'));
@@ -118,3 +120,41 @@ console.log(JSON.stringify({{sid: collapsed[0].session_id, containsRoot: _sessio
     result = _run_node(source)
     assert '"sid":"tip"' in result
     assert '"containsRoot":true' in result
+
+
+def test_sidebar_attaches_child_sessions_to_collapsed_hidden_parent_lineage():
+    js = SESSIONS_JS_PATH.read_text(encoding="utf-8")
+    source = f"""
+const src = {js!r};
+function extractFunc(name) {{
+  const re = new RegExp('function\\\\s+' + name + '\\\\s*\\\\(');
+  const start = src.search(re);
+  if (start < 0) throw new Error(name + ' not found');
+  let i = src.indexOf('{{', start);
+  let depth = 1; i++;
+  while (depth > 0 && i < src.length) {{
+    if (src[i] === '{{') depth++;
+    else if (src[i] === '}}') depth--;
+    i++;
+  }}
+  return src.slice(start, i);
+}}
+eval(extractFunc('_sessionTimestampMs'));
+eval(extractFunc('_isChildSession'));
+eval(extractFunc('_sessionLineageKey'));
+eval(extractFunc('_sidebarLineageKeyForRow'));
+eval(extractFunc('_collapseSessionLineageForSidebar'));
+eval(extractFunc('_attachChildSessionsToSidebarRows'));
+const raw = [
+  {{session_id:'root', title:'Root', updated_at:10, last_message_at:10, _lineage_root_id:'root', _lineage_tip_id:'tip'}},
+  {{session_id:'tip', title:'Tip', updated_at:20, last_message_at:20, _lineage_root_id:'root', _lineage_tip_id:'tip'}},
+  {{session_id:'child', title:'Subtask', parent_session_id:'tip', relationship_type:'child_session', _parent_lineage_root_id:'root', updated_at:30, last_message_at:30}},
+];
+const collapsed = _collapseSessionLineageForSidebar(raw);
+const attached = _attachChildSessionsToSidebarRows(collapsed, raw);
+console.log(JSON.stringify(attached));
+"""
+    rows = json.loads(_run_node(source))
+    assert [row["session_id"] for row in rows] == ["tip"]
+    assert rows[0]["_child_session_count"] == 1
+    assert rows[0]["_child_sessions"][0]["session_id"] == "child"
