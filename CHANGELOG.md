@@ -1,5 +1,14 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.265] — 2026-05-02
+
+### Added
+- **Opt-in WebUI extension hooks** (#1445) — adds a deliberately-small, self-hosted extension surface for administrators who want to inject local CSS/JS into the WebUI shell without forking the core repo. Disabled by default; activates only when `HERMES_WEBUI_EXTENSION_DIR` points to an existing directory. Three env vars expose the surface: `HERMES_WEBUI_EXTENSION_DIR` (filesystem root for served assets), `HERMES_WEBUI_EXTENSION_SCRIPT_URLS` (comma-separated same-origin script URLs to inject before `</body>`), `HERMES_WEBUI_EXTENSION_STYLESHEET_URLS` (same-origin stylesheet URLs to inject before `</head>`). New `/extensions/...` static route is auth-gated (NOT in `PUBLIC_PATHS`, unlike `/static/...`) so administrator-supplied code only runs for authenticated sessions. URL validation rejects external schemes, protocol-relative URLs, fragments, traversal (raw + percent-encoded + double-encoded), control characters, quotes, and angle brackets. Filesystem serving sandboxes paths under the configured root via `Path.resolve()` + `relative_to()`, rejects dotfiles, dot-directories, encoded backslashes, and symlink escapes. CSP unchanged — extensions live at same origin so existing `'self'` directive covers them. 7 regression tests in `tests/test_extension_hooks.py` pin the disabled-by-default contract, URL validation against external/protocol-relative/javascript:/data:/API/encoded-traversal, HTML escaping during injection, the auth-gate vs public-static distinction, sandboxed static serving, fail-closed when disabled or unreadable, and symlink-escape rejection. Documentation in `docs/EXTENSIONS.md` (204 lines) covers extension authoring guidance for SPA-style additions, including avoiding destructive DOM mutations like replacing `main.innerHTML`. **Trust model**: extensions are intentionally administrator-controlled — JS injected this way runs in the WebUI origin and can call any authenticated API the logged-in browser session can. The PR explicitly does NOT introduce remote extension loading, a plugin marketplace, Python plugin execution, manifests, a browser-facing config endpoint, or new dependencies. (`api/extensions.py`, `api/routes.py`, `docs/EXTENSIONS.md`, `tests/test_extension_hooks.py`, `README.md`) @ryansombraio — PR #1445
+
+### Fixed (stage-merge)
+- Test-only fix: `tests/test_extension_hooks.py::test_extension_route_remains_behind_webui_auth` was using `SimpleNamespace(path=...)` without a `.query` attribute, but `api/auth.py:check_auth` (since v0.50.258's multi-param `?next=` encoding fix) accesses `parsed.query` when constructing the redirect Location. Added `query=""` to the test's namespace and updated the expected Location to include the encoded `?next=` parameter. No behavior change.
+
+
 ## [v0.50.264] — 2026-05-02
 
 ### Added

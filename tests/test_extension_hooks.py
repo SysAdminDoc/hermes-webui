@@ -114,14 +114,17 @@ def test_extension_route_remains_behind_webui_auth(monkeypatch):
     from api.auth import check_auth
 
     extension = FakeHandler()
-    assert check_auth(extension, SimpleNamespace(path="/extensions/app.js")) is False
+    # SimpleNamespace must include `query` because api.auth.check_auth (since
+    # v0.50.258, the multi-param ?next= encoding fix) accesses `parsed.query`
+    # when constructing the redirect Location header.
+    assert check_auth(extension, SimpleNamespace(path="/extensions/app.js", query="")) is False
     assert extension.status == 302
-    assert extension.header("Location") == "/login"
+    assert extension.header("Location") == "/login?next=/extensions/app.js"
 
     # Existing core static assets remain public; extension assets intentionally
     # do not share that exemption because they are administrator-supplied code.
     static = FakeHandler()
-    assert check_auth(static, SimpleNamespace(path="/static/ui.js")) is True
+    assert check_auth(static, SimpleNamespace(path="/static/ui.js", query="")) is True
 
 
 def test_extension_static_serving_is_sandboxed(tmp_path, monkeypatch):
