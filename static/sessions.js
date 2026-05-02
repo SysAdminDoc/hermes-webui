@@ -722,6 +722,14 @@ function toggleSessionSelect(sid){
   const item=cb?cb.closest('.session-item'):null;
   if(item){item.classList.toggle('selected',_selectedSessions.has(sid));if(cb)cb.checked=_selectedSessions.has(sid);}
 }
+function setSessionSelected(sid, selected){
+  if(selected) _selectedSessions.add(sid);
+  else _selectedSessions.delete(sid);
+  _updateBatchActionBar();
+  const cb=document.querySelector('.session-select-cb[data-sid="'+sid+'"]');
+  const item=cb?cb.closest('.session-item'):null;
+  if(item){item.classList.toggle('selected',_selectedSessions.has(sid));if(cb)cb.checked=_selectedSessions.has(sid);}
+}
 function selectAllSessions(){
   _selectedSessions.clear();
   document.querySelectorAll('.session-select-cb').forEach(cb=>{
@@ -738,21 +746,20 @@ function deselectAllSessions(){
 function _updateBatchActionBar(){
   const bar=$('batchActionBar');if(!bar)return;
   const count=_selectedSessions.size;
-  bar.style.display=count>0?'':'none';
-  const badge=bar.querySelector('.batch-count');
-  if(badge) badge.textContent=t('session_selected_count',count);
+  if(count>0){_renderBatchActionBar();}
+  else{bar.style.display='none';}
 }
 function _renderBatchActionBar(){
   const bar=$('batchActionBar');if(!bar)return;
-  bar.innerHTML='';bar.style.display=_selectedSessions.size>0?'':'none';
+  bar.innerHTML='';bar.style.display=_selectedSessions.size>0?'flex':'none';
   const countBadge=document.createElement('span');countBadge.className='batch-count';
-  countBadge.textContent=t('session_selected_count',_selectedSessions.size);bar.appendChild(countBadge);
+  countBadge.textContent=String(t('session_selected_count')).replace('{0}',_selectedSessions.size);bar.appendChild(countBadge);
   // Archive
   const archiveBtn=document.createElement('button');archiveBtn.className='batch-action-btn';
   archiveBtn.textContent=t('session_batch_archive');
   archiveBtn.onclick=async()=>{
     const ids=[..._selectedSessions];
-    const ok=await showConfirmDialog({message:t('session_batch_archive_confirm',ids.length),confirmLabel:t('session_batch_archive'),danger:true});
+    const ok=await showConfirmDialog({message:String(t('session_batch_archive_confirm')).replace('{0}',ids.length),confirmLabel:t('session_batch_archive'),danger:true});
     if(!ok)return;
     try{await Promise.all(ids.map(sid=>api('/api/session/archive',{method:'POST',body:JSON.stringify({session_id:sid,archived:true})})));
       showToast(t('session_archived'));exitSessionSelectMode();await renderSessionList();
@@ -761,13 +768,13 @@ function _renderBatchActionBar(){
   // Move
   const moveBtn=document.createElement('button');moveBtn.className='batch-action-btn';
   moveBtn.textContent=t('session_batch_move');
-  moveBtn.onclick=()=>{_showBatchProjectPicker();};bar.appendChild(moveBtn);
+  moveBtn.onclick=(e)=>{e.stopPropagation();_showBatchProjectPicker();};bar.appendChild(moveBtn);
   // Delete
   const deleteBtn=document.createElement('button');deleteBtn.className='batch-action-btn batch-action-btn-danger';
   deleteBtn.textContent=t('session_batch_delete');
   deleteBtn.onclick=async()=>{
     const ids=[..._selectedSessions];
-    const ok=await showConfirmDialog({message:t('session_batch_delete_confirm',ids.length),confirmLabel:t('delete_title'),danger:true});
+    const ok=await showConfirmDialog({message:String(t('session_batch_delete_confirm')).replace('{0}',ids.length),confirmLabel:t('delete_title'),danger:true});
     if(!ok)return;
     try{await Promise.all(ids.map(sid=>api('/api/session/delete',{method:'POST',body:JSON.stringify({session_id:sid})})));
       if(S.session&&ids.includes(S.session.session_id)){
@@ -782,8 +789,9 @@ function _renderBatchActionBar(){
 }
 function _showBatchProjectPicker(){
   const ids=[..._selectedSessions];if(!ids.length)return;
-  document.querySelectorAll('.project-picker').forEach(p=>p.remove());
-  const picker=document.createElement('div');picker.className='project-picker';
+  const bar=$('batchActionBar');if(!bar)return;
+  bar.querySelectorAll('.batch-project-picker').forEach(p=>p.remove());
+  const picker=document.createElement('div');picker.className='project-picker batch-project-picker';
   const none=document.createElement('div');none.className='project-picker-item';none.textContent='No project';
   none.onclick=async()=>{picker.remove();
     try{await Promise.all(ids.map(sid=>api('/api/session/move',{method:'POST',body:JSON.stringify({session_id:sid,project_id:null})})));
@@ -801,7 +809,7 @@ function _showBatchProjectPicker(){
       }catch(e){showToast('Move failed: '+(e.message||e));}
     };picker.appendChild(item);
   }
-  document.body.appendChild(picker);picker.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:999;';
+  bar.appendChild(picker);
   const close=(e)=>{if(!picker.contains(e.target)){picker.remove();document.removeEventListener('click',close);}};
   setTimeout(()=>document.addEventListener('click',close),0);
 }
@@ -1320,7 +1328,14 @@ function renderSessionListFromCache(){
   // real once the first message is sent. The server already filters them, but this
   // guard ensures a brand-new active session doesn't flash into the list while
   // _allSessions is stale from a prior render (#1171).
-  const withMessages=allMatched.filter(s=>(s.message_count||0)>0 || (activeSidForSidebar&&s.session_id===activeSidForSidebar) || (S.session&&s.session_id===S.session.session_id&&(S.session.message_count||0)>0));
+  const withMessages=allMatched.filter(s=>
+    (s.message_count||0)>0 ||
+    _isSessionEffectivelyStreaming(s) ||
+    !!s.active_stream_id ||
+    !!s.pending_user_message ||
+    (activeSidForSidebar&&s.session_id===activeSidForSidebar) ||
+    (S.session&&s.session_id===S.session.session_id&&(S.session.message_count||0)>0)
+  );
   // Filter by active profile (unless "All profiles" is toggled on)
   // Server backfills profile='default' for legacy sessions, so every session has a profile.
   // Show only sessions tagged to the active profile; 'All profiles' toggle overrides.
@@ -1364,8 +1379,9 @@ function renderSessionListFromCache(){
   }
   // Ensure batch action bar exists in DOM
   let batchBar=$('batchActionBar');
-  if(!batchBar){batchBar=document.createElement('div');batchBar.id='batchActionBar';batchBar.className='batch-action-bar';document.body.appendChild(batchBar);}
-  if(_sessionSelectMode&&_selectedSessions.size>0){batchBar.style.display='';_renderBatchActionBar();}
+  if(!batchBar){batchBar=document.createElement('div');batchBar.id='batchActionBar';batchBar.className='batch-action-bar';}
+  list.appendChild(batchBar);
+  if(_sessionSelectMode&&_selectedSessions.size>0){batchBar.style.display='flex';_renderBatchActionBar();}
   else{batchBar.style.display='none';}
   // Project filter bar (only when projects exist)
   if(_allProjects.length>0){
@@ -1557,8 +1573,11 @@ function renderSessionListFromCache(){
       const cbWrapper=document.createElement('label');cbWrapper.className='session-select-cb-wrapper';
       const cb=document.createElement('input');cb.type='checkbox';cb.className='session-select-cb';
       cb.dataset.sid=s.session_id;cb.checked=_selectedSessions.has(s.session_id);
-      cb.onchange=(e)=>{e.stopPropagation();toggleSessionSelect(s.session_id);};
+      cb.onchange=(e)=>{e.stopPropagation();setSessionSelected(s.session_id,cb.checked);};
       cb.onclick=(e)=>{e.stopPropagation();};
+      cb.onpointerup=(e)=>{e.stopPropagation();};
+      cbWrapper.onpointerup=(e)=>{e.stopPropagation();};
+      cbWrapper.onclick=(e)=>{e.stopPropagation();};
       cbWrapper.appendChild(cb);
       el.classList.toggle('selected',_selectedSessions.has(s.session_id));
       el.appendChild(cbWrapper);
