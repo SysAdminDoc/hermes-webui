@@ -676,6 +676,7 @@ let _showAllProfiles = false;  // false = filter to active profile only
 let _sessionActionMenu = null;
 let _sessionActionAnchor = null;
 let _sessionActionSessionId = null;
+const _expandedChildSessionKeys = new Set();
 
 function _sessionIdFromLocation(){
   if(typeof window==='undefined'||!window.location) return null;
@@ -932,9 +933,8 @@ function _openSessionActionMenu(session, anchorEl){
     async()=>{
       closeSessionActionMenu();
       try{
-        const res=await api('/api/session/new',{method:'POST',body:JSON.stringify({workspace:session.workspace,model:session.model,model_provider:session.model_provider||null})});
+        const res=await api('/api/session/duplicate',{method:'POST',body:JSON.stringify({session_id:session.session_id})});
         if(res.session){
-          await api('/api/session/rename',{method:'POST',body:JSON.stringify({session_id:res.session.session_id,title:(session.title||'Untitled')+' (copy)'})});
           await loadSession(res.session.session_id);
           await renderSessionList();
           showToast(t('session_duplicated'));
@@ -1283,8 +1283,13 @@ function _sessionTimeBucketLabel(timestampMs, nowMs) {
   return t('session_time_bucket_older');
 }
 
+function _isChildSession(s){
+  return !!(s&&s.parent_session_id&&s.relationship_type==='child_session');
+}
+
 function _sessionLineageKey(s, sessionIdsInList){
   if(!s||!s.session_id) return null;
+  if(_isChildSession(s)) return null;
   // If parent_session_id points to another session in the current list,
   // this is a subagent child — don't collapse it into lineage (#494).
   if(s.parent_session_id && sessionIdsInList && sessionIdsInList.has(s.parent_session_id)){
@@ -1296,8 +1301,68 @@ function _sessionLineageKey(s, sessionIdsInList){
 function _sessionLineageContainsSession(s, sid){
   if(!s||!sid) return false;
   if(s.session_id===sid) return true;
-  if(!Array.isArray(s._lineage_segments)) return false;
-  return s._lineage_segments.some(seg=>seg&&seg.session_id===sid);
+  if(Array.isArray(s._lineage_segments)&&s._lineage_segments.some(seg=>seg&&seg.session_id===sid)) return true;
+  if(Array.isArray(s._child_sessions)&&s._child_sessions.some(child=>child&&child.session_id===sid)) return true;
+  return false;
+}
+
+function _sidebarLineageKeyForRow(s){
+  if(!s) return null;
+  return s._lineage_key||s._lineage_root_id||s.lineage_root_id||s.parent_session_id||s.session_id||null;
+}
+
+function _attachChildSessionsToSidebarRows(collapsedRows, rawSessions){
+  const rows=(collapsedRows||[]).filter(s=>!_isChildSession(s)).map(s=>({...s}));
+  const visibleBySid=new Map();
+  const visibleBySegmentSid=new Map();
+  const visibleByLineageKey=new Map();
+  for(const row of rows){
+    if(row&&row.session_id) visibleBySid.set(row.session_id,row);
+    const lineageKey=_sidebarLineageKeyForRow(row);
+    if(lineageKey&&!visibleByLineageKey.has(lineageKey)) visibleByLineageKey.set(lineageKey,row);
+    for(const seg of (Array.isArray(row._lineage_segments)?row._lineage_segments:[])){
+      if(seg&&seg.session_id) visibleBySegmentSid.set(seg.session_id,{row,seg});
+    }
+  }
+  const orphans=[];
+  for(const child of rawSessions||[]){
+    if(!_isChildSession(child)) continue;
+    const parentSid=child.parent_session_id;
+    let parentRow=visibleBySid.get(parentSid);
+    let parentSegment=null;
+    if(!parentRow&&visibleBySegmentSid.has(parentSid)){
+      const resolved=visibleBySegmentSid.get(parentSid);
+      parentRow=resolved.row;
+      parentSegment=resolved.seg;
+    }
+    if(!parentRow&&child._parent_lineage_root_id){
+      parentRow=visibleByLineageKey.get(child._parent_lineage_root_id)||null;
+    }
+    if(parentRow){
+      if(!Array.isArray(parentRow._child_sessions)) parentRow._child_sessions=[];
+      const childCopy={...child};
+      if(parentSegment){
+        childCopy._parent_segment_id=parentSegment.session_id;
+        childCopy._parent_segment_title=parentSegment.title||child.parent_title||'Untitled';
+      }
+      parentRow._child_sessions.push(childCopy);
+      parentRow._child_session_count=parentRow._child_sessions.length;
+    } else {
+      orphans.push({...child,_orphan_child_session:true});
+    }
+  }
+  return [...rows,...orphans];
+}
+
+function _syncSidebarExpansionForActiveSession(rows, activeSid){
+  if(!activeSid) return;
+  for(const row of rows||[]){
+    const key=_sidebarLineageKeyForRow(row);
+    if(!key) continue;
+    if(Array.isArray(row._child_sessions)&&row._child_sessions.some(child=>child&&child.session_id===activeSid)){
+      _expandedChildSessionKeys.add(key);
+    }
+  }
 }
 
 function _collapseSessionLineageForSidebar(sessions){
@@ -1310,11 +1375,11 @@ function _collapseSessionLineageForSidebar(sessions){
     if(!groups.has(key)) groups.set(key,[]);
     groups.get(key).push(s);
   }
-  for(const items of groups.values()){
+  for(const [key,items] of groups.entries()){
     if(items.length<=1){result.push(items[0]);continue;}
     const sorted=[...items].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
     const chosen=sorted[0];
-    result.push({...chosen,_lineage_collapsed_count:items.length,_lineage_segments:sorted});
+    result.push({...chosen,_lineage_key:key,_lineage_collapsed_count:items.length,_lineage_segments:sorted});
   }
   return result;
 }
@@ -1355,24 +1420,8 @@ function renderSessionListFromCache(){
   const projectFiltered=_activeProject?profileFiltered.filter(s=>s.project_id===_activeProject):profileFiltered;
   // Filter archived unless toggle is on
   const sessionsRaw=_showArchived?projectFiltered:projectFiltered.filter(s=>!s.archived);
-  const sessions=_collapseSessionLineageForSidebar(sessionsRaw);
-  // Build parent→children map for subagent tree (#494).
-  // Only children whose parent exists in the current (post-collapse) list are grouped.
-  const _sessionIdsInList=new Set(sessions.map(s=>s.session_id));
-  const _parentChildrenMap=new Map();
-  const _topLevelSessions=[];
-  for(const s of sessions){
-    if(s.parent_session_id && _sessionIdsInList.has(s.parent_session_id)){
-      if(!_parentChildrenMap.has(s.parent_session_id)) _parentChildrenMap.set(s.parent_session_id,[]);
-      _parentChildrenMap.get(s.parent_session_id).push(s);
-    } else {
-      _topLevelSessions.push(s);
-    }
-  }
-  // Collapse state for subagent tree groups — persisted in localStorage (#494)
-  let _treeCollapsed={};
-  try{_treeCollapsed=JSON.parse(localStorage.getItem('hermes-tree-collapsed')||'{}');}catch(e){}
-  const _saveTreeCollapsed=()=>{try{localStorage.setItem('hermes-tree-collapsed',JSON.stringify(_treeCollapsed));}catch(e){}};
+  const sessions=_attachChildSessionsToSidebarRows(_collapseSessionLineageForSidebar(sessionsRaw), sessionsRaw);
+  _syncSidebarExpansionForActiveSession(sessions, activeSidForSidebar);
   const archivedCount=projectFiltered.filter(s=>s.archived).length;
   const list=$('sessionList');list.innerHTML='';
   // Batch select bar (when in select mode)
@@ -1465,7 +1514,7 @@ function renderSessionListFromCache(){
     empty.textContent='No sessions in this project yet.';
     list.appendChild(empty);
   }
-  const orderedSessions=[..._topLevelSessions].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
+  const orderedSessions=[...sessions].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
   // Separate pinned from unpinned
   const pinned=orderedSessions.filter(s=>s.pinned);
   const unpinned=orderedSessions.filter(s=>!s.pinned);
@@ -1511,47 +1560,7 @@ function renderSessionListFromCache(){
       _saveCollapsed();
     };
     wrapper.appendChild(hdr);
-    for(const s of g.items){
-      const parentEl=_renderOneSession(s, Boolean(g.isPinned));
-      body.appendChild(parentEl);
-      // Render subagent children as indented tree (#494)
-      const children=_parentChildrenMap.get(s.session_id);
-      if(children&&children.length){
-        parentEl.classList.add('session-parent');
-        const treeCaret=document.createElement('span');
-        treeCaret.className='session-tree-caret';
-        treeCaret.textContent='\u25B8'; // right-pointing triangle (collapsed)
-        treeCaret.title=t('subagent_children');
-        parentEl.querySelector('.session-title-row').prepend(treeCaret);
-        const childCount=children.length;
-        const childBadge=document.createElement('span');
-        childBadge.className='session-tree-badge';
-        childBadge.textContent=childCount;
-        childBadge.title=t('subagent_children');
-        parentEl.querySelector('.session-title-row').appendChild(childBadge);
-        const isCollapsed=_treeCollapsed[s.session_id]!==false; // collapsed by default
-        const childContainer=document.createElement('div');
-        childContainer.className='session-tree-children';
-        if(isCollapsed){childContainer.style.display='none';treeCaret.classList.add('collapsed');}
-        else{treeCaret.classList.remove('collapsed');treeCaret.textContent='\u25BE';}
-        const sortedChildren=[...children].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
-        for(const child of sortedChildren){
-          const childEl=_renderOneSession(child, Boolean(g.isPinned));
-          childEl.classList.add('session-tree-child');
-          childContainer.appendChild(childEl);
-        }
-        body.appendChild(childContainer);
-        treeCaret.onclick=(e)=>{
-          e.stopPropagation();
-          const hidden=childContainer.style.display==='none';
-          childContainer.style.display=hidden?'':'none';
-          treeCaret.textContent=hidden?'\u25BE':'\u25B8';
-          treeCaret.classList.toggle('collapsed',!hidden);
-          _treeCollapsed[s.session_id]=!hidden;
-          _saveTreeCollapsed();
-        };
-      }
-    }
+    for(const s of g.items){ body.appendChild(_renderOneSession(s, Boolean(g.isPinned))); }
     wrapper.appendChild(body);
     list.appendChild(wrapper);
   }
@@ -1626,6 +1635,23 @@ function renderSessionListFromCache(){
     ts.className='session-time'+(hasAttentionState?' is-hidden':'');
     ts.textContent=hasAttentionState?'':_formatRelativeSessionTime(tsMs);
     titleRow.appendChild(title);
+    const childCount=typeof s._child_session_count==='number'?s._child_session_count:(Array.isArray(s._child_sessions)?s._child_sessions.length:0);
+    if(childCount>0){
+      const childCountEl=document.createElement('span');
+      childCountEl.className='session-child-count';
+      const childLabel=t('session_meta_children', childCount);
+      childCountEl.textContent=childLabel;
+      childCountEl.title=childLabel;
+      ['pointerdown','pointerup','click'].forEach(ev=>childCountEl.addEventListener(ev,e=>e.stopPropagation()));
+      childCountEl.onclick=(e)=>{
+        e.stopPropagation();
+        const key=_sidebarLineageKeyForRow(s);
+        if(_expandedChildSessionKeys.has(key)) _expandedChildSessionKeys.delete(key);
+        else _expandedChildSessionKeys.add(key);
+        renderSessionListFromCache();
+      };
+      titleRow.appendChild(childCountEl);
+    }
     // Project color dot: placed BETWEEN title and timestamp, not inside the
     // title span. Inside the title span it would be clipped by the ellipsis
     // truncation, becoming invisible exactly when the title is long enough
@@ -1651,12 +1677,41 @@ function renderSessionListFromCache(){
         ? t('session_meta_messages', msgCount)
         : `${msgCount} msg${msgCount===1?'':'s'}`;
       metaBits.push(msgLabel);
+      if(childCount>0) metaBits.push(t('session_meta_children', childCount));
       if(s.model) metaBits.push(s.model);
       if(_showAllProfiles&&s.profile) metaBits.push(s.profile);
       const meta=document.createElement('div');
       meta.className='session-meta';
       meta.textContent=metaBits.join(' · ');
       sessionText.appendChild(meta);
+    }
+    const lineageKey=_sidebarLineageKeyForRow(s);
+    if(childCount>0&&Array.isArray(s._child_sessions)&&_expandedChildSessionKeys.has(lineageKey)){
+      const childList=document.createElement('div');
+      childList.className='session-child-sessions';
+      ['pointerdown','pointerup','click'].forEach(ev=>childList.addEventListener(ev,e=>e.stopPropagation()));
+      const sortedChildren=[...s._child_sessions].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
+      for(const child of sortedChildren){
+        const row=document.createElement('button');
+        row.type='button';
+        row.className='session-child-session'+(activeSidForSidebar&&child.session_id===activeSidForSidebar?' active':'');
+        const childTitle=child.title||'Untitled child session';
+        const childTime=_formatRelativeSessionTime(_sessionTimestampMs(child));
+        const parentNote=child._parent_segment_title?` via ${child._parent_segment_title}`:'';
+        row.textContent=`-> ${childTitle}${parentNote} - ${childTime}`;
+        row.title='Open child session';
+        row.onclick=async(e)=>{
+          e.stopPropagation();
+          if(child.is_cli_session){
+            try{await api('/api/session/import_cli',{method:'POST',body:JSON.stringify({session_id:child.session_id})});}
+            catch(_e){ /* read-only fallback */ }
+          }
+          await loadSession(child.session_id);
+          renderSessionListFromCache();
+        };
+        childList.appendChild(row);
+      }
+      sessionText.appendChild(childList);
     }
     // Append tag chips after the title text
     for(const tag of tags){
@@ -1797,6 +1852,7 @@ function renderSessionListFromCache(){
       if(e.pointerType==='mouse' && e.button!==0) return;  // ignore right/middle click
       if(_renamingSid) return;
       if(actions.contains(e.target)) return;
+      if(e.target&&e.target.closest&&e.target.closest('.session-child-count,.session-child-sessions,.session-child-session')) return;
       if(_sessionSelectMode){e.stopPropagation();toggleSessionSelect(s.session_id);return;}
       // If the pointer moved enough to be a drag, cancel any pending tap
       if(_isDragging){clearTimeout(_tapTimer);_tapTimer=null;_lastTapTime=0;_clearDragTimer=setTimeout(()=>{el.classList.remove('dragging');_clearDragTimer=null;},50);return;}
