@@ -1,6 +1,6 @@
 # Hermes Web UI -- Changelog
 
-## [Unreleased]
+## [v0.50.271] — 2026-05-02
 
 ### Changed (1 self-built PR)
 
