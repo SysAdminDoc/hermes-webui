@@ -520,8 +520,11 @@ function _selectedModelOption(){
 
 function _normalizeConfiguredModelKey(modelId){
   let s=String(modelId||'').trim().toLowerCase();
-  if(s.startsWith('@')&&s.includes(':')) s=s.substring(s.indexOf(':')+1);
-  if(s.includes('/')) s=s.split('/').pop();
+  // Strip @provider: prefix (e.g., @custom:jingdong:GLM-5 -> GLM-5).
+  // Defensive: trailing-colon / trailing-slash falls back to the original key
+  // so malformed configs don't collapse distinct ids to '' (matches backend _norm_model_id).
+  if(s.startsWith('@')&&s.includes(':')){const last=s.split(':').pop();s=last||s;}
+  if(s.includes('/')){const last=s.split('/').pop();s=last||s;}
   return s.replace(/-/g,'.');
 }
 
@@ -574,9 +577,10 @@ function _positionModelDropdown(){
   const chip=$('composerModelChip');
   const mobileAction=$('composerMobileModelAction');
   const footer=document.querySelector('.composer-footer');
-  if(!dd||!chip||!footer) return;
+  if(!dd||!footer) return;
   const panel=$('composerMobileConfigPanel');
-  const anchor=(panel&&panel.classList.contains('open')&&mobileAction)?mobileAction:chip;
+  const anchor=(panel&&panel.classList.contains('open')&&mobileAction)?mobileAction:(chip&&chip.offsetParent?chip:mobileAction);
+  if(!anchor) return;
   const chipRect=anchor.getBoundingClientRect();
   const footerRect=footer.getBoundingClientRect();
   let left=chipRect.left-footerRect.left;
@@ -678,7 +682,13 @@ function renderModelDropdown(){
       for(const m of configuredModels){
         const row=document.createElement('div');
         row.className='model-opt'+(m.value===sel.value?' active':'');
-        const badgeHtml=m.badge?`<span class="model-opt-badge model-opt-badge--${esc(m.badge.role||'configured')}">${esc(m.badge.label||'Configured')}</span>`:'';
+        // Add provider info to badge label (e.g., "Primary (jingdong)")
+        let badgeLabel=m.badge?(m.badge.label||'Configured'):'';
+        if(m.badge&&m.badge.provider){
+          const providerName=m.badge.provider.replace(/^custom:/,'').split('/')[0];
+          badgeLabel+=` (${providerName})`;
+        }
+        const badgeHtml=m.badge?`<span class="model-opt-badge model-opt-badge--${esc(m.badge.role||'configured')}">${esc(badgeLabel)}</span>`:'';
         row.innerHTML=`<div class="model-opt-top"><span class="model-opt-name">${m.name}</span>${badgeHtml}</div><span class="model-opt-id">${m.id}</span>`;
         row.onclick=()=>selectModelFromDropdown(m.value);
         dd.appendChild(row);

@@ -1298,7 +1298,11 @@ function applyBotName(){
       // subsequent refresh will also run loadSession() → loadDir() → files stay visible.
       // Removing it here caused the file tree to go blank on the second refresh
       // because the "no saved session" path never calls loadDir (#workspace-files).
-      if(S.session && (S.session.message_count||0) === 0){
+      const _restoredInFlight = S.session && (
+        S.session.active_stream_id ||
+        S.session.pending_user_message
+      );
+      if(S.session && (S.session.message_count||0) === 0 && !_restoredInFlight){
         S.session=null; S.messages=[];
         S._bootReady=true;
         // Restore panel pref before syncing so the workspace panel stays visible

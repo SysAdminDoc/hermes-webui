@@ -369,6 +369,12 @@ async function loadSession(sid){
     if (_loadingSessionId === sid) _loadingSessionId = null;
     return;
   }
+  // Guard: api() may have redirected (401) and returned undefined; in that case
+  // the browser is already navigating away, so abort the rest of this flow.
+  if (!data) {
+    if (_loadingSessionId === sid) _loadingSessionId = null;
+    return;
+  }
   // Stale response? A newer loadSession() call has already started (#1060).
   if (_loadingSessionId !== sid) return;
   S.session=data.session;
@@ -561,6 +567,8 @@ async function _ensureMessagesLoaded(sid) {
   }
   // Fetch session messages with a tail window for fast initial load.
   const data = await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}`);
+  // Guard: api() may have redirected (401) and returned undefined.
+  if (!data || !data.session) return;
   _messagesTruncated = !!data.session._messages_truncated;
   _oldestIdx = data.session._messages_offset || 0;
   const msgs = (data.session.messages || []).filter(m => m && m.role);
@@ -601,7 +609,8 @@ async function _loadOlderMessages() {
   _loadingOlder = true;
   try {
     const data = await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_before=${_oldestIdx}&msg_limit=${_INITIAL_MSG_LIMIT}`);
-    // Cancellation guards:
+    // Guard: api() may have redirected (401) and returned undefined.
+    if (!data || !data.session) { _loadingOlder = false; return; }
     //  - response shape sane
     //  - the active session is still the one we issued the request for.
     //    Compare against S.session.session_id, NOT _loadingSessionId — the
@@ -646,6 +655,8 @@ async function _ensureAllMessagesLoaded() {
   if (!_messagesTruncated || !S.session) return;
   const sid = S.session.session_id;
   const data = await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0`);
+  // Guard: api() may have redirected (401) and returned undefined.
+  if (!data || !data.session) return;
   const msgs = (data.session.messages || []).filter(m => m && m.role);
   S.messages = msgs;
   _messagesTruncated = false;
@@ -697,7 +708,7 @@ function _setActiveSessionUrl(sid){
   if(typeof window==='undefined'||!window.history||!sid) return;
   const next=_sessionUrlForSid(sid);
   if(next && next!==(window.location.pathname+window.location.search+window.location.hash)){
-    window.history.replaceState({session_id:sid},'',next);
+    window.history.pushState({session_id:sid},'',next);
   }
 }
 
@@ -722,6 +733,14 @@ function toggleSessionSelect(sid){
   const item=cb?cb.closest('.session-item'):null;
   if(item){item.classList.toggle('selected',_selectedSessions.has(sid));if(cb)cb.checked=_selectedSessions.has(sid);}
 }
+function setSessionSelected(sid, selected){
+  if(selected) _selectedSessions.add(sid);
+  else _selectedSessions.delete(sid);
+  _updateBatchActionBar();
+  const cb=document.querySelector('.session-select-cb[data-sid="'+sid+'"]');
+  const item=cb?cb.closest('.session-item'):null;
+  if(item){item.classList.toggle('selected',_selectedSessions.has(sid));if(cb)cb.checked=_selectedSessions.has(sid);}
+}
 function selectAllSessions(){
   _selectedSessions.clear();
   document.querySelectorAll('.session-select-cb').forEach(cb=>{
@@ -738,13 +757,12 @@ function deselectAllSessions(){
 function _updateBatchActionBar(){
   const bar=$('batchActionBar');if(!bar)return;
   const count=_selectedSessions.size;
-  bar.style.display=count>0?'':'none';
-  const badge=bar.querySelector('.batch-count');
-  if(badge) badge.textContent=t('session_selected_count',count);
+  if(count>0){_renderBatchActionBar();}
+  else{bar.style.display='none';}
 }
 function _renderBatchActionBar(){
   const bar=$('batchActionBar');if(!bar)return;
-  bar.innerHTML='';bar.style.display=_selectedSessions.size>0?'':'none';
+  bar.innerHTML='';bar.style.display=_selectedSessions.size>0?'flex':'none';
   const countBadge=document.createElement('span');countBadge.className='batch-count';
   countBadge.textContent=t('session_selected_count',_selectedSessions.size);bar.appendChild(countBadge);
   // Archive
@@ -761,7 +779,7 @@ function _renderBatchActionBar(){
   // Move
   const moveBtn=document.createElement('button');moveBtn.className='batch-action-btn';
   moveBtn.textContent=t('session_batch_move');
-  moveBtn.onclick=()=>{_showBatchProjectPicker();};bar.appendChild(moveBtn);
+  moveBtn.onclick=(e)=>{e.stopPropagation();_showBatchProjectPicker();};bar.appendChild(moveBtn);
   // Delete
   const deleteBtn=document.createElement('button');deleteBtn.className='batch-action-btn batch-action-btn-danger';
   deleteBtn.textContent=t('session_batch_delete');
@@ -782,8 +800,9 @@ function _renderBatchActionBar(){
 }
 function _showBatchProjectPicker(){
   const ids=[..._selectedSessions];if(!ids.length)return;
-  document.querySelectorAll('.project-picker').forEach(p=>p.remove());
-  const picker=document.createElement('div');picker.className='project-picker';
+  const bar=$('batchActionBar');if(!bar)return;
+  bar.querySelectorAll('.batch-project-picker').forEach(p=>p.remove());
+  const picker=document.createElement('div');picker.className='project-picker batch-project-picker';
   const none=document.createElement('div');none.className='project-picker-item';none.textContent='No project';
   none.onclick=async()=>{picker.remove();
     try{await Promise.all(ids.map(sid=>api('/api/session/move',{method:'POST',body:JSON.stringify({session_id:sid,project_id:null})})));
@@ -801,7 +820,7 @@ function _showBatchProjectPicker(){
       }catch(e){showToast('Move failed: '+(e.message||e));}
     };picker.appendChild(item);
   }
-  document.body.appendChild(picker);picker.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:999;';
+  bar.appendChild(picker);
   const close=(e)=>{if(!picker.contains(e.target)){picker.remove();document.removeEventListener('click',close);}};
   setTimeout(()=>document.addEventListener('click',close),0);
 }
@@ -1320,7 +1339,14 @@ function renderSessionListFromCache(){
   // real once the first message is sent. The server already filters them, but this
   // guard ensures a brand-new active session doesn't flash into the list while
   // _allSessions is stale from a prior render (#1171).
-  const withMessages=allMatched.filter(s=>(s.message_count||0)>0 || (activeSidForSidebar&&s.session_id===activeSidForSidebar) || (S.session&&s.session_id===S.session.session_id&&(S.session.message_count||0)>0));
+  const withMessages=allMatched.filter(s=>
+    (s.message_count||0)>0 ||
+    _isSessionEffectivelyStreaming(s) ||
+    !!s.active_stream_id ||
+    !!s.pending_user_message ||
+    (activeSidForSidebar&&s.session_id===activeSidForSidebar) ||
+    (S.session&&s.session_id===S.session.session_id&&(S.session.message_count||0)>0)
+  );
   // Filter by active profile (unless "All profiles" is toggled on)
   // Server backfills profile='default' for legacy sessions, so every session has a profile.
   // Show only sessions tagged to the active profile; 'All profiles' toggle overrides.
@@ -1364,8 +1390,9 @@ function renderSessionListFromCache(){
   }
   // Ensure batch action bar exists in DOM
   let batchBar=$('batchActionBar');
-  if(!batchBar){batchBar=document.createElement('div');batchBar.id='batchActionBar';batchBar.className='batch-action-bar';document.body.appendChild(batchBar);}
-  if(_sessionSelectMode&&_selectedSessions.size>0){batchBar.style.display='';_renderBatchActionBar();}
+  if(!batchBar){batchBar=document.createElement('div');batchBar.id='batchActionBar';batchBar.className='batch-action-bar';}
+  list.appendChild(batchBar);
+  if(_sessionSelectMode&&_selectedSessions.size>0){batchBar.style.display='flex';_renderBatchActionBar();}
   else{batchBar.style.display='none';}
   // Project filter bar (only when projects exist)
   if(_allProjects.length>0){
@@ -1557,8 +1584,11 @@ function renderSessionListFromCache(){
       const cbWrapper=document.createElement('label');cbWrapper.className='session-select-cb-wrapper';
       const cb=document.createElement('input');cb.type='checkbox';cb.className='session-select-cb';
       cb.dataset.sid=s.session_id;cb.checked=_selectedSessions.has(s.session_id);
-      cb.onchange=(e)=>{e.stopPropagation();toggleSessionSelect(s.session_id);};
+      cb.onchange=(e)=>{e.stopPropagation();setSessionSelected(s.session_id,cb.checked);};
       cb.onclick=(e)=>{e.stopPropagation();};
+      cb.onpointerup=(e)=>{e.stopPropagation();};
+      cbWrapper.onpointerup=(e)=>{e.stopPropagation();};
+      cbWrapper.onclick=(e)=>{e.stopPropagation();};
       cbWrapper.appendChild(cb);
       el.classList.toggle('selected',_selectedSessions.has(s.session_id));
       el.appendChild(cbWrapper);
@@ -1644,6 +1674,9 @@ function renderSessionListFromCache(){
 
     // Rename: called directly when we confirm it's a double-click
     const startRename=()=>{
+      // Guard: prevent renaming if session is currently being loaded
+      if (_loadingSessionId && _loadingSessionId !== s.session_id) return;
+
       closeSessionActionMenu();
       _renamingSid = s.session_id;
       const oldTitle=s.title||'Untitled';
@@ -1795,6 +1828,16 @@ function renderSessionListFromCache(){
         await loadSession(s.session_id);renderSessionListFromCache();
         if(typeof closeMobileSidebar==='function')closeMobileSidebar();
       }, delay);
+    };
+    // Add ondblclick for more reliable double-click detection
+    el.ondblclick=(e)=>{
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      if(_renamingSid) return;
+      if(actions.contains(e.target)) return;
+      if(_sessionSelectMode){e.stopPropagation();toggleSessionSelect(s.session_id);return;}
+      // Guard: prevent renaming if session is currently being loaded
+      if (_loadingSessionId && _loadingSessionId !== s.session_id) return;
+      startRename();
     };
     return el;
   }
