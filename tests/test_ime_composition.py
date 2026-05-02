@@ -9,16 +9,20 @@ SESSIONS_JS = (REPO_ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
 
 
 def _ime_guarded_enter_pattern(event_var_pattern, require_no_shift=False):
-    """Accept both the original `e.isComposing` guard AND the broader
-    `_isImeEnter(e)` helper introduced in PR #1441 (which folds in
-    `keyCode===229` and a manual `_imeComposing` flag for Safari).
+    """Accept the IME guard in any of three shapes that have been used in the codebase:
+
+    1. Original `e.isComposing` (pre-#1441)
+    2. Module-local `_isImeEnter(e)` (PR #1441 — chat composer in boot.js)
+    3. Window-exposed `window._isImeEnter(e)` (issue #1443 — promoted to ui.js,
+       sessions.js so all 6 Enter-input sites use the same Safari-aware guard).
     """
     no_shift = rf"\s*&&\s*!\s*{event_var_pattern}\.shiftKey" if require_no_shift else ""
-    # Either: if(e.isComposing) ...  OR  if(_isImeEnter(e)) ...
+    # Either: if(e.isComposing) ... | if(_isImeEnter(e)) ... | if(window._isImeEnter&&window._isImeEnter(e)) ...
     guard = (
         rf"if\s*\(\s*"
         rf"(?:{event_var_pattern}\.isComposing"
-        rf"|_isImeEnter\(\s*{event_var_pattern}\s*\))"
+        rf"|_isImeEnter\(\s*{event_var_pattern}\s*\)"
+        rf"|window\._isImeEnter\s*&&\s*window\._isImeEnter\s*\(\s*{event_var_pattern}\s*\))"
         rf"\s*\)\s*"
     )
     return (
