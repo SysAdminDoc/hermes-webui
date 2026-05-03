@@ -387,6 +387,15 @@ async function loadSession(sid){
   _setActiveSessionUrl(S.session.session_id);
 
   const activeStreamId=S.session.active_stream_id||null;
+  // If the server says the session is idle, discard any browser-side inflight
+  // cache left behind by a crashed/restarted stream. Otherwise the UI can keep
+  // showing a permanent thinking/running state even though active_streams=0.
+  if(!activeStreamId&&INFLIGHT[sid]){
+    delete INFLIGHT[sid];
+    if(typeof clearInflightState==='function') clearInflightState(sid);
+    S.activeStreamId=null;
+    S.busy=false;
+  }
 
   // Phase 2a: If session is streaming, restore from INFLIGHT cache before
   // loading full messages (INFLIGHT state is self-contained and sufficient).
@@ -1654,7 +1663,7 @@ function renderSessionListFromCache(){
     if(s.parent_session_id){
       const branchInd=document.createElement('span');
       branchInd.className='session-branch-indicator';
-      branchInd.textContent='\u2482'; // ⑂
+      branchInd.textContent='\u2442'; // ⑂
       branchInd.title=(typeof t==='function'?t('forked_from'):'Forked from')+' '+s.parent_session_id;
       branchInd.style.cursor='pointer';
       branchInd.onclick=(e)=>{
