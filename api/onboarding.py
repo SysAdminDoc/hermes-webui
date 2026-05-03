@@ -70,6 +70,10 @@ _SUPPORTED_PROVIDER_SETUPS = {
         "default_model": "qwen3:32b",
         "default_base_url": "http://localhost:11434/v1",
         "requires_base_url": True,
+        # Local Ollama runs keyless by default — only Ollama Cloud requires
+        # OLLAMA_API_KEY.  The wizard accepts an empty api_key for this
+        # provider; users with auth enabled can still type one.  See #1499.
+        "key_optional": True,
         "models": [],
         "category": "self_hosted",
     },
@@ -90,6 +94,11 @@ _SUPPORTED_PROVIDER_SETUPS = {
         "default_model": "gpt-4o-mini",
         "default_base_url": "http://localhost:1234/v1",
         "requires_base_url": True,
+        # Most LM Studio installs run keyless (LMSTUDIO_NOAUTH_PLACEHOLDER on the
+        # agent side handles this).  The wizard accepts an empty api_key; auth-
+        # enabled servers still need one but the user types it in the same field.
+        # See #1499 (third sub-bug from #1420).
+        "key_optional": True,
         "models": [],
         "category": "self_hosted",
     },
@@ -98,6 +107,11 @@ _SUPPORTED_PROVIDER_SETUPS = {
         "env_var": "OPENAI_API_KEY",
         "default_model": "gpt-4o-mini",
         "requires_base_url": True,
+        # Many self-hosted OpenAI-compatible servers (vLLM, llama-server,
+        # TabbyAPI, etc.) run keyless behind a private network.  The wizard
+        # accepts an empty api_key — auth-protected endpoints can still
+        # supply one.  See #1499.
+        "key_optional": True,
         "models": [],
         "category": "self_hosted",
     },
@@ -574,12 +588,30 @@ def _status_from_runtime(cfg: dict, imports_ok: bool) -> dict:
     provider_ready = False
 
     if provider_configured:
-        if provider == "custom":
-            provider_ready = bool(
-                base_url and _provider_api_key_present(provider, cfg, env_values)
-            )
-        elif provider in _SUPPORTED_PROVIDER_SETUPS:
-            provider_ready = _provider_api_key_present(provider, cfg, env_values)
+        meta = _SUPPORTED_PROVIDER_SETUPS.get(provider, {})
+        if provider in _SUPPORTED_PROVIDER_SETUPS:
+            # key_optional providers (lmstudio, ollama, custom) are ready as
+            # soon as the user has saved a provider+model+base_url; an api_key
+            # is allowed but not required.  The agent runtime substitutes a
+            # placeholder for keyless local servers (LMSTUDIO_NOAUTH_PLACEHOLDER
+            # for lmstudio, equivalent paths for ollama / custom).  See #1499
+            # third sub-bug from #1420.
+            if meta.get("key_optional"):
+                if meta.get("requires_base_url"):
+                    provider_ready = bool(base_url)
+                else:
+                    provider_ready = True
+            else:
+                # Standard wizard provider (openrouter, anthropic, openai, gemini,
+                # deepseek, zai, …) — needs an api_key.  Custom historically also
+                # took this branch, but is now key_optional via the meta flag.
+                if meta.get("requires_base_url"):
+                    provider_ready = bool(
+                        base_url
+                        and _provider_api_key_present(provider, cfg, env_values)
+                    )
+                else:
+                    provider_ready = _provider_api_key_present(provider, cfg, env_values)
         else:
             # Unknown provider — may be an OAuth flow (openai-codex, copilot, etc.)
             # OR an API-key provider not in the quick-setup list (minimax-cn, deepseek,
@@ -655,6 +687,10 @@ def _build_setup_catalog(cfg: dict) -> dict:
                 "default_model": meta["default_model"],
                 "default_base_url": meta.get("default_base_url") or "",
                 "requires_base_url": bool(meta.get("requires_base_url")),
+                # #1499 (third sub-bug from #1420) — providers that may run
+                # keyless (lmstudio, ollama, custom).  Frontend uses this to
+                # show a "(optional)" hint and allow Continue without a key.
+                "key_optional": bool(meta.get("key_optional")),
                 "models": list(meta.get("models", [])),
                 "category": meta.get("category", "easy_start"),
                 "quick": meta.get("quick", False),
@@ -842,7 +878,14 @@ def apply_onboarding_setup(body: dict) -> dict:
     env_values = _load_env_file(env_path)
 
     if not api_key and not _provider_api_key_present(provider, cfg, env_values):
-        raise ValueError(f"{provider_meta['env_var']} is required")
+        # Providers that may run keyless (lmstudio, ollama, custom — gated by
+        # `key_optional` in _SUPPORTED_PROVIDER_SETUPS) are allowed to onboard
+        # with no api_key.  The agent runtime substitutes a placeholder
+        # (LMSTUDIO_NOAUTH_PLACEHOLDER) for those, and the probe (#1499) gives
+        # the user immediate feedback if their server actually does require
+        # auth (http_4xx with status 401).  See #1499 third sub-bug from #1420.
+        if not provider_meta.get("key_optional"):
+            raise ValueError(f"{provider_meta['env_var']} is required")
 
     model_cfg = cfg.get("model", {})
     if not isinstance(model_cfg, dict):

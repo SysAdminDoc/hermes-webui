@@ -185,6 +185,21 @@ function _renderOnboardingBaseUrlField(showBaseUrl){
   return `<label class="onboarding-field"><span>${t('onboarding_base_url_label')}</span><input id="onboardingBaseUrlInput" value="${esc(ONBOARDING.form.baseUrl||'')}" placeholder="${t('onboarding_base_url_placeholder')}" oninput="ONBOARDING.form.baseUrl=this.value;_scheduleOnboardingProbe()" onblur="_runOnboardingProbe()"></label><div class="onboarding-probe-row"><button type="button" class="onboarding-probe-btn" ${testBtnDisabled} onclick="_runOnboardingProbe({force:true})">${esc(testBtnLabel)}</button></div>${banner}`;
 }
 
+function _renderOnboardingApiKeyField(){
+  // Renders the API-key input.  For providers flagged `key_optional` in the
+  // setup catalog (lmstudio, ollama, custom — typically self-hosted servers
+  // that run keyless by default), the field shows an "(optional)" hint and
+  // empty input is accepted on Continue.  Pre-#1499-third-sub-bug-fix the
+  // wizard required a non-empty string here even for keyless installs, which
+  // forced users to type random gibberish to clear onboarding.
+  const provider=_getOnboardingSetupProvider(ONBOARDING.form.provider);
+  const keyOptional=!!(provider&&provider.key_optional);
+  const labelKey=keyOptional?'onboarding_api_key_label_optional':'onboarding_api_key_label';
+  const placeholderKey=keyOptional?'onboarding_api_key_placeholder_optional':'onboarding_api_key_placeholder';
+  const helpHtml=keyOptional?`<p class="onboarding-copy onboarding-api-key-help">${esc(t('onboarding_api_key_help_keyless')||'')}</p>`:'';
+  return `<label class="onboarding-field" id="onboardingApiKeyField"><span>${t(labelKey)}</span><input id="onboardingApiKeyInput" type="password" value="${esc(ONBOARDING.form.apiKey||'')}" placeholder="${t(placeholderKey)}" oninput="ONBOARDING.form.apiKey=this.value;_scheduleOnboardingProbe()"></label>${helpHtml}`;
+}
+
 function _getOnboardingSelectedModel(){
   return ONBOARDING.form.model||'';
 }
@@ -265,10 +280,7 @@ function _renderOnboardingBody(){
             <span>${t('onboarding_provider_label')}</span>
             <select id="onboardingProviderSelect" onchange="syncOnboardingProvider(this.value)">${groupedOptions}</select>
           </label>
-          <label class="onboarding-field" id="onboardingApiKeyField">
-            <span>${t('onboarding_api_key_label')}</span>
-            <input id="onboardingApiKeyInput" type="password" value="${esc(ONBOARDING.form.apiKey||'')}" placeholder="${t('onboarding_api_key_placeholder')}" oninput="ONBOARDING.form.apiKey=this.value">
-          </label>
+          ${_renderOnboardingApiKeyField()}
           ${_renderOnboardingBaseUrlField(showBaseUrl)}
           <p class="onboarding-copy">${keyHelp}</p>`;
       } else {
@@ -286,10 +298,7 @@ function _renderOnboardingBody(){
             <span>${t('onboarding_provider_label')}</span>
             <select id="onboardingProviderSelect" onchange="syncOnboardingProvider(this.value)">${groupedOptions}</select>
           </label>
-          <label class="onboarding-field" id="onboardingApiKeyField">
-            <span>${t('onboarding_api_key_label')}</span>
-            <input id="onboardingApiKeyInput" type="password" value="${esc(ONBOARDING.form.apiKey||'')}" placeholder="${t('onboarding_api_key_placeholder')}" oninput="ONBOARDING.form.apiKey=this.value">
-          </label>
+          ${_renderOnboardingApiKeyField()}
           ${_renderOnboardingBaseUrlField(showBaseUrl)}
           <p class="onboarding-copy">${keyHelp}</p>`;
       }
@@ -302,10 +311,7 @@ function _renderOnboardingBody(){
         <span>${t('onboarding_provider_label')}</span>
         <select id="onboardingProviderSelect" onchange="syncOnboardingProvider(this.value)">${groupedOptions}</select>
       </label>
-      <label class="onboarding-field">
-        <span>${t('onboarding_api_key_label')}</span>
-        <input id="onboardingApiKeyInput" type="password" value="${esc(ONBOARDING.form.apiKey||'')}" placeholder="${t('onboarding_api_key_placeholder')}" oninput="ONBOARDING.form.apiKey=this.value">
-      </label>
+      ${_renderOnboardingApiKeyField()}
       ${_renderOnboardingBaseUrlField(showBaseUrl)}
       <p class="onboarding-copy">${keyHelp}</p>
       <div class="onboarding-oauth-card" id="codexOAuthCard">

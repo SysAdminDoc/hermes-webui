@@ -622,6 +622,9 @@ const LOCALES = {
     provider_category_specialized: 'Specialized',
     onboarding_api_key_label: 'API key',
     onboarding_api_key_placeholder: 'Leave blank to keep an existing saved key',
+    onboarding_api_key_label_optional: 'API key (optional)',
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers',
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.',
     onboarding_api_key_help_prefix: 'Saved as a secret in your Hermes .env file using',
     onboarding_base_url_label: 'Base URL',
     onboarding_base_url_placeholder: 'https://your-endpoint.example/v1',
@@ -1515,6 +1518,9 @@ const LOCALES = {
     provider_category_specialized: '専門用途',
     onboarding_api_key_label: 'APIキー',
     onboarding_api_key_placeholder: '空欄で既存の保存済みキーを維持',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     onboarding_api_key_help_prefix: 'Hermes の .env ファイルにシークレットとして保存されます — 使用変数:',
     onboarding_base_url_label: 'ベース URL',
     onboarding_base_url_placeholder: 'https://your-endpoint.example/v1',
@@ -2208,6 +2214,9 @@ const LOCALES = {
     provider_category_specialized: 'Специализированные',
     onboarding_api_key_label: 'Ключ API',
     onboarding_api_key_placeholder: 'Оставьте пустым, чтобы сохранить уже сохранённый ключ',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     oauth_login_codex: 'Login with Codex (ChatGPT)', // TODO: translate
     oauth_codex_step1: 'Step 1: Visit this URL and enter the code', // TODO: translate
     oauth_codex_step2: 'Step 2: Enter this code on the page', // TODO: translate
@@ -3040,6 +3049,9 @@ const LOCALES = {
     provider_category_specialized: 'Especializados',
     onboarding_api_key_label: 'API key',
     onboarding_api_key_placeholder: 'Déjala en blanco para conservar una key ya guardada',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     oauth_login_codex: 'Login with Codex (ChatGPT)', // TODO: translate
     oauth_codex_step1: 'Step 1: Visit this URL and enter the code', // TODO: translate
     oauth_codex_step2: 'Step 2: Enter this code on the page', // TODO: translate
@@ -4010,6 +4022,9 @@ const LOCALES = {
     provider_category_specialized: 'Spezialisiert',
     onboarding_api_key_label: 'API-Schlüssel',
     onboarding_api_key_placeholder: 'sk-…',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     oauth_login_codex: 'Login with Codex (ChatGPT)', // TODO: translate
     oauth_codex_step1: 'Step 1: Visit this URL and enter the code', // TODO: translate
     oauth_codex_step2: 'Step 2: Enter this code on the page', // TODO: translate
@@ -4696,6 +4711,9 @@ const LOCALES = {
     provider_category_specialized: '专业服务',
     onboarding_api_key_label: 'API key',
     onboarding_api_key_placeholder: '留空可保留已保存的 key',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     oauth_login_codex: 'Login with Codex (ChatGPT)', // TODO: translate
     oauth_codex_step1: 'Step 1: Visit this URL and enter the code', // TODO: translate
     oauth_codex_step2: 'Step 2: Enter this code on the page', // TODO: translate
@@ -5494,6 +5512,9 @@ const LOCALES = {
     onboarding_api_key_help_prefix: '\u900f\u904e\u4ee5\u4e0b\u65b9\u5f0f\u5132\u5b58\u70ba Hermes .env \u6a94\u6848\u4e2d\u7684\u6a5f\u5bc6',
     onboarding_api_key_label: 'API \u91d1\u9470',
     onboarding_api_key_placeholder: '\u7559\u7a7a\u4ee5\u4fdd\u7559\u5df2\u5132\u5b58\u7684\u91d1\u9470',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     onboarding_back: '\u4e0a\u4e00\u6b65',
     onboarding_badge: '\u9996\u6b21\u57f7\u884c',
     onboarding_base_url_help: '\u7528\u65bc OpenAI \u76f8\u5bb9\u8def\u7531\u5668\u3001\u81ea\u67b6\u4f3a\u670d\u5668\u3001LiteLLM\u3001Ollama\u3001LM Studio\u3001vLLM \u7b49\u7aef\u9ede\u3002',
@@ -6532,6 +6553,9 @@ const LOCALES = {
     oauth_codex_error: 'OAuth login failed', // TODO: translate
     oauth_codex_expired: 'Code expired, please try again', // TODO: translate
     onboarding_api_key_placeholder: 'Deixe em branco para manter key existente',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     onboarding_api_key_help_prefix: 'Salvo como segredo no .env do Hermes usando',
     onboarding_base_url_label: 'Base URL',
     onboarding_base_url_placeholder: 'https://seu-endpoint.exemplo/v1',
@@ -7331,6 +7355,9 @@ const LOCALES = {
     oauth_codex_error: 'OAuth login failed', // TODO: translate
     oauth_codex_expired: 'Code expired, please try again', // TODO: translate
     onboarding_api_key_placeholder: 'Leave blank to keep an existing saved key',
+    onboarding_api_key_label_optional: 'API key (optional)', // TODO: translate
+    onboarding_api_key_placeholder_optional: 'Leave blank for keyless servers', // TODO: translate
+    onboarding_api_key_help_keyless: 'Most LM Studio / Ollama / vLLM installs run keyless — leave this blank if your server doesn\'t require authentication. Use the Test connection button to verify.', // TODO: translate
     onboarding_api_key_help_prefix: 'Saved as a secret in your Hermes .env file using',
     onboarding_base_url_label: 'Base URL',
     onboarding_base_url_placeholder: 'https://your-endpoint.example/v1',
