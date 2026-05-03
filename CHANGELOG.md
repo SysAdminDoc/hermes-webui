@@ -1,5 +1,23 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.287] — 2026-05-03
+
+### Fixed (1 PR — closes another vector for the pending-message-loss class)
+
+- **Self-update refuses to re-exec while chat streams are active** (#1565, @ai-ag2026) — closes the last known vector for the pending-message-loss class fixed in #1471/#1543/#1558. The WebUI self-update path schedules an in-process `os.execv()` re-exec after applying updates. That restart-equivalent path is independent of systemd, so when a browser user clicks "Update Now" while a chat is streaming, the process can be replaced mid-stream — same data-loss class as the stale-stream/pending-message work in v0.50.279/v0.50.284. **Fix:** new `_active_stream_count()` helper reads `len(STREAMS)` under `STREAMS_LOCK`; both `apply_update(target)` and `apply_force_update(target)` short-circuit at function entry with a structured `{ok: False, restart_blocked: True, active_streams: N, message: "Cannot update {target} while {N} active chat stream{s} is running. Wait for the response to finish, then retry the update."}` response — **before** any git command runs and **before** scheduling restart. Frontend integration: `_showUpdateError` in `static/ui.js:2882` already routes `res.message` to the persistent error element, and the "Force update" button only reveals on `res.conflict || res.diverged` (neither set for `restart_blocked`), so the user gets a clean error and correctly cannot escalate to force-update (which has the same restart problem and is also blocked by the same guard). 2 new regression tests in `tests/test_update_banner_fixes.py::TestApplyUpdateRestartSafety` pin the refusal shape AND the absence of side effects (`_run_git` never called; `_schedule_restart` raises if invoked). Pre-release Opus advisor: SHIP AS-IS — verified that the residual race window (between guard release and `_apply_lock` acquire) is bounded by design and recoverable via the #1543 pending-message recovery path. Closing the window would require holding `STREAMS_LOCK` across the whole git+restart sequence, which would block every new chat for the duration of an update — worse UX than the residual race.
+
+### Tests
+
+4051 → **4053 passing** (+2 from PR #1565). 0 regressions. Full suite in 120s.
+
+### Pre-release verification
+
+- All 31 update-banner tests pass standalone in 3.5s (29 existing + 2 new).
+- All 4053 tests pass in the full suite.
+- Browser sanity (HTTP API checks against port 8789): 11/11 endpoints verified.
+- Pre-release Opus advisor: SHIP AS-IS — all 5 verification questions resolved (race-window bounded, lock ordering safe, no deadlock, frontend integration clean, test isolation robust against assertion failures).
+
+
 ## [v0.50.286] — 2026-05-03
 
 ### Fixed (1 PR — closes #1560)
