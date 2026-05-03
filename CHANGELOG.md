@@ -1,5 +1,17 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.273] — 2026-05-03
+
+### Fixed (1 PR)
+
+- **LM Studio shows in Settings → Providers when configured** (#1498, partial fix for #1420; reporters @chwps and @AdoneyGalvan) — after running the onboarding wizard with LM Studio selected, users saw the provider in the model picker and could chat normally, but Settings → Providers showed no LM Studio entry or marked it as `has_key=False / configurable=False` even when `LMSTUDIO_API_KEY` was already in `~/.hermes/.env`. Root cause: the `_PROVIDER_ENV_VAR` map in `api/providers.py` is missing an `lmstudio: "LMSTUDIO_API_KEY"` entry. That dict drives both `_provider_has_key()` (env-var-based key detection — falls through to `has_key=False / key_source=none` when the provider id isn't there) and `get_providers()` line 364 (`configurable = pid in _PROVIDER_ENV_VAR` — falls through to `False`, hiding the "Add API key" UI surface). Same bug shape as #1410 (Ollama Cloud / local Ollama env-var collision). **Fix:** add the single mapping. Unlike #1410's collision concern, `LMSTUDIO_API_KEY` is not shared with any other provider's runtime, so adding the mapping has no side effects. **Scope discipline:** issue #1420's broader thread surfaces a sibling bug — the onboarding wizard never probes the configured `<base_url>/v1/models` endpoint before persisting (the wizard accepts unreachable URLs silently, with no model-list dropdown population). That sibling bug is filed separately as #1499 and is **not** addressed by this PR — adding a probe touches the wizard UX flow, has timeout / error-handling implications, and warrants its own design pass. 5 regression tests in `tests/test_issue1420_lmstudio_provider_env_var.py` pin: dict literally contains the mapping, env-var path flips `has_key=True` + `configurable=True` + `key_source` reflects env source, config.yaml `providers.lmstudio.api_key` fallback also flips `has_key=True`, no-key path still renders `configurable=True` (so the user has a UI surface to add a key), and `LMSTUDIO_API_KEY` doesn't cross-detect any sibling provider. 4 of 5 tests verified to fail (catching the bug) when the new map entry is reverted. (`api/providers.py`, `tests/test_issue1420_lmstudio_provider_env_var.py`)
+
+### Notes
+
+- 3874 → 3879 tests passing (+5 from the issue #1420 regression suite). 3884 collected (includes some `xfail`/`skip` markers).
+- Independent review by `nesquena` flagged a pre-existing cross-tool env-var-name divergence: webui uses `LMSTUDIO_API_KEY` (the convention this PR aligns Settings detection with), while the agent CLI's runtime uses `LM_API_KEY` — masked in practice by the agent's `LMSTUDIO_NOAUTH_PLACEHOLDER` for keyless local installs. Filed as a follow-up issue (separate from #1499). Not a blocker for this PR — its scope is the UI-detection bug, and the divergence pre-dates the change.
+- Single-PR release lane (no stage branch); reviewer parked at approval, ready for the merge/tag pipeline.
+
 ## [v0.50.272] — 2026-05-03
 
 ### Fixed (3 PRs)
