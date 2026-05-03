@@ -870,14 +870,16 @@ def _format_nous_label(mid: str) -> str:
     so the entry is visually distinct from same-named models in other
     provider groups (e.g. direct Anthropic).
 
-    Examples::
+    Examples (matches the helper's actual output — labels are produced by
+    :func:`_format_ollama_label`'s token rules, so 3-letter tokens like
+    ``GPT`` and ``PRO`` render uppercase)::
 
         anthropic/claude-opus-4.7         -> Claude Opus 4.7 (via Nous)
         openai/gpt-5.4-mini               -> GPT 5.4 Mini (via Nous)
-        google/gemini-3.1-pro-preview     -> Gemini 3.1 Pro Preview (via Nous)
+        google/gemini-3.1-pro-preview     -> Gemini 3.1 PRO Preview (via Nous)
         moonshotai/kimi-k2.6              -> Kimi K2.6 (via Nous)
         qwen/qwen3.5-plus-02-15           -> Qwen3.5 Plus 02 15 (via Nous)
-        nvidia/nemotron-3-super-120b-a12b -> Nemotron 3 Super 120B A12B (via Nous)
+        nvidia/nemotron-3-super-120b-a12b -> Nemotron 3 Super 120B A12b (via Nous)
         minimax/minimax-m2.5:free         -> MiniMax M2.5 (Free) (via Nous)
     """
     name_part = mid.split("/", 1)[-1] if "/" in mid else mid
