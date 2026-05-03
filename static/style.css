@@ -2411,6 +2411,11 @@ main.main.showing-profiles > #mainProfiles{display:flex;}
 .project-chip{font-size:10px;font-weight:600;padding:3px 8px;border-radius:12px;cursor:pointer;border:1px solid var(--border2);background:var(--input-bg);color:var(--muted);transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;}
 .project-chip:hover{background:rgba(255,255,255,.08);color:var(--text);}
 .project-chip.active{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg);}
+/* "Unassigned" filter chip — dashed border distinguishes it from real
+   project chips so it reads as a meta-filter ("things without a project")
+   rather than another project. Keeps full color treatment in the active
+   state so it's still obviously selected. */
+.project-chip.no-project{border-style:dashed;}
 .project-chip .color-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
 .project-create-btn{font-size:10px;padding:3px 6px;border-radius:12px;cursor:pointer;border:1px dashed var(--border2);background:none;color:var(--muted);opacity:.6;transition:all .15s;}
 .project-create-btn:hover{opacity:1;border-color:var(--blue);color:var(--blue);}
