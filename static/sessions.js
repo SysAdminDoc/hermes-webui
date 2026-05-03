@@ -672,7 +672,14 @@ let _showArchived = false;  // toggle to show archived sessions
 let _sessionSelectMode = false;  // batch select mode
 const _selectedSessions = new Set();  // selected session IDs
 let _allProjects = [];  // cached project list
-let _activeProject = null;  // project_id filter (null = show all)
+// Sentinel value for the _activeProject state when filtering to sessions
+// that have no project_id assigned. Distinct from real project IDs so the
+// equality check below can branch cleanly on it. The literal string is
+// not user-visible (the chip renders the localized label) — it just has
+// to be something a user-created project_id can never collide with, which
+// double-underscore prefixes provide.
+const NO_PROJECT_FILTER = '__none__';
+let _activeProject = null;  // project_id filter (null = show all, NO_PROJECT_FILTER = unassigned only)
 let _showAllProfiles = false;  // false = filter to active profile only
 let _sessionActionMenu = null;
 let _sessionActionAnchor = null;
@@ -1429,8 +1436,13 @@ function renderSessionListFromCache(){
   // Server backfills profile='default' for legacy sessions, so every session has a profile.
   // Show only sessions tagged to the active profile; 'All profiles' toggle overrides.
   const profileFiltered=_showAllProfiles?withMessages:withMessages.filter(s=>s.is_cli_session||s.profile===S.activeProfile);
-  // Filter by active project
-  const projectFiltered=_activeProject?profileFiltered.filter(s=>s.project_id===_activeProject):profileFiltered;
+  // Filter by active project. NO_PROJECT_FILTER sentinel asks for sessions
+  // with no project_id; otherwise filter to the matching project_id, or
+  // pass through when no filter is active.
+  const projectFiltered=
+    _activeProject===NO_PROJECT_FILTER
+      ?profileFiltered.filter(s=>!s.project_id)
+      :(_activeProject?profileFiltered.filter(s=>s.project_id===_activeProject):profileFiltered);
   // Filter archived unless toggle is on
   const sessionsRaw=_showArchived?projectFiltered:projectFiltered.filter(s=>!s.archived);
   const sessions=_attachChildSessionsToSidebarRows(_collapseSessionLineageForSidebar(sessionsRaw), sessionsRaw);
@@ -1456,8 +1468,10 @@ function renderSessionListFromCache(){
   list.appendChild(batchBar);
   if(_sessionSelectMode&&_selectedSessions.size>0){batchBar.style.display='flex';_renderBatchActionBar();}
   else{batchBar.style.display='none';}
-  // Project filter bar (only when projects exist)
-  if(_allProjects.length>0){
+  // Project filter bar — show when there are real projects OR there are
+  // unassigned sessions (so the Unassigned chip has something to filter to).
+  const hasUnprojected=profileFiltered.some(s=>!s.project_id);
+  if(_allProjects.length>0||hasUnprojected){
     const bar=document.createElement('div');
     bar.className='project-bar';
     // "All" chip
@@ -1466,6 +1480,17 @@ function renderSessionListFromCache(){
     allChip.textContent='All';
     allChip.onclick=()=>{_activeProject=null;renderSessionListFromCache();};
     bar.appendChild(allChip);
+    // "Unassigned" chip — only when there are sessions with no project to
+    // filter to. Hidden in the common case where every session is already
+    // organized, to keep the chip bar uncluttered.
+    if(hasUnprojected){
+      const noneChip=document.createElement('span');
+      noneChip.className='project-chip no-project'+(_activeProject===NO_PROJECT_FILTER?' active':'');
+      noneChip.textContent='Unassigned';
+      noneChip.title='Show conversations not yet assigned to a project';
+      noneChip.onclick=()=>{_activeProject=NO_PROJECT_FILTER;renderSessionListFromCache();};
+      bar.appendChild(noneChip);
+    }
     // Project chips
     for(const p of _allProjects){
       const chip=document.createElement('span');
@@ -1524,7 +1549,7 @@ function renderSessionListFromCache(){
   if(_activeProject&&sessions.length===0){
     const empty=document.createElement('div');
     empty.style.cssText='padding:20px 14px;color:var(--muted);font-size:12px;text-align:center;opacity:.7;';
-    empty.textContent='No sessions in this project yet.';
+    empty.textContent=_activeProject===NO_PROJECT_FILTER?'No unassigned sessions.':'No sessions in this project yet.';
     list.appendChild(empty);
   }
   const orderedSessions=[...sessions].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
