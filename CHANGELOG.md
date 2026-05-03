@@ -1,5 +1,15 @@
 # Hermes Web UI -- Changelog
 
+## [v0.50.280] — 2026-05-03
+
+### Added (1 PR — Frank Song — cross-channel messaging handoff)
+
+- **Cross-channel messaging handoff** (#1404, @franksong2702; closes #1013) — when a Discord/Slack/Telegram/Weixin conversation is bridged into the WebUI via the messaging gateway, the composer now renders a docked "handoff" flyout above the composer (slim slide-up panel matching the terminal-collapsed dock and workspace-files panels) summarizing the live external session. After 10 rounds of message exchange a transcript-summary card surfaces — operators get a quick catch-up of the channel context without scrolling the full transcript. Sidebar dedup now keys on `_messaging_session_identity(session, raw_source)` (`api/routes.py:776-810`) — distinct chats from the same platform stay separate (e.g. two different Telegram threads with the same person now show as two sidebar rows, not one). Dup/Delete options are removed from external messaging session right-click menus (the underlying gateway owns lifecycle for those). 13 files, 3439 LOC, 73 PR-related tests + 729 lines added to `test_gateway_sync.py` covering the dedup, identity, and import paths. UX-approved on Discord by @aronprins after three rounds of feedback (composer-docked entry, transcript-card alignment, flyout-card visual consistency). Maintainer-rebased onto current master with one resolved conflict in `api/routes.py` (kept both `_clear_stale_stream_state(s)` and the new CLI messaging-session loading path; verified order-safe by Opus advisor).
+
+### Fixed (1 PR — salvage of #1531)
+
+- **Reasoning effort actually flows into WebUI agents** (#1535, salvages #1531 by @Asunfly; closes #1531) — `api/streaming.py:1820` was reading `_cfg.cfg.get('agent', {})` but `get_config()` returns a plain dict, not a wrapper exposing `.cfg`. The buggy line raised `AttributeError` swallowed by the surrounding `try/except`, so `_reasoning_config` was always `None` regardless of what `/reasoning <level>` had been set to. Operators got the agent's default effort no matter what they configured. Smoking gun: `api/streaming.py:1959` already correctly used `_cfg.get(...)` — same `_cfg` was being read two different ways in the same function. Fix is two surgical lines: `_cfg.cfg.get(...)` → `_cfg.get(...)` plus `_reasoning_config or {}` added to the per-session agent cache `_sig_blob` so changing effort mid-session rebuilds the cached agent (mirrors how `resolved_provider` / `resolved_base_url` already participate). Two static-source assertion regression tests in `tests/test_regressions.py` (R17b/R17c) pin both fixes. Spliced from #1531 Change-1 only — Change-2 (auxiliary title-route `extra_body` refactor) skipped as separate scope; Asunfly may re-open as its own PR.
+
 ## [v0.50.279] — 2026-05-03
 
 ### Fixed (8-PR batch from full PR sweep — closes #1463, #1491, #1503, #1509, #1522)
@@ -379,6 +389,9 @@ This release is the first under the May 2 2026 auto-rebase + auto-fix policy: co
 
 - **`popstate` handler refuses to switch sessions mid-stream** — Opus pre-release follow-up. Mirrors the same `S.busy` guard the cross-tab storage handler had. A user mid-stream who absent-mindedly hits browser Back used to lose their active turn (PR #1392 introduced the popstate listener without the guard). Now shows a toast and stays on the current session. 1 regression test in `test_v050254_opus_followups.py`. (`static/sessions.js`)
 
+
+### Added
+- **Messaging sessions get a WebUI handoff path without exposing every raw channel segment** — Weixin and Telegram sessions imported from Hermes Agent are now treated as messaging-source conversations: sidebar results keep only the latest visible session per channel, preserve source metadata through compact/import paths, and avoid destructive/duplicating menu actions that would imply WebUI owns the external channel history. Messaging sessions with enough external conversation rounds show a composer-docked handoff prompt; clicking it generates a transcript card summary for the user without inserting a fake command bubble. This is PR2 for the #1013 channel-handoff direction and intentionally does not cover the separate CLI Session follow-up. (`api/models.py`, `api/routes.py`, `static/index.html`, `static/messages.js`, `static/sessions.js`, `static/style.css`, `static/ui.js`, `tests/test_gateway_sync.py`, `tests/test_issue1013_handoff_dock.py`) @franksong2702 — refs #1013
 
 ## [v0.50.253] — 2026-05-01
 
