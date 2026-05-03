@@ -18,7 +18,7 @@
 
 ### Why this needed a same-day v0.50.285 vs being deferred
 
-v0.50.284 promised that "the first server start after deploying v0.50.285 will auto-restore any session that was wiped between deploys." That promise was broken by the `_index.json` shape mismatch — the recovery silently never fired. Affected users (the original reporter on v0.50.282 with the 1000+ message session that disappeared) would have had `<sid>.json.bak` files on disk but those files would never be processed. Same-day hotfix restores the promise.
+v0.50.284 promised that "the first server start after deploying v0.50.284 will auto-restore any session that was wiped between deploys." That promise was broken in production by the `_index.json` shape mismatch — the recovery silently never fired. Affected users (the original reporter on v0.50.282 with the 1000+ message session that disappeared) had `<sid>.json.bak` files on disk but those files would never be processed. Same-day hotfix restores the promise.
 
 
 ## [v0.50.284] — 2026-05-03

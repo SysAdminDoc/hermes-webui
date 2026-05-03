@@ -130,10 +130,9 @@ def recover_all_sessions_on_startup(session_dir: Path) -> dict:
     for path in session_dir.glob('*.json'):
         # Skip non-session JSON files in the same dir:
         # - ``_index.json`` is a top-level list of session metadata
-        # - any other underscore-prefixed file is convention-marked as
-        #   non-session (matching the existing _index.json pattern)
-        # - dated-format files (``YYYYMMDD_HHMMSS_*.json``) are gateway
-        #   transcripts with their own shape
+        # - any future non-session JSON marked with the ``_`` convention is
+        #   skipped automatically (project convention for system files in
+        #   directories that otherwise hold user data)
         if path.name.startswith('_'):
             continue
         scanned += 1
