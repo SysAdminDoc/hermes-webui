@@ -1817,7 +1817,7 @@ def _run_agent_streaming(
             # the key is absent or invalid, pass None → agent uses its default.
             try:
                 from api.config import parse_reasoning_effort as _parse_reff
-                _effort_cfg = _cfg.cfg.get('agent', {}) if isinstance(_cfg.cfg, dict) else {}
+                _effort_cfg = _cfg.get('agent', {}) if isinstance(_cfg, dict) else {}
                 _effort_raw = _effort_cfg.get('reasoning_effort') if isinstance(_effort_cfg, dict) else None
                 _reasoning_config = _parse_reff(_effort_raw)
             except Exception:
@@ -1885,6 +1885,7 @@ def _run_agent_streaming(
                     _max_tokens_cfg or '',
                     _fallback_resolved or {},
                     sorted(_toolsets) if _toolsets else [],
+                    _reasoning_config or {},
                 ], sort_keys=True)
                 _agent_sig = _hashlib.sha256(_sig_blob.encode()).hexdigest()[:16]
 
