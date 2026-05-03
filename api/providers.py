@@ -53,6 +53,13 @@ _PROVIDER_ENV_VAR: dict[str, str] = {
     # via providers.ollama.api_key in config.yaml — that path remains supported
     # by _provider_has_key().
     "ollama-cloud": "OLLAMA_API_KEY",
+    # NOTE: bare "lmstudio" maps to LMSTUDIO_API_KEY (no conflict — this env var is
+    # only consumed by the lmstudio runtime, not by ollama-cloud or any sibling).
+    # Without this entry, Settings → Providers would render LM Studio as
+    # has_key=False / configurable=False even when LMSTUDIO_API_KEY is set in
+    # ~/.hermes/.env (e.g. via a successful onboarding wizard run), and the user
+    # would have no UI surface to add or update the key.  See #1420.
+    "lmstudio": "LMSTUDIO_API_KEY",
     "nvidia": "NVIDIA_API_KEY",
 }
 

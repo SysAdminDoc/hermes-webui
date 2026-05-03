@@ -1,5 +1,11 @@
 # Hermes Web UI -- Changelog
 
+## [Unreleased]
+
+### Fixed (1 PR)
+
+- **LM Studio shows in Settings → Providers when configured** (#1420, partial fix; reporters @chwps and @AdoneyGalvan) — after running the onboarding wizard with LM Studio selected, users saw the provider in the model picker and could chat normally, but Settings → Providers showed no LM Studio entry or marked it as `has_key=False / configurable=False` even when `LMSTUDIO_API_KEY` was already in `~/.hermes/.env`. Root cause: the `_PROVIDER_ENV_VAR` map in `api/providers.py` is missing an `lmstudio: "LMSTUDIO_API_KEY"` entry. That dict drives both `_provider_has_key()` (env-var-based key detection — falls through to `has_key=False / key_source=none` when the provider id isn't there) and `get_providers()` line 364 (`configurable = pid in _PROVIDER_ENV_VAR` — falls through to `False`, hiding the "Add API key" UI surface). Same bug shape as #1410 (Ollama Cloud / local Ollama env-var collision). **Fix:** add the single mapping. Unlike #1410's collision concern, `LMSTUDIO_API_KEY` is not shared with any other provider's runtime, so adding the mapping has no side effects. **Scope discipline:** issue #1420's broader thread surfaces a sibling bug (the onboarding wizard never probes the configured `<base_url>/v1/models` endpoint before persisting — the wizard accepts unreachable URLs silently, with no model-list dropdown population). That sibling bug is being filed separately and is **not** addressed by this PR — adding a probe touches the wizard UX flow, has timeout / error-handling implications, and warrants its own design pass. 5 regression tests in `tests/test_issue1420_lmstudio_provider_env_var.py` pin: dict literally contains the mapping, env-var path flips `has_key=True` + `configurable=True` + `key_source` reflects env source, config.yaml `providers.lmstudio.api_key` fallback also flips `has_key=True`, no-key path still renders `configurable=True` (so the user has a UI surface to add a key), and `LMSTUDIO_API_KEY` doesn't cross-detect any sibling provider. 4 of 5 tests verified to fail (catching the bug) when the new map entry is reverted. (`api/providers.py`, `tests/test_issue1420_lmstudio_provider_env_var.py`)
+
 ## [v0.50.272] — 2026-05-03
 
 ### Fixed (3 PRs)
