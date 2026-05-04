@@ -20,7 +20,7 @@
 
 ### Tests
 
-4180 → **4271 passing** (+91 regression tests across `tests/test_issue1623_sse_heartbeat_alignment.py` (3), `tests/test_issue1624_repair_stale_pending_grace.py` (9), `tests/test_issue1625_local_server_model_id_preservation.py` (34, expanded for `lm-studio`/`localai`), `tests/test_issue1633_models_cache_version_stamp.py` (19); plus `tests/test_model_resolver.py` updates and `tests/test_model_cache_metadata.py` round-trip semantics). 0 regressions. Full suite ~120s.
+4180 → **4245 passing** (+65 regression tests across `tests/test_issue1623_sse_heartbeat_alignment.py` (3), `tests/test_issue1624_repair_stale_pending_grace.py` (9), `tests/test_issue1625_local_server_model_id_preservation.py` (34, expanded for `lm-studio`/`localai`), `tests/test_issue1633_models_cache_version_stamp.py` (19); plus `tests/test_model_resolver.py` updates and `tests/test_model_cache_metadata.py` round-trip semantics). 0 regressions. Full suite ~120s.
 
 ### Pre-release verification
 
