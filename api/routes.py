@@ -1489,6 +1489,7 @@ button:hover{background:rgba(124,185,255,.25)}
   </form>
   <div class="err" id="err"></div>
 </div>
+<!-- Keep login.js relative so subpath mounts load it under the current scope. -->
 <script src="static/login.js?v={{WEBUI_VERSION}}"></script>
 </body></html>"""
 
