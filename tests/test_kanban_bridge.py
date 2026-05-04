@@ -424,3 +424,62 @@ def test_routes_dispatches_canonical_kanban_patch_and_delete_verbs():
     assert 'parsed.path.startswith("/api/kanban/")' in src
     assert "handle_kanban_patch(handler, parsed, body)" in src
     assert "handle_kanban_delete(handler, parsed, body)" in src
+
+
+def test_patch_status_running_is_rejected_to_protect_dispatcher_contract(monkeypatch):
+    """Bridge must NOT allow status='running' via PATCH.
+
+    The 'running' state is owned by the kanban dispatcher / claim_task path
+    (sets claim_lock + claim_expires + started_at + worker_pid). A raw status
+    flip would leave the task in a phantom-claimed state the dispatcher would
+    treat as orphaned. Mirrors the agent dashboard plugin's contract at
+    plugins/kanban/dashboard/plugin_api.py update_task — both surfaces must
+    reject this transition.
+    """
+    bridge = _load_bridge(monkeypatch)
+    bridge._OAUTH_FLOWS = getattr(bridge, '_OAUTH_FLOWS', {})  # no-op safe
+    # The fake board includes t_1 (ready) — try to PATCH it to 'running'
+    try:
+        bridge._patch_task_payload("t_1", {"status": "running"})
+    except ValueError as exc:
+        assert "running" in str(exc).lower()
+        return
+    raise AssertionError("PATCH status='running' must raise ValueError")
+
+
+def test_patch_status_done_to_running_is_rejected(monkeypatch):
+    """A completed task must not be resurrected to 'running' via PATCH."""
+    bridge = _load_bridge(monkeypatch)
+    # The fake board includes t_2 (blocked); we'll PATCH any task to 'running'
+    try:
+        bridge._patch_task_payload("t_2", {"status": "running"})
+    except ValueError as exc:
+        assert "running" in str(exc).lower()
+        return
+    raise AssertionError("PATCH status='running' must raise ValueError")
+
+
+def test_patch_status_blocked_to_ready_routes_through_unblock_task(monkeypatch):
+    """blocked → ready transition must call kb.unblock_task (not raw UPDATE).
+
+    kb.unblock_task is the structured verb that fires the 'unblocked' event
+    and clears any block-related state. Going through raw UPDATE would skip
+    that event firing, so live event polling and worker dispatchers wouldn't
+    see the transition.
+    """
+    bridge = _load_bridge(monkeypatch)
+    # Hook into the shared FakeKanbanDB instance
+    kb = bridge._kb()
+    kb.unblock_calls = []
+    original_unblock = kb.unblock_task
+
+    def fake_unblock(conn, task_id):
+        kb.unblock_calls.append(task_id)
+        return original_unblock(conn, task_id)
+
+    monkeypatch.setattr(kb, "unblock_task", fake_unblock, raising=False)
+    # t_2 is blocked in the fake fixture
+    bridge._patch_task_payload("t_2", {"status": "ready"})
+    assert kb.unblock_calls == ["t_2"], (
+        f"blocked → ready transition must call kb.unblock_task; saw: {kb.unblock_calls}"
+    )

@@ -996,6 +996,16 @@ function dragKanbanTask(event, taskId){
 }
 
 function allowKanbanDrop(event){
+  // Don't accept drops into the 'running' column. Entering 'running' is owned
+  // by the dispatcher/claim_task path (sets claim_lock + claim_expires +
+  // started_at + worker_pid). A drag-drop would bypass that contract and the
+  // bridge would reject the resulting PATCH with HTTP 400 anyway. Refuse the
+  // drop visually so users see immediate feedback.
+  const target = event.currentTarget;
+  if (target && target.dataset && target.dataset.kanbanStatus === 'running') {
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+    return;
+  }
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 }
@@ -1332,7 +1342,12 @@ function _kanbanRenderTaskDetail(data){
   const events = data.events || [];
   const links = data.links || {};
   const runs = data.runs || [];
-  const statusButtons = ['triage', 'todo', 'ready', 'running', 'blocked', 'done', 'archived'].map(status =>
+  // Note: 'running' is intentionally absent — entering 'running' is the
+  // dispatcher/claim_task path's responsibility, not a user UI write. The
+  // bridge rejects PATCH status='running' with HTTP 400 to match the agent
+  // dashboard plugin's contract. UI users want to claim/promote a ready task
+  // via the dispatcher Nudge button, not flip it to running by hand.
+  const statusButtons = ['triage', 'todo', 'ready', 'blocked', 'done', 'archived'].map(status =>
     `<button class="btn secondary" onclick="updateKanbanTask('${esc(task.id)}',{status:'${status}'})">${esc(_kanbanColumnLabel(status))}</button>`
   ).join('') + `<button class="btn secondary" onclick="blockKanbanTask('${esc(task.id)}')">${esc(t('kanban_block'))}</button><button class="btn secondary" onclick="unblockKanbanTask('${esc(task.id)}')">${esc(t('kanban_unblock'))}</button>`;
   return `<div class="kanban-task-preview-header">
