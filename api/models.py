@@ -1053,7 +1053,16 @@ def load_projects(*, _migrate: bool = True) -> list:
         with _PROJECTS_MIGRATION_LOCK:
             # Re-check inside the lock — another thread may have raced.
             if _projects_migrated:
-                return projects
+                # Per Opus advisor on stage-293: another thread completed
+                # migration and wrote new state to disk while we waited for
+                # the lock. Our `projects` snapshot is the pre-migration
+                # version; re-read so the caller doesn't see stale untagged
+                # rows (which a mutation route could then write back,
+                # silently overwriting the migration).
+                try:
+                    return json.loads(PROJECTS_FILE.read_text(encoding='utf-8'))
+                except Exception:
+                    return projects
             if _backfill_project_profiles_if_needed(projects):
                 try:
                     save_projects(projects)

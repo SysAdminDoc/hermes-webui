@@ -135,7 +135,10 @@ def _detect_agent_version() -> str:
     # file is available (common in source checkouts and developer environments).
     if not Path(_AGENT_DIR).exists():
         return 'not detected'
-    out, ok = _run_git(['describe', '--tags', '--always'], _AGENT_DIR, timeout=3)
+    # Symmetric with _detect_webui_version() above — `--dirty` flags a
+    # locally-modified checkout so operators can see when their agent has
+    # uncommitted changes vs a clean tag. Per Opus advisor on stage-293.
+    out, ok = _run_git(['describe', '--tags', '--always', '--dirty'], _AGENT_DIR, timeout=3)
     if ok and out:
         return out
 
