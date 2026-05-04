@@ -411,3 +411,16 @@ def test_kanban_only_mine_bulk_dispatch_and_block_unblock(monkeypatch):
     assert unblocked["task"]["status"] == "ready"
     assert dispatch["dry_run"] is True
     assert dispatch["max_spawn"] == 2
+
+
+
+def test_routes_dispatches_canonical_kanban_patch_and_delete_verbs():
+    src = open("api/routes.py", encoding="utf-8").read()
+    server = open("server.py", encoding="utf-8").read()
+    assert "def do_PATCH" in server
+    assert "def do_DELETE" in server
+    assert "self._handle_write(handle_patch)" in server
+    assert "self._handle_write(handle_delete)" in server
+    assert 'parsed.path.startswith("/api/kanban/")' in src
+    assert "handle_kanban_patch(handler, parsed, body)" in src
+    assert "handle_kanban_delete(handler, parsed, body)" in src

@@ -3778,6 +3778,30 @@ def handle_post(handler, parsed) -> bool:
 
     return False  # 404
 
+
+def handle_patch(handler, parsed) -> bool:
+    """Handle all PATCH routes. Returns True if handled, False for 404."""
+    if not _check_csrf(handler):
+        return j(handler, {"error": "Cross-origin request rejected"}, status=403)
+    body = read_body(handler)
+    if parsed.path.startswith("/api/kanban/"):
+        from api.kanban_bridge import handle_kanban_patch
+
+        return handle_kanban_patch(handler, parsed, body)
+    return False
+
+
+def handle_delete(handler, parsed) -> bool:
+    """Handle all DELETE routes. Returns True if handled, False for 404."""
+    if not _check_csrf(handler):
+        return j(handler, {"error": "Cross-origin request rejected"}, status=403)
+    body = read_body(handler)
+    if parsed.path.startswith("/api/kanban/"):
+        from api.kanban_bridge import handle_kanban_delete
+
+        return handle_kanban_delete(handler, parsed, body)
+    return False
+
 # ── GET route helpers ─────────────────────────────────────────────────────────
 
 # MIME types for static file serving. Hoisted to module scope to avoid

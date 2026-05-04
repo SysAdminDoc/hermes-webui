@@ -594,3 +594,34 @@ def handle_kanban_post(handler, parsed, body) -> bool:
     except RuntimeError as exc:
         return bad(handler, str(exc), status=409)
     return False
+
+
+def handle_kanban_patch(handler, parsed, body) -> bool:
+    path = parsed.path
+    try:
+        if path.startswith(_TASK_PREFIX):
+            task_id = unquote(path[len(_TASK_PREFIX):]).strip("/")
+            if not task_id or "/" in task_id:
+                return False
+            return j(handler, _patch_task_payload(task_id, body)) or True
+    except LookupError as exc:
+        return bad(handler, str(exc), status=404)
+    except ValueError as exc:
+        return bad(handler, str(exc))
+    except RuntimeError as exc:
+        return bad(handler, str(exc), status=409)
+    return False
+
+
+def handle_kanban_delete(handler, parsed, body) -> bool:
+    path = parsed.path
+    try:
+        if path == "/api/kanban/links":
+            return j(handler, _link_tasks_payload(body, unlink=True)) or True
+    except LookupError as exc:
+        return bad(handler, str(exc), status=404)
+    except ValueError as exc:
+        return bad(handler, str(exc))
+    except RuntimeError as exc:
+        return bad(handler, str(exc), status=409)
+    return False

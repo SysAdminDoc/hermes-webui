@@ -1116,7 +1116,10 @@ async function loadKanbanStats(){
     if (!el) return;
     const byStatus = (stats && stats.by_status) || {};
     const total = Object.values(byStatus).reduce((a, b) => a + Number(b || 0), 0);
-    el.textContent = `${t('kanban_stats')}: ${total}`;
+    const cells = Object.entries(byStatus).sort(([a], [b]) => a.localeCompare(b)).map(([status, count]) =>
+      `<span class="kanban-stat-cell"><strong>${esc(String(count))}</strong> ${esc(_kanbanColumnLabel(status))}</span>`
+    ).join('');
+    el.innerHTML = `<div class="kanban-stats-grid"><span class="kanban-stat-cell total"><strong>${esc(String(total))}</strong> ${esc(t('kanban_stats'))}</span>${cells}</div>`;
   } catch(e) { /* stats are best-effort */ }
 }
 
@@ -1179,6 +1182,45 @@ async function unblockKanbanTask(taskId){
   } catch(e) { showToast(t('kanban_unavailable') + ': ' + (e.message || e), 'error'); }
 }
 
+function closeKanbanTaskDetail(){
+  _kanbanCurrentTaskId = null;
+  const preview = $('kanbanTaskPreview');
+  if (preview) {
+    preview.style.display = 'none';
+    preview.innerHTML = '';
+  }
+  const board = $('kanbanBoard');
+  if (board) board.querySelectorAll('.kanban-card').forEach(card => card.classList.remove('selected'));
+}
+
+function _kanbanFormatTimestamp(value){
+  if (value === undefined || value === null || value === '') return '';
+  let date = null;
+  if (typeof value === 'number') date = new Date(value > 100000000000 ? value : value * 1000);
+  else if (/^\d+(?:\.\d+)?$/.test(String(value).trim())) {
+    const n = Number(value);
+    date = new Date(n > 100000000000 ? n : n * 1000);
+  } else {
+    date = new Date(value);
+  }
+  if (!date || Number.isNaN(date.getTime())) return String(value);
+  try { return date.toLocaleString(); } catch(e) { return date.toISOString(); }
+}
+
+function _kanbanEventSummary(event){
+  const kind = event.kind || event.type || 'event';
+  const payload = event.payload || event.data || {};
+  if (payload && typeof payload === 'object') {
+    const parts = [];
+    if (payload.status) parts.push(String(payload.status));
+    if (payload.reason) parts.push(String(payload.reason));
+    if (payload.summary) parts.push(String(payload.summary));
+    if (payload.fields && Array.isArray(payload.fields)) parts.push(payload.fields.join(', '));
+    if (parts.length) return `${kind}: ${parts.join(' · ')}`;
+  }
+  return String(kind);
+}
+
 function _kanbanFormatDetailValue(value){
   if (value === undefined || value === null || value === '') return '';
   if (typeof value === 'object') {
@@ -1198,7 +1240,7 @@ function _kanbanDetailSection(cls, title, inner, emptyKey){
 function _kanbanCommentHtml(comment){
   const body = comment.body || comment.text || comment.content || '';
   const by = comment.author || comment.created_by || comment.actor || '';
-  const at = comment.created_at || comment.ts || '';
+  const at = _kanbanFormatTimestamp(comment.created_at || comment.ts || '');
   return `<div class="kanban-detail-row">
     <div class="kanban-detail-row-main">${esc(body)}</div>
     <div class="kanban-detail-row-meta">${esc([by, at].filter(Boolean).join(' · '))}</div>
@@ -1206,11 +1248,10 @@ function _kanbanCommentHtml(comment){
 }
 
 function _kanbanEventHtml(event){
-  const kind = event.kind || event.type || 'event';
-  const at = event.created_at || event.ts || '';
+  const at = _kanbanFormatTimestamp(event.created_at || event.ts || '');
   const payload = _kanbanFormatDetailValue(event.payload || event.data || '');
   return `<div class="kanban-detail-row">
-    <div class="kanban-detail-row-main">${esc(kind)}</div>
+    <div class="kanban-detail-row-main">${esc(_kanbanEventSummary(event))}</div>
     ${payload ? `<pre class="kanban-detail-pre">${esc(payload)}</pre>` : ''}
     <div class="kanban-detail-row-meta">${esc(at)}</div>
   </div>`;
@@ -1219,8 +1260,8 @@ function _kanbanEventHtml(event){
 function _kanbanRunHtml(run){
   const status = run.status || run.state || run.result || '';
   const label = run.run_id || run.id || run.worker || t('kanban_task');
-  const started = run.started_at || run.created_at || '';
-  const finished = run.finished_at || run.completed_at || '';
+  const started = _kanbanFormatTimestamp(run.started_at || run.created_at || '');
+  const finished = _kanbanFormatTimestamp(run.finished_at || run.completed_at || '');
   const detail = run.error || run.summary || run.log_tail || '';
   return `<div class="kanban-detail-row">
     <div class="kanban-detail-row-main">${esc(label)}${status ? ` · ${esc(status)}` : ''}</div>
@@ -1258,8 +1299,8 @@ async function createKanbanTask(){
 async function updateKanbanTask(taskId, patch){
   if (!taskId || !patch) return;
   try {
-    const updated = await api('/api/kanban/tasks/' + encodeURIComponent(taskId) + '/patch', {
-      method: 'POST',
+    const updated = await api('/api/kanban/tasks/' + encodeURIComponent(taskId), {
+      method: 'PATCH',
       body: JSON.stringify(patch),
     });
     await loadKanban(true);
@@ -1283,6 +1324,7 @@ async function addKanbanComment(taskId){
 
 function _kanbanRenderTaskDetail(data){
   const task = data.task || {};
+  const log = data.log || {};
   const title = _kanbanTaskTitle(task);
   const body = _kanbanTaskBody(task) || t('kanban_no_description');
   const meta = _kanbanTaskMeta(task);
@@ -1293,7 +1335,10 @@ function _kanbanRenderTaskDetail(data){
   const statusButtons = ['triage', 'todo', 'ready', 'running', 'blocked', 'done', 'archived'].map(status =>
     `<button class="btn secondary" onclick="updateKanbanTask('${esc(task.id)}',{status:'${status}'})">${esc(_kanbanColumnLabel(status))}</button>`
   ).join('') + `<button class="btn secondary" onclick="blockKanbanTask('${esc(task.id)}')">${esc(t('kanban_block'))}</button><button class="btn secondary" onclick="unblockKanbanTask('${esc(task.id)}')">${esc(t('kanban_unblock'))}</button>`;
-  return `<div class="kanban-task-preview-title">${esc(title)}</div>
+  return `<div class="kanban-task-preview-header">
+      <button class="btn secondary kanban-back-btn" onclick="closeKanbanTaskDetail()">${esc(t('kanban_back_to_board'))}</button>
+      <div class="kanban-task-preview-title">${esc(title)}</div>
+    </div>
     <div class="kanban-task-preview-body">${esc(body)}</div>
     ${meta.length ? `<div class="kanban-meta">${esc(meta.join(' · '))}</div>` : ''}
     <div class="kanban-status-actions">${statusButtons}</div>

@@ -70,7 +70,8 @@ def test_kanban_write_mvp_has_native_controls_and_api_calls():
     assert "async function addKanbanComment" in PANELS
     assert "api('/api/kanban/tasks'," in PANELS
     assert "method: 'POST'" in PANELS
-    assert "'/api/kanban/tasks/' + encodeURIComponent(taskId) + '/patch'" in PANELS
+    assert "'/api/kanban/tasks/' + encodeURIComponent(taskId)" in PANELS
+    assert "method: 'PATCH'" in PANELS
     assert "'/api/kanban/tasks/' + encodeURIComponent(taskId) + '/comments'" in PANELS
     assert "kanban-status-actions" in PANELS
     assert "kanban-comment-form" in PANELS
@@ -216,3 +217,67 @@ def test_kanban_ui_parity_polish_css_and_i18n_exist():
         if re.search(rf"\b{re.escape(key)}\s*:", body) is None
     ]
     assert missing == []
+
+
+
+def test_kanban_review_feedback_static_ui_fixes_exist():
+    assert "function closeKanbanTaskDetail" in PANELS
+    assert "kanban-back-btn" in PANELS
+    assert "function _kanbanFormatTimestamp" in PANELS
+    assert "function _kanbanEventSummary" in PANELS
+    assert "data.log || {}" in PANELS
+    assert ".kanban-task-preview-header" in STYLE
+    assert ".kanban-back-btn" in STYLE
+    assert "@media (max-width: 640px)" in STYLE
+    assert "scroll-snap-type" in STYLE
+    assert "kanban-stats-grid" in PANELS
+
+
+def test_kanban_task_detail_renderer_executes_with_log_and_formats_feedback():
+    import json
+    import subprocess
+    script = """
+const fs = require('fs');
+const vm = require('vm');
+const src = fs.readFileSync('static/panels.js', 'utf8');
+function esc(value) {
+  return String(value == null ? '' : value).replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]));
+}
+const context = {
+  console,
+  setInterval(){ return 1; },
+  document: { querySelectorAll(){ return []; }, getElementById(){ return null; }, addEventListener(){} },
+  window: { addEventListener(){} },
+  t(key){
+    const map = {
+      kanban_no_description:'No description', kanban_comments_count:'Comments ({0})', kanban_events_count:'Events ({0})',
+      kanban_links:'Links', kanban_runs_count:'Runs ({0})', kanban_worker_log:'Worker log', kanban_empty:'Empty',
+      kanban_no_comments:'No comments', kanban_no_events:'No events', kanban_no_runs:'No runs', kanban_add_comment:'Add comment',
+      kanban_block:'Block', kanban_unblock:'Unblock', kanban_back_to_board:'Back to board', kanban_task:'Task',
+      kanban_status_triage:'Triage', kanban_status_todo:'Todo', kanban_status_ready:'Ready', kanban_status_running:'Running',
+      kanban_status_blocked:'Blocked', kanban_status_done:'Done', kanban_status_archived:'Archived'
+    };
+    return map[key] || key;
+  },
+  esc, $(){ return null; }, api(){}, showToast(){}, li(){ return ''; }, S: {}
+};
+vm.createContext(context);
+vm.runInContext(src, context);
+const html = vm.runInContext(`_kanbanRenderTaskDetail({
+  task:{id:'t_1', title:'Demo', status:'ready', body:'Body'},
+  comments:[{body:'hello', author:'webui', created_at:1777931496}],
+  events:[{kind:'blocked', payload:{reason:'waiting'}, created_at:1777931496}],
+  links:{parents:['t_0'], children:[]},
+  runs:[],
+  log:{content:'worker log'}
+})`, context);
+console.log(JSON.stringify({html}));
+"""
+    result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    html = json.loads(result.stdout)["html"]
+    assert "worker log" in html
+    assert "kanban-back-btn" in html
+    assert "Back to board" in html
+    assert "1777931496" not in html
+    assert "waiting" in html
+    assert "ReferenceError" not in html
