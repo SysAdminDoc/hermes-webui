@@ -43,6 +43,12 @@ class QuietHTTPServer(ThreadingHTTPServer):
         A process can be alive and still stop accepting/dispatching requests.
         Exposing this heartbeat on /health gives supervisors and watchdogs a
         cheap signal that the accept loop is still moving.
+
+        Note: this method is called only from the single ``serve_forever()``
+        thread in CPython socketserver, so the un-locked ``+=`` increment is
+        safe — there is no other thread mutating these counters. The /health
+        readers may see a stale value momentarily but never an inconsistent
+        one (Python int reads are atomic). Per Opus advisor on stage-297.
         """
         self.accept_loop_requests_total += 1
         self.accept_loop_last_request_at = time.time()

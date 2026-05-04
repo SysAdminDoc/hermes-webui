@@ -1689,17 +1689,21 @@ def _streams_lock_health(timeout_seconds: float = 0.5) -> dict:
         STREAMS_LOCK.release()
 
 
-def _deep_health_checks() -> tuple[dict, bool]:
+def _deep_health_checks(stream_check: dict | None = None) -> tuple[dict, bool]:
     """Run cheap probes that exercise the state paths used by the UI shell.
 
     Plain /health intentionally stays tiny. /health?deep=1 is for supervisors
     and watchdogs that need to know whether the process can still touch the
     shared stream map, sidebar/session path, project state, and Hermes state.db
     without hitting the RST-before-write failure mode from #1458.
+
+    `stream_check` is the result from a prior `_streams_lock_health()` call;
+    if provided, it's reused so we don't acquire `STREAMS_LOCK` twice on the
+    same /health?deep=1 request (per Opus advisor on stage-297).
     """
     checks: dict[str, dict] = {}
 
-    checks["streams_lock"] = _streams_lock_health()
+    checks["streams_lock"] = stream_check if stream_check is not None else _streams_lock_health()
     if checks["streams_lock"].get("status") != "ok":
         return checks, False
 
@@ -1776,7 +1780,7 @@ def _handle_health(handler, parsed):
         if stream_check.get("status") != "ok":
             payload["checks"] = {"streams_lock": stream_check}
             return j(handler, payload, status=503)
-        checks, healthy = _deep_health_checks()
+        checks, healthy = _deep_health_checks(stream_check=stream_check)
         payload["checks"] = checks
         if not healthy:
             payload["status"] = "degraded"
