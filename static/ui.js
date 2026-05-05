@@ -3203,6 +3203,7 @@ function dismissUpdate(){
   sessionStorage.setItem('hermes-update-dismissed','1');
 }
 function _isUpdateApplyNetworkError(error){
+  if(error && error.status) return false;
   const message=(error&&error.message)||String(error||'');
   return /Failed to fetch|NetworkError|Load failed/i.test(message);
 }
