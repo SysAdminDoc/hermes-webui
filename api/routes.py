@@ -245,52 +245,119 @@ def _cron_output_content_window(text: str, limit: int = _CRON_OUTPUT_CONTENT_LIM
     return text[-limit:]
 
 
-def _run_cron_tracked(job, profile_home=None):
+
+
+def _cron_job_for_api(job: dict) -> dict:
+    """Return a cron job payload with the #617 optional profile field present.
+
+    Legacy jobs intentionally persist without ``profile`` so they keep the
+    scheduler's server-default behavior. The API still returns ``profile: None``
+    so the UI can label that state explicitly instead of guessing.
+    """
+    payload = dict(job or {})
+    payload.setdefault("profile", None)
+    return payload
+
+
+def _cron_jobs_for_api(jobs) -> list[dict]:
+    return [_cron_job_for_api(job) for job in (jobs or [])]
+
+
+def _available_cron_profile_names() -> set[str]:
+    from api.profiles import list_profiles_api
+
+    names = {"default"}
+    for profile in list_profiles_api():
+        try:
+            name = str(profile.get("name") or "").strip()
+        except AttributeError:
+            continue
+        if name:
+            names.add(name)
+    return names
+
+
+def _normalize_cron_profile_value(value) -> str | None:
+    if value is None:
+        return None
+    profile = str(value).strip()
+    if not profile:
+        return None
+    if profile not in _available_cron_profile_names():
+        raise ValueError(f"Unknown profile: {profile}")
+    return profile
+
+
+def _profile_home_for_cron_job(job: dict):
+    """Resolve the execution profile for a cron job, with graceful fallback.
+
+    A missing/blank profile preserves legacy server-default behavior. If a job
+    points at a profile that was deleted after save, fall back to the active
+    server profile and log a warning instead of crashing the Run Now path.
+    """
+    from api.profiles import get_active_hermes_home, get_hermes_home_for_profile
+
+    raw = str((job or {}).get("profile") or "").strip()
+    if not raw:
+        return get_active_hermes_home()
+    if raw not in _available_cron_profile_names():
+        logger.warning(
+            "Cron job %s references missing profile %r; falling back to server default",
+            (job or {}).get("id", "?"), raw,
+        )
+        return get_active_hermes_home()
+    return get_hermes_home_for_profile(raw)
+
+
+def _run_cron_tracked(job, profile_home=None, execution_profile_home=None):
     """Wrapper that tracks running state around cron.scheduler.run_job.
 
-    ``profile_home`` pins HERMES_HOME for this worker thread so output files
-    and run metadata land in the profile that triggered the run, not the
-    process-global default. Captured at dispatch time because the thread runs
-    after the HTTP request (and its TLS profile) has already been cleared.
+    ``profile_home`` is the cron store that owns the job row/output metadata.
+    ``execution_profile_home`` is the selected per-job profile used to load
+    agent config/.env while running. When no job profile is selected, both homes
+    are the same and legacy server-default behavior is preserved.
     """
     from cron.scheduler import run_job  # import here — runs inside a worker thread
     from cron.jobs import mark_job_run, save_job_output
 
     job_id = job.get("id", "")
+    execution_profile_home = execution_profile_home or profile_home
 
-    # Pin HERMES_HOME for the duration of this thread using a dedicated
-    # context manager variant that accepts the profile home directly
-    # (threads have no TLS, so get_active_hermes_home() can't resolve).
-    ctx = None
-    if profile_home is not None:
+    def _with_cron_home(home, fn):
+        if home is None:
+            return fn()
         from api.profiles import cron_profile_context_for_home
 
-        ctx = cron_profile_context_for_home(profile_home)
-        ctx.__enter__()
+        with cron_profile_context_for_home(home):
+            return fn()
 
     try:
-        success, output, final_response, error = run_job(job)
-        save_job_output(job_id, output)
+        success, output, final_response, error = _with_cron_home(
+            execution_profile_home, lambda: run_job(job)
+        )
 
-        # Match the scheduled cron path: an apparently successful run with no
-        # final response should not leave the job looking healthy.
-        if success and not final_response:
-            success = False
-            error = "Agent completed but produced empty response (model error, timeout, or misconfiguration)"
+        # Persist output and run metadata back to the job's owning cron store,
+        # even when the selected execution profile is different.
+        def _persist_success():
+            save_job_output(job_id, output)
 
-        mark_job_run(job_id, success, error)
+            # Match the scheduled cron path: an apparently successful run with no
+            # final response should not leave the job looking healthy.
+            _success, _error = success, error
+            if _success and not final_response:
+                _success = False
+                _error = "Agent completed but produced empty response (model error, timeout, or misconfiguration)"
+
+            mark_job_run(job_id, _success, _error)
+
+        _with_cron_home(profile_home, _persist_success)
     except Exception as e:
         logger.exception("Manual cron run failed for job %s", job_id)
         try:
-            mark_job_run(job_id, False, str(e))
+            _with_cron_home(profile_home, lambda: mark_job_run(job_id, False, str(e)))
         except Exception:
             logger.debug("Failed to mark manual cron run failure for %s", job_id)
     finally:
-        if ctx is not None:
-            try:
-                ctx.__exit__(None, None, None)
-            except Exception:
-                logger.debug("Failed to release cron_profile_context for %s", job_id)
         _mark_cron_done(job_id)
 
 _PROVIDER_ALIASES = {
@@ -1576,7 +1643,32 @@ def _handle_insights(handler, parsed) -> bool:
         days = 30
 
     now = _time.time()
-    cutoff = now - (days * 86400)
+    today = _time.localtime(now)
+    today_midnight = _time.mktime((today.tm_year, today.tm_mon, today.tm_mday, 0, 0, 0, today.tm_wday, today.tm_yday, today.tm_isdst))
+    day_secs = 86400
+    first_day_ts = today_midnight - ((days - 1) * day_secs)
+    cutoff = first_day_ts
+
+    def _safe_usage_int(value) -> int:
+        try:
+            return max(int(float(value or 0)), 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _safe_cost_float(value) -> float:
+        if value is None:
+            return 0.0
+        try:
+            if isinstance(value, str):
+                value = value.strip().replace("$", "").replace(",", "")
+                if not value:
+                    return 0.0
+            return max(float(value), 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _session_usage_ts(session: dict) -> float:
+        return session.get("updated_at", session.get("created_at", 0)) or session.get("created_at", 0) or 0
 
     # Walk session index (fast, no full JSON parse)
     sessions_data = []
@@ -1592,7 +1684,7 @@ def _handle_insights(handler, parsed) -> bool:
     for entry in idx:
         created = entry.get("created_at", 0) or 0
         updated = entry.get("updated_at", 0) or 0
-        # Session is relevant if it was created or updated within the window
+        # Session is relevant if it was created or updated within the calendar window.
         if max(created, updated) < cutoff:
             continue
         sessions_data.append(entry)
@@ -1603,39 +1695,91 @@ def _handle_insights(handler, parsed) -> bool:
     total_input_tokens = 0
     total_output_tokens = 0
     total_cost = 0.0
-    model_counts = collections.Counter()
+    model_stats: dict[str, dict] = {}
+    daily_tokens: dict[str, dict] = {}
     # Activity by day of week (0=Mon .. 6=Sun)
     dow_activity = collections.Counter()
     # Activity by hour of day (0-23)
     hod_activity = collections.Counter()
 
     for s in sessions_data:
-        total_messages += max(s.get("message_count", 0) or 0, 0)
-        total_input_tokens += max(s.get("input_tokens", 0) or 0, 0)
-        total_output_tokens += max(s.get("output_tokens", 0) or 0, 0)
-        cost = s.get("estimated_cost")
-        if cost is not None:
-            try:
-                total_cost += float(cost)
-            except (ValueError, TypeError):
-                pass
+        input_tokens = _safe_usage_int(s.get("input_tokens"))
+        output_tokens = _safe_usage_int(s.get("output_tokens"))
+        cost_value = _safe_cost_float(s.get("estimated_cost"))
+        total_messages += _safe_usage_int(s.get("message_count"))
+        total_input_tokens += input_tokens
+        total_output_tokens += output_tokens
+        total_cost += cost_value
+
         model = s.get("model") or "unknown"
-        if model:
-            model_counts[model] += 1
+        bucket = model_stats.setdefault(model, {
+            "sessions": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost": 0.0,
+        })
+        bucket["sessions"] += 1
+        bucket["input_tokens"] += input_tokens
+        bucket["output_tokens"] += output_tokens
+        bucket["cost"] += cost_value
+
         # Activity patterns
-        ts = s.get("updated_at", s.get("created_at", 0)) or 0
+        ts = _session_usage_ts(s)
         if ts:
             try:
                 dt = _time.localtime(ts)
+                day_key = _time.strftime("%Y-%m-%d", dt)
+                daily_bucket = daily_tokens.setdefault(day_key, {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "sessions": 0,
+                    "cost": 0.0,
+                })
+                daily_bucket["input_tokens"] += input_tokens
+                daily_bucket["output_tokens"] += output_tokens
+                daily_bucket["sessions"] += 1
+                daily_bucket["cost"] += cost_value
                 dow_activity[dt.tm_wday] += 1
                 hod_activity[dt.tm_hour] += 1
             except Exception:
                 pass
 
     # Build model breakdown
+    total_tokens = total_input_tokens + total_output_tokens
     models_breakdown = []
-    for model, count in model_counts.most_common():
-        models_breakdown.append({"model": model, "sessions": count})
+    for model, stats in model_stats.items():
+        row_total_tokens = stats["input_tokens"] + stats["output_tokens"]
+        row_cost = round(stats["cost"], 6)
+        models_breakdown.append({
+            "model": model,
+            "sessions": stats["sessions"],
+            "input_tokens": stats["input_tokens"],
+            "output_tokens": stats["output_tokens"],
+            "total_tokens": row_total_tokens,
+            "cost": row_cost,
+            "session_share": int(round((stats["sessions"] / total_sessions) * 100)) if total_sessions else 0,
+            "token_share": int(round((row_total_tokens / total_tokens) * 100)) if total_tokens else 0,
+            "cost_share": int(round((row_cost / total_cost) * 100)) if total_cost else 0,
+        })
+    models_breakdown.sort(key=lambda r: (-r["cost"], -r["sessions"], r["model"]))
+
+    daily_series = []
+    for i in range(days):
+        day_ts = first_day_ts + (i * day_secs)
+        day_key = _time.strftime("%Y-%m-%d", _time.localtime(day_ts))
+        bucket = daily_tokens.get(day_key, {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "sessions": 0,
+            "cost": 0.0,
+        })
+        daily_series.append({
+            "date": day_key,
+            "input_tokens": bucket["input_tokens"],
+            "output_tokens": bucket["output_tokens"],
+            "sessions": bucket["sessions"],
+            "cost": round(bucket["cost"], 6),
+        })
 
     # Day-of-week labels
     dow_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -1650,9 +1794,10 @@ def _handle_insights(handler, parsed) -> bool:
         "total_messages": total_messages,
         "total_input_tokens": total_input_tokens,
         "total_output_tokens": total_output_tokens,
-        "total_tokens": total_input_tokens + total_output_tokens,
+        "total_tokens": total_tokens,
         "total_cost": round(total_cost, 6),
         "models": models_breakdown,
+        "daily_tokens": daily_series,
         "activity_by_day": dow_data,
         "activity_by_hour": hod_data,
     })
@@ -1790,6 +1935,101 @@ def _handle_health(handler, parsed):
     return j(handler, payload)
 
 
+# ── Plugin visibility endpoint (#539) ───────────────────────────────────────
+_PLUGIN_VISIBILITY_HOOKS = (
+    "pre_tool_call",
+    "post_tool_call",
+    "pre_llm_call",
+    "post_llm_call",
+)
+_PLUGIN_VISIBILITY_HOOK_SET = set(_PLUGIN_VISIBILITY_HOOKS)
+
+
+def _get_plugin_manager_for_visibility():
+    """Return Hermes Agent's plugin manager for read-only WebUI visibility."""
+    from hermes_cli.plugins import get_plugin_manager
+
+    return get_plugin_manager()
+
+
+def _clean_plugin_visibility_text(value, *, limit=240) -> str:
+    """Return bounded display text without path/callback-like internals."""
+    if value is None:
+        return ""
+    text = str(value).replace("\x00", "").strip()
+    # Display metadata should be plain labels/descriptions. Drop multiline text
+    # and common path separators rather than risk leaking local plugin paths.
+    text = " ".join(text.split())
+    if len(text) > limit:
+        text = text[: limit - 1].rstrip() + "…"
+    return text
+
+
+def _plugin_visibility_payload(manager=None) -> dict:
+    """Build a sanitized plugin/hook visibility payload for Settings.
+
+    The Hermes Agent manager stores manifests and callback objects internally.
+    This endpoint intentionally exposes only safe, user-facing metadata and the
+    four lifecycle hook names called out by the Settings visibility MVP. It
+    never includes plugin source paths, callback names, callback reprs, or raw
+    load errors because those can contain private filesystem details.
+    """
+    manager = manager or _get_plugin_manager_for_visibility()
+    manager.discover_and_load(force=False)
+
+    plugins = []
+    raw_plugins = getattr(manager, "_plugins", {}) or {}
+    for key, loaded in sorted(raw_plugins.items(), key=lambda item: str(item[0])):
+        manifest = getattr(loaded, "manifest", None)
+        if manifest is None:
+            continue
+        plugin_key = _clean_plugin_visibility_text(
+            getattr(manifest, "key", None) or key or getattr(manifest, "name", ""),
+            limit=120,
+        )
+        name = _clean_plugin_visibility_text(getattr(manifest, "name", "") or plugin_key, limit=120)
+        version = _clean_plugin_visibility_text(getattr(manifest, "version", ""), limit=80)
+        description = _clean_plugin_visibility_text(getattr(manifest, "description", ""), limit=280)
+        registered = []
+        for hook in list(getattr(manifest, "provides_hooks", []) or []) + list(getattr(loaded, "hooks_registered", []) or []):
+            hook_name = str(hook or "").strip()
+            if hook_name in _PLUGIN_VISIBILITY_HOOK_SET and hook_name not in registered:
+                registered.append(hook_name)
+        registered.sort(key=_PLUGIN_VISIBILITY_HOOKS.index)
+        plugins.append({
+            "name": name,
+            "key": plugin_key or name,
+            "version": version,
+            "description": description,
+            "enabled": bool(getattr(loaded, "enabled", False)),
+            "hooks": registered,
+        })
+
+    return {
+        "plugins": plugins,
+        "empty": not bool(plugins),
+        "supported_hooks": list(_PLUGIN_VISIBILITY_HOOKS),
+        "read_only": True,
+    }
+
+
+def _handle_plugins(handler, parsed) -> bool:
+    try:
+        return j(handler, _plugin_visibility_payload())
+    except Exception as exc:
+        logger.warning("Failed to build plugin visibility payload: %s", exc)
+        return j(
+            handler,
+            {
+                "plugins": [],
+                "empty": True,
+                "supported_hooks": list(_PLUGIN_VISIBILITY_HOOKS),
+                "read_only": True,
+                "unavailable": True,
+            },
+        )
+
+
 def handle_get(handler, parsed) -> bool:
     """Handle all GET routes. Returns True if handled, False for 404."""
 
@@ -1921,9 +2161,28 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/models/live":
         return _handle_live_models(handler, parsed)
 
+    if parsed.path == "/api/dashboard/status":
+        from api import dashboard_probe
+
+        j(handler, dashboard_probe.get_dashboard_status())
+        return True
+
+    if parsed.path == "/api/dashboard/config":
+        from api import dashboard_probe
+
+        try:
+            j(handler, dashboard_probe.get_dashboard_config())
+        except ValueError as exc:
+            bad(handler, str(exc), status=400)
+        return True
+
     # ── Providers (GET) ──
     if parsed.path == "/api/providers":
         return j(handler, get_providers())
+
+    # ── Plugins/hooks visibility (read-only, no callback/source internals) ──
+    if parsed.path == "/api/plugins":
+        return _handle_plugins(handler, parsed)
 
     if parsed.path == "/api/settings":
         settings = load_settings()
@@ -2127,6 +2386,7 @@ def handle_get(handler, parsed) -> bool:
                     "raw_source": (cli_meta or {}).get("raw_source"),
                     "session_source": (cli_meta or {}).get("session_source"),
                     "source_label": (cli_meta or {}).get("source_label"),
+                    "read_only": bool((cli_meta or {}).get("read_only")),
                     "messages": msgs,
                     "tool_calls": [],
                 }
@@ -2435,7 +2695,7 @@ def handle_get(handler, parsed) -> bool:
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
-            return j(handler, {"jobs": list_jobs(include_disabled=True)})
+            return j(handler, {"jobs": _cron_jobs_for_api(list_jobs(include_disabled=True))})
 
     if parsed.path == "/api/crons/output":
         from api.profiles import cron_profile_context
@@ -2575,6 +2835,10 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/mcp/servers":
         return _handle_mcp_servers_list(handler)
 
+    # ── MCP Tools (GET) ──
+    if parsed.path == "/api/mcp/tools":
+        return _handle_mcp_tools_list(handler)
+
     # ── Checkpoints / Rollback (GET) ──
     if parsed.path == "/api/rollback/list":
         qs = parse_qs(parsed.query)
@@ -2631,6 +2895,17 @@ def handle_post(handler, parsed) -> bool:
         from api.kanban_bridge import handle_kanban_post
 
         return handle_kanban_post(handler, parsed, body)
+    if parsed.path == "/api/dashboard/config":
+        from api import dashboard_probe
+
+        try:
+            j(handler, dashboard_probe.save_dashboard_config(body))
+        except ValueError as exc:
+            bad(handler, str(exc), status=400)
+        except Exception as exc:
+            logger.exception("dashboard config save failed")
+            bad(handler, str(exc), status=500)
+        return True
 
     if parsed.path == "/api/session/new":
         try:
@@ -2918,6 +3193,9 @@ def handle_post(handler, parsed) -> bool:
             return bad(handler, "session_id is required")
         if not all(c in '0123456789abcdefghijklmnopqrstuvwxyz_' for c in sid):
             return bad(handler, "Invalid session_id", 400)
+        cli_meta_for_delete = _lookup_cli_session_metadata(sid)
+        if cli_meta_for_delete.get("read_only"):
+            return bad(handler, "Read-only imported sessions cannot be deleted from WebUI", 400)
         is_messaging_session = _is_messaging_session_id(sid)
         # Delete from WebUI session store
         with LOCK:
@@ -3519,6 +3797,8 @@ def handle_post(handler, parsed) -> bool:
             cli_meta = _lookup_cli_session_metadata(sid)
             if not cli_meta:
                 return bad(handler, "Session not found", 404)
+            if cli_meta.get("read_only"):
+                return bad(handler, "Read-only imported sessions cannot be archived from WebUI", 400)
             if _is_messaging_session_record(cli_meta):
                 s = Session(
                     session_id=sid,
@@ -5552,8 +5832,9 @@ def _handle_cron_create(handler, body):
     except ValueError as e:
         return bad(handler, str(e))
     try:
-        from cron.jobs import create_job
+        from cron.jobs import create_job, update_job
 
+        profile = _normalize_cron_profile_value(body.get("profile"))
         job = create_job(
             prompt=body["prompt"],
             schedule=body["schedule"],
@@ -5562,7 +5843,9 @@ def _handle_cron_create(handler, body):
             skills=body.get("skills") or [],
             model=body.get("model") or None,
         )
-        return j(handler, {"ok": True, "job": job})
+        if profile is not None:
+            job = update_job(job["id"], {"profile": profile}) or job
+        return j(handler, {"ok": True, "job": _cron_job_for_api(job)})
     except Exception as e:
         return j(handler, {"error": str(e)}, status=400)
 
@@ -5574,11 +5857,21 @@ def _handle_cron_update(handler, body):
         return bad(handler, str(e))
     from cron.jobs import update_job
 
-    updates = {k: v for k, v in body.items() if k != "job_id" and v is not None}
+    try:
+        updates = {}
+        for k, v in body.items():
+            if k == "job_id":
+                continue
+            if k == "profile":
+                updates[k] = _normalize_cron_profile_value(v)
+            elif v is not None:
+                updates[k] = v
+    except ValueError as e:
+        return bad(handler, str(e))
     job = update_job(body["job_id"], updates)
     if not job:
         return bad(handler, "Job not found", 404)
-    return j(handler, {"ok": True, "job": job})
+    return j(handler, {"ok": True, "job": _cron_job_for_api(job)})
 
 
 def _handle_cron_delete(handler, body):
@@ -5624,7 +5917,8 @@ def _handle_cron_run(handler, body):
     from api.profiles import get_active_hermes_home
 
     _profile_home = get_active_hermes_home()
-    threading.Thread(target=_run_cron_tracked, args=(job, _profile_home), daemon=True).start()
+    _execution_profile_home = _profile_home_for_cron_job(job)
+    threading.Thread(target=_run_cron_tracked, args=(job, _profile_home, _execution_profile_home), daemon=True).start()
     return j(handler, {"ok": True, "job_id": job_id, "status": "running"})
 
 
@@ -7031,6 +7325,7 @@ def _handle_session_import_cli(handler, body):
                 | {
                     "messages": existing.messages,
                     "is_cli_session": True,
+                    "read_only": bool((cli_meta or {}).get("read_only")),
                 },
                 "imported": False,
             },
@@ -7057,6 +7352,7 @@ def _handle_session_import_cli(handler, body):
     cli_thread_id = None
     cli_session_key = None
     cli_platform = None
+    cli_read_only = False
     for cs in get_cli_sessions():
         if cs["session_id"] == sid:
             profile = cs.get("profile")
@@ -7074,6 +7370,7 @@ def _handle_session_import_cli(handler, body):
             cli_thread_id = cs.get("thread_id")
             cli_session_key = cs.get("session_key")
             cli_platform = cs.get("platform")
+            cli_read_only = bool(cs.get("read_only"))
             break
 
     # Use the CLI session title if available (e.g., cron job name), otherwise derive from messages
@@ -7083,6 +7380,31 @@ def _handle_session_import_cli(handler, body):
     cron_project_id = None
     if is_cron_session(sid, cli_source_tag):
         cron_project_id = ensure_cron_project()
+
+    if cli_read_only:
+        session_payload = {
+            "session_id": sid,
+            "title": title,
+            "workspace": str(get_last_workspace()),
+            "model": model,
+            "message_count": len(msgs),
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "last_message_at": updated_at or created_at,
+            "pinned": False,
+            "archived": False,
+            "project_id": None,
+            "profile": profile,
+            "is_cli_session": True,
+            "source_tag": cli_source_tag,
+            "raw_source": cli_raw_source or cli_source_tag,
+            "session_source": cli_session_source,
+            "source_label": cli_source_label,
+            "read_only": True,
+            "messages": msgs,
+            "tool_calls": [],
+        }
+        return j(handler, {"session": session_payload, "imported": False})
 
     s = import_cli_session(
         sid,
@@ -7167,33 +7489,291 @@ def _mask_secrets(obj):
     return masked
 
 
-def _server_summary(name, cfg):
+def _parse_mcp_enabled(value) -> bool:
+    """Parse Hermes MCP ``enabled`` values without raising on bad config."""
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    return True
+
+
+def _mcp_runtime_status_by_name() -> dict[str, dict]:
+    """Return already-known MCP runtime status without starting servers.
+
+    ``tools.mcp_tool.get_mcp_status()`` only reads the existing MCP registry and
+    configuration; it does not probe or spawn MCP subprocesses. If Hermes Agent
+    is unavailable, fall back to an empty map so the API remains safe.
+    """
+    try:
+        from tools.mcp_tool import get_mcp_status
+        statuses = get_mcp_status()
+    except Exception:
+        return {}
+    if not isinstance(statuses, list):
+        return {}
+    return {
+        str(entry.get("name")): entry
+        for entry in statuses
+        if isinstance(entry, dict) and entry.get("name")
+    }
+
+
+def _server_summary(name, cfg, runtime_status=None):
     """Return a safe summary of an MCP server config."""
+    runtime_status = runtime_status if isinstance(runtime_status, dict) else {}
     out = {"name": name}
+    if not isinstance(cfg, dict):
+        out.update({
+            "transport": "invalid",
+            "timeout": 120,
+            "connect_timeout": 60,
+            "enabled": False,
+            "active": False,
+            "status": "invalid_config",
+            "tool_count": None,
+        })
+        return out
+
+    enabled = _parse_mcp_enabled(cfg.get("enabled", True))
+    connected = bool(runtime_status.get("connected")) if enabled else False
     if "url" in cfg:
         out["transport"] = "http"
         # Mask auth headers
         if "headers" in cfg:
             out["headers"] = _mask_secrets(cfg["headers"])
         out["url"] = cfg["url"]
-    else:
+    elif "command" in cfg:
         out["transport"] = "stdio"
         out["command"] = cfg.get("command", "")
         out["args"] = cfg.get("args", [])
         if "env" in cfg:
             out["env"] = _mask_secrets(cfg["env"])
+    else:
+        out["transport"] = "invalid"
+        enabled = False
+        connected = False
+
     out["timeout"] = cfg.get("timeout", 120)
+    out["connect_timeout"] = cfg.get("connect_timeout", 60)
+    out["enabled"] = enabled
+    out["active"] = connected
+    if out["transport"] == "invalid":
+        out["status"] = "invalid_config"
+    elif not enabled:
+        out["status"] = "disabled"
+    elif connected:
+        out["status"] = "active"
+    else:
+        out["status"] = "configured"
+    out["tool_count"] = runtime_status.get("tools") if runtime_status else None
     return out
 
 
-def _handle_mcp_servers_list(handler):
-    """List all configured MCP servers."""
+def _mcp_safe_display_text(value, *, limit: int) -> str:
+    """Return redacted, bounded MCP text safe for WebUI inventory rows."""
+    if not isinstance(value, str):
+        value = "" if value is None else str(value)
+    value = _redact_text(value).strip()
+    value = re.sub(r"Authorization:\s*Bearer\s+\S+", "[REDACTED CREDENTIAL]", value, flags=re.I)
+    if len(value) > limit:
+        value = value[: max(0, limit - 1)].rstrip() + "…"
+    return value
+
+
+def _mcp_schema_type(schema) -> str:
+    """Return a compact, non-sensitive display type for a JSON schema node."""
+    if not isinstance(schema, dict):
+        return "unknown"
+    typ = schema.get("type")
+    if isinstance(typ, list):
+        typ = "/".join(str(t) for t in typ if t)
+    if isinstance(typ, str) and typ:
+        return typ
+    for composite in ("anyOf", "oneOf", "allOf"):
+        if isinstance(schema.get(composite), list) and schema[composite]:
+            return composite
+    if "enum" in schema:
+        return "enum"
+    return "unknown"
+
+
+def _mcp_schema_summary(schema, *, limit: int = 12) -> list[dict]:
+    """Summarize an MCP input schema without exposing raw defaults/examples.
+
+    The WebUI only needs searchable/displayable argument hints. Returning raw
+    JSON Schema can overexpose server-provided defaults, examples, enums, or
+    vendor extensions, so this strips each parameter down to name/type/required
+    and a redacted description.
+    """
+    if not isinstance(schema, dict):
+        return []
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return []
+    required = schema.get("required")
+    required_names = set(required) if isinstance(required, list) else set()
+    out = []
+    for name, prop in properties.items():
+        if len(out) >= limit:
+            break
+        if not isinstance(name, str):
+            continue
+        prop = prop if isinstance(prop, dict) else {}
+        desc = prop.get("description", "")
+        if not isinstance(desc, str):
+            desc = ""
+        desc = _mcp_safe_display_text(desc, limit=180)
+        out.append({
+            "name": name,
+            "type": _mcp_schema_type(prop),
+            "required": name in required_names,
+            "description": desc,
+        })
+    return out
+
+
+def _mcp_tool_schema_from_payload(tool):
+    if not isinstance(tool, dict):
+        return {}
+    for key in ("parameters", "inputSchema", "input_schema", "schema"):
+        value = tool.get(key)
+        if isinstance(value, dict):
+            if key == "schema" and isinstance(value.get("parameters"), dict):
+                return value["parameters"]
+            return value
+    return {}
+
+
+def _mcp_tool_summary(name, tool, server_summary):
+    """Return a safe global inventory row for one MCP tool."""
+    server_summary = server_summary if isinstance(server_summary, dict) else {}
+    if isinstance(tool, str):
+        tool = {"name": tool}
+    elif not isinstance(tool, dict):
+        tool = {}
+    tool_name = str(tool.get("name") or name or "")
+    description = tool.get("description") or ""
+    if not isinstance(description, str):
+        description = str(description)
+    description = _mcp_safe_display_text(description, limit=360)
+    return {
+        "name": tool_name,
+        "server": str(server_summary.get("name") or ""),
+        "description": description,
+        "active": bool(server_summary.get("active")),
+        "enabled": bool(server_summary.get("enabled")),
+        "status": server_summary.get("status") or "unknown",
+        "schema_summary": _mcp_schema_summary(_mcp_tool_schema_from_payload(tool)),
+    }
+
+
+def _mcp_tools_from_runtime_status(runtime_by_name, server_summaries):
+    """Read detailed MCP tool payloads from runtime status when available."""
+    tools = []
+    if not isinstance(runtime_by_name, dict):
+        return tools
+    for server_name, runtime in runtime_by_name.items():
+        if not isinstance(runtime, dict):
+            continue
+        raw_tools = runtime.get("tools")
+        if not isinstance(raw_tools, list):
+            raw_tools = runtime.get("tool_schemas")
+        if not isinstance(raw_tools, list):
+            continue
+        server_summary = server_summaries.get(str(server_name), {"name": str(server_name)})
+        for index, tool in enumerate(raw_tools):
+            fallback_name = f"{server_name}:{index}"
+            summary = _mcp_tool_summary(fallback_name, tool, server_summary)
+            if summary["name"]:
+                tools.append(summary)
+    return tools
+
+
+def _mcp_tools_from_registry(server_summaries):
+    """Read already-registered MCP tool schemas without probing MCP servers."""
+    try:
+        from tools.registry import registry
+    except Exception:
+        return []
+    tools = []
+    try:
+        names = registry.get_all_tool_names()
+    except Exception:
+        return []
+    for tool_name in names:
+        try:
+            toolset = registry.get_toolset_for_tool(tool_name)
+        except Exception:
+            continue
+        if not isinstance(toolset, str) or not toolset.startswith("mcp-"):
+            continue
+        server_name = toolset[len("mcp-"):]
+        schema = registry.get_schema(tool_name) or {}
+        server_summary = server_summaries.get(server_name, {
+            "name": server_name,
+            "enabled": True,
+            "active": False,
+            "status": "configured",
+        })
+        tools.append(_mcp_tool_summary(tool_name, schema, server_summary))
+    return tools
+
+
+def _handle_mcp_tools_list(handler):
+    """List known MCP tools from already-available runtime inventory only."""
     cfg = get_config()
     servers = cfg.get("mcp_servers", {})
     if not isinstance(servers, dict):
         servers = {}
-    result = [_server_summary(name, scfg) for name, scfg in servers.items()]
-    return j(handler, {"servers": result})
+    runtime = _mcp_runtime_status_by_name()
+    server_summaries = {
+        str(name): _server_summary(str(name), scfg, runtime.get(str(name)))
+        for name, scfg in servers.items()
+    }
+    tools = _mcp_tools_from_runtime_status(runtime, server_summaries)
+    source = "mcp_runtime_status"
+    if not tools:
+        tools = _mcp_tools_from_registry(server_summaries)
+        source = "tool_registry" if tools else "none"
+    tools.sort(key=lambda row: (row.get("server", ""), row.get("name", "")))
+    unavailable_servers = [
+        summary["name"] for summary in server_summaries.values()
+        if summary.get("enabled") and not summary.get("active")
+    ]
+    return j(handler, {
+        "tools": tools,
+        "total": len(tools),
+        "source": source,
+        "inventory_scope": "already_known_runtime_only",
+        "unavailable_servers": unavailable_servers,
+    })
+
+
+def _handle_mcp_servers_list(handler):
+    """List configured MCP servers with safe, read-only runtime visibility."""
+    cfg = get_config()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict):
+        servers = {}
+    runtime = _mcp_runtime_status_by_name()
+    result = [
+        _server_summary(name, scfg, runtime.get(str(name)))
+        for name, scfg in servers.items()
+    ]
+    return j(handler, {
+        "servers": result,
+        "toggle_supported": False,
+        "reload_required": True,
+    })
 
 
 def _handle_mcp_server_delete(handler, name):

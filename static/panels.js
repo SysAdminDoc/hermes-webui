@@ -48,10 +48,12 @@ function syncAppTitlebar() {
   const panel = (typeof _currentPanel === 'string' && _currentPanel) ? _currentPanel : 'chat';
   let mainText = '';
   let subText = '';
+  let sourceLabel = '';
   if (panel === 'chat' && typeof S !== 'undefined' && S && S.session) {
     mainText = S.session.title || (typeof t === 'function' ? t('untitled') : 'Untitled');
     const vis = Array.isArray(S.messages) ? S.messages.filter(m => m && m.role && m.role !== 'tool') : [];
     if (typeof t === 'function') subText = t('n_messages', vis.length);
+    if (S.session.is_cli_session) sourceLabel = S.session.source_label || S.session.source_tag || S.session.raw_source || '';
   } else {
     const key = APP_TITLEBAR_KEYS[panel];
     mainText = key && typeof t === 'function' ? t(key) : (panel.charAt(0).toUpperCase() + panel.slice(1));
@@ -64,7 +66,17 @@ function syncAppTitlebar() {
 
   titleEl.textContent = mainText;
   if (subEl) {
-    if (subText) { subEl.textContent = subText; subEl.hidden = false; }
+    if (subText) {
+      subEl.textContent = subText;
+      if (sourceLabel) {
+        const badge = document.createElement('span');
+        badge.className = 'topbar-source-badge';
+        badge.textContent = sourceLabel + (S.session && S.session.read_only ? ' · read-only' : '');
+        subEl.appendChild(document.createTextNode(' '));
+        subEl.appendChild(badge);
+      }
+      subEl.hidden = false;
+    }
     else { subEl.textContent = ''; subEl.hidden = true; }
   }
 
@@ -72,7 +84,7 @@ function syncAppTitlebar() {
   // as double-clicking a session title in the sidebar).  Only active on the chat
   // panel when a session is open.
   titleEl.ondblclick = null;  // remove any previous handler before adding a fresh one
-  if (panel === 'chat' && typeof S !== 'undefined' && S && S.session) {
+  if (panel === 'chat' && typeof S !== 'undefined' && S && S.session && !(S.session.read_only || S.session.is_read_only)) {
     titleEl.ondblclick = (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -270,6 +282,58 @@ function _cronStatusMeta(job) {
   };
 }
 
+
+function _cronProfileName(profile){
+  return (profile || '').toString().trim();
+}
+
+function _cronProfileLabel(profile){
+  const name = _cronProfileName(profile);
+  return name || (t('cron_profile_server_default') || 'server default');
+}
+
+function _cronProfileTitle(profile){
+  const name = _cronProfileName(profile);
+  if (name) return (t('cron_profile_label') || 'Profile') + ': ' + name;
+  return t('cron_profile_server_default_hint') || 'Uses the WebUI server default profile at run time';
+}
+
+async function loadCronProfiles(){
+  if (_cronProfilesCache) return _cronProfilesCache;
+  try {
+    const data = await api('/api/profiles');
+    _cronProfilesCache = Array.isArray(data.profiles) ? data.profiles : [];
+  } catch(e) {
+    _cronProfilesCache = [];
+  }
+  return _cronProfilesCache;
+}
+
+function _cronProfileOptions(selected){
+  const current = _cronProfileName(selected);
+  const profiles = Array.isArray(_cronProfilesCache) ? _cronProfilesCache : [];
+  const seen = new Set(['']);
+  const opts = [`<option value=""${current ? '' : ' selected'}>${esc(t('cron_profile_server_default') || 'server default')}</option>`];
+  for (const p of profiles) {
+    const name = _cronProfileName(p && p.name);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const label = p && p.is_default ? `${name} (${t('default') || 'default'})` : name;
+    opts.push(`<option value="${esc(name)}"${current === name ? ' selected' : ''}>${esc(label)}</option>`);
+  }
+  if (current && !seen.has(current)) {
+    opts.push(`<option value="${esc(current)}" selected>${esc(current)} (${esc(t('not_available') || 'not available')})</option>`);
+  }
+  return opts.join('');
+}
+
+function _refreshCronProfileSelect(selected){
+  const sel = $('cronFormProfile');
+  if (!sel) return;
+  const keep = selected === undefined ? sel.value : selected;
+  sel.innerHTML = _cronProfileOptions(keep);
+}
+
 function _cronDiagnostics(job) {
   const fields = {
     id: job.id,
@@ -297,6 +361,7 @@ async function loadCrons(animate) {
     refreshBtn.disabled = true;
   }
   try {
+    await loadCronProfiles();
     const data = await api('/api/crons');
     _cronList = data.jobs || [];
     if (!_cronList.length) {
@@ -311,10 +376,13 @@ async function loadCrons(animate) {
       item.id = 'cron-' + job.id;
       const status = _cronStatusMeta(job);
       const isNewRun = _cronNewJobIds.has(String(job.id));
+      const profileLabel = _cronProfileLabel(job.profile);
+      const profileTitle = _cronProfileTitle(job.profile);
       item.innerHTML = `
         <div class="cron-header">
           ${isNewRun ? '<span class="cron-new-dot" title="New run"></span>' : ''}
           <span class="cron-name" title="${esc(job.name)}">${esc(job.name)}</span>
+          <span class="cron-profile-badge" title="${esc(profileTitle)}">${esc(profileLabel)}</span>
           <span class="cron-status ${status.listClass}">${esc(status.label)}</span>
         </div>`;
       item.onclick = () => openCronDetail(job.id, item);
@@ -349,6 +417,8 @@ function _renderCronDetail(job){
   const schedule = job.schedule_display || (job.schedule && job.schedule.expression) || '';
   const skills = Array.isArray(job.skills) && job.skills.length ? job.skills.join(', ') : '—';
   const deliver = job.deliver || 'local';
+  const profileLabel = _cronProfileLabel(job.profile);
+  const profileTitle = _cronProfileTitle(job.profile);
   const lastError = job.last_error ? `<div class="detail-row"><div class="detail-row-label">${esc(t('error_prefix').replace(/:\s*$/,''))}</div><div class="detail-row-value" style="color:var(--accent-text)">${esc(job.last_error)}</div></div>` : '';
   const attention = status.state === 'needs_attention' || status.state === 'schedule_error';
   const croniterHint = job.last_error && /croniter/i.test(job.last_error)
@@ -375,6 +445,7 @@ function _renderCronDetail(job){
         <div class="detail-row"><div class="detail-row-label">${esc(t('cron_next'))}</div><div class="detail-row-value">${esc(nextRun)}</div></div>
         <div class="detail-row"><div class="detail-row-label">${esc(t('cron_last'))}</div><div class="detail-row-value">${esc(lastRun)}</div></div>
         <div class="detail-row"><div class="detail-row-label">Deliver</div><div class="detail-row-value">${esc(deliver)}</div></div>
+        <div class="detail-row"><div class="detail-row-label">${esc(t('cron_profile_label') || 'Profile')}</div><div class="detail-row-value"><span class="detail-badge active" title="${esc(profileTitle)}">${esc(profileLabel)}</span></div></div>
         <div class="detail-row"><div class="detail-row-label">Skills</div><div class="detail-row-value">${esc(skills)}</div></div>
         ${lastError}
       </div>
@@ -557,6 +628,7 @@ function duplicateCurrentCron(){
     schedule: job.schedule_display || (job.schedule && job.schedule.expression) || '',
     prompt: job.prompt || '',
     deliver: job.deliver || 'local',
+    profile: job.profile || '',
     isEdit: false,
   });
   if (!_cronSkillsCache) {
@@ -581,6 +653,7 @@ async function deleteCurrentCron(){
 let _cronSelectedSkills=[];
 let _cronIsDuplicate = false;
 let _cronSkillsCache=null;
+let _cronProfilesCache=null;
 
 function openCronCreate(){
   if (typeof switchPanel === 'function' && _currentPanel !== 'tasks') switchPanel('tasks');
@@ -589,9 +662,10 @@ function openCronCreate(){
   _cronMode = 'create';
   _cronIsDuplicate = false;
   _cronSelectedSkills = [];
-  _renderCronForm({ name:'', schedule:'', prompt:'', deliver:'local', isEdit:false });
+  _renderCronForm({ name:'', schedule:'', prompt:'', deliver:'local', profile:'', isEdit:false });
   _cronSkillsCache = null;
   api('/api/skills').then(d=>{_cronSkillsCache=d.skills||[]; _bindCronSkillPicker();}).catch(()=>{});
+  loadCronProfiles().then(()=>_refreshCronProfileSelect('')).catch(()=>{});
 }
 
 function openCronEdit(job){
@@ -605,6 +679,7 @@ function openCronEdit(job){
     schedule: job.schedule_display || (job.schedule && job.schedule.expression) || '',
     prompt: job.prompt || '',
     deliver: job.deliver || 'local',
+    profile: job.profile || '',
     isEdit: true,
   });
   if (!_cronSkillsCache) {
@@ -612,9 +687,10 @@ function openCronEdit(job){
   } else {
     _bindCronSkillPicker();
   }
+  loadCronProfiles().then(()=>_refreshCronProfileSelect(job.profile || '')).catch(()=>{});
 }
 
-function _renderCronForm({ name, schedule, prompt, deliver, isEdit }){
+function _renderCronForm({ name, schedule, prompt, deliver, profile, isEdit }){
   const title = $('taskDetailTitle');
   const body = $('taskDetailBody');
   const empty = $('taskDetailEmpty');
@@ -644,6 +720,13 @@ function _renderCronForm({ name, schedule, prompt, deliver, isEdit }){
             ${deliverOpt('discord','Discord')}
             ${deliverOpt('telegram','Telegram')}
           </select>
+        </div>
+        <div class="detail-form-row">
+          <label for="cronFormProfile">${esc(t('cron_profile_label') || 'Profile')}</label>
+          <select id="cronFormProfile">
+            ${_cronProfileOptions(profile)}
+          </select>
+          <div class="detail-form-hint">${esc(t('cron_profile_server_default_hint') || 'Uses the WebUI server default profile at run time')}</div>
         </div>
         <div class="detail-form-row">
           <label for="cronFormSkillSearch">${esc(t('cron_skills_label') || 'Skills')}</label>
@@ -729,18 +812,20 @@ async function saveCronForm(){
   const schEl=$('cronFormSchedule');
   const promptEl=$('cronFormPrompt');
   const delivEl=$('cronFormDeliver');
+  const profileEl=$('cronFormProfile');
   const errEl=$('cronFormError');
   if(!schEl||!promptEl||!errEl) return;
   const name=(nameEl?nameEl.value:'').trim();
   const schedule=schEl.value.trim();
   const prompt=promptEl.value.trim();
   const deliver=delivEl?delivEl.value:'local';
+  const profile=profileEl?profileEl.value:'';
   errEl.style.display='none';
   if(!schedule){errEl.textContent=t('cron_schedule_required_example');errEl.style.display='';return;}
   if(!prompt){errEl.textContent=t('cron_prompt_required');errEl.style.display='';return;}
   try{
     if (_editingCronId) {
-      const updates = {job_id: _editingCronId, schedule, prompt};
+      const updates = {job_id: _editingCronId, schedule, prompt, profile: profile};
       if (name) updates.name = name;
       await api('/api/crons/update', {method:'POST', body: JSON.stringify(updates)});
       const editedId = _editingCronId;
@@ -752,7 +837,7 @@ async function saveCronForm(){
       if (job) openCronDetail(editedId);
       return;
     }
-    const body={schedule,prompt,deliver};
+    const body={schedule,prompt,deliver,profile: profile};
     if(_cronIsDuplicate) body.enabled=false;
     if(name)body.name=name;
     if(_cronSelectedSkills.length)body.skills=_cronSelectedSkills;
@@ -1923,9 +2008,15 @@ async function loadInsights(animate) {
 }
 
 function _renderInsights(d, box) {
-  const fmtNum = n => n.toLocaleString();
-  const fmtCost = c => c > 0 ? '$' + c.toFixed(4) : t('insights_no_cost');
-  const fmtTokens = n => n >= 1e6 ? (n/1e6).toFixed(1) + 'M' : n >= 1e3 ? (n/1e3).toFixed(1) + 'K' : fmtNum(n);
+  const fmtNum = n => Number(n || 0).toLocaleString();
+  const fmtCost = c => {
+    const value = Number(c || 0);
+    return value > 0 ? '$' + value.toFixed(value < 1 ? 4 : 2) : t('insights_no_cost');
+  };
+  const fmtTokens = n => {
+    const value = Number(n || 0);
+    return value >= 1e6 ? (value/1e6).toFixed(1) + 'M' : value >= 1e3 ? (value/1e3).toFixed(1) + 'K' : fmtNum(value);
+  };
 
   // Overview cards
   const overviewCards = [
@@ -1935,16 +2026,39 @@ function _renderInsights(d, box) {
     { label: t('insights_cost'), value: fmtCost(d.total_cost), icon: li('dollar-sign', 18) },
   ];
 
+  // Daily token trend
+  const dailyTokens = Array.isArray(d.daily_tokens) ? d.daily_tokens : [];
+  let dailyHtml = '';
+  if (dailyTokens.length) {
+    const maxDailyTokens = Math.max(...dailyTokens.map(r => Number(r.input_tokens || 0) + Number(r.output_tokens || 0)), 1);
+    const labelEvery = Math.max(Math.ceil(dailyTokens.length / 7), 1);
+    dailyHtml = `<div class="insights-card"><div class="insights-card-title">${esc(t('insights_daily_tokens'))}</div><div class="insights-daily-token-chart">` +
+      dailyTokens.map((r, idx) => {
+        const input = Number(r.input_tokens || 0);
+        const output = Number(r.output_tokens || 0);
+        const inputPct = Math.max((input / maxDailyTokens) * 100, input ? 2 : 0).toFixed(1);
+        const outputPct = Math.max((output / maxDailyTokens) * 100, output ? 2 : 0).toFixed(1);
+        const showLabel = idx === 0 || idx === dailyTokens.length - 1 || idx % labelEvery === 0;
+        const title = `${r.date} · ${fmtTokens(input)} ${t('insights_input_tokens')} · ${fmtTokens(output)} ${t('insights_output_tokens')} · ${fmtCost(r.cost)} · ${fmtNum(r.sessions)} ${t('insights_sessions')}`;
+        return `<div class="insights-daily-bar" title="${esc(title)}"><div class="insights-daily-stack" aria-label="${esc(title)}"><div class="insights-daily-bar-output" style="height:${outputPct}%"></div><div class="insights-daily-bar-input" style="height:${inputPct}%"></div></div><span>${showLabel ? esc(String(r.date).slice(5)) : ''}</span></div>`;
+      }).join('') +
+      `</div><div class="insights-daily-legend"><span><i class="insights-daily-legend-input"></i>${esc(t('insights_input_tokens'))}</span><span><i class="insights-daily-legend-output"></i>${esc(t('insights_output_tokens'))}</span></div></div>`;
+  } else {
+    dailyHtml = `<div class="insights-card"><div class="insights-card-title">${esc(t('insights_daily_tokens'))}</div><div class="insights-empty">${esc(t('insights_no_usage_data'))}</div></div>`;
+  }
+
   // Models table
   let modelsHtml = '';
   if (d.models && d.models.length) {
-    const totalSess = d.models.reduce((a, m) => a + m.sessions, 0) || 1;
-    modelsHtml = `<div class="insights-card"><div class="insights-card-title">${esc(t('insights_models'))}</div><div class="insights-table"><div class="insights-table-head"><span>Model</span><span>Sessions</span><span>Share</span></div>` +
+    modelsHtml = `<div class="insights-card"><div class="insights-card-title">${esc(t('insights_models'))}</div><div class="insights-table insights-model-table"><div class="insights-table-head"><span>${esc(t('insights_model_name'))}</span><span>${esc(t('insights_model_sessions'))}</span><span>${esc(t('insights_model_tokens'))}</span><span>${esc(t('insights_model_cost'))}</span><span>${esc(t('insights_model_share'))}</span></div>` +
       d.models.map(m => {
-        const pct = ((m.sessions / totalSess) * 100).toFixed(0);
-        return `<div class="insights-table-row"><span class="insights-model-name" title="${esc(m.model)}">${esc(m.model)}</span><span>${m.sessions}</span><span>${pct}%</span></div>`;
+        const share = Number(m.cost_share || m.token_share || m.session_share || 0);
+        const title = `${m.model} · ${fmtTokens(m.input_tokens)} ${t('insights_input_tokens')} · ${fmtTokens(m.output_tokens)} ${t('insights_output_tokens')}`;
+        return `<div class="insights-table-row"><span class="insights-model-name" title="${esc(m.model)}">${esc(m.model)}</span><span>${fmtNum(m.sessions)}</span><span class="insights-model-tokens" title="${esc(title)}">${fmtTokens(m.total_tokens || 0)}</span><span class="insights-model-cost">${fmtCost(m.cost)}</span><span>${share}%</span></div>`;
       }).join('') +
       `</div></div>`;
+  } else {
+    modelsHtml = `<div class="insights-card"><div class="insights-card-title">${esc(t('insights_models'))}</div><div class="insights-empty">${esc(t('insights_no_usage_data'))}</div></div>`;
   }
 
   // Activity by day of week
@@ -1995,6 +2109,7 @@ function _renderInsights(d, box) {
     <div class="insights-grid">
       ${overviewCards.map(c => `<div class="insights-stat"><div class="insights-stat-icon">${c.icon}</div><div class="insights-stat-info"><div class="insights-stat-value">${c.value}</div><div class="insights-stat-label">${esc(c.label)}</div></div></div>`).join('')}
     </div>
+    ${dailyHtml}
     <div class="insights-row">
       ${tokenCards}
       ${modelsHtml}
@@ -3739,24 +3854,25 @@ let _settingsPreferencesAutosaveTimer = null;
 let _settingsPreferencesAutosaveRetryPayload = null;
 
 function switchSettingsSection(name){
-  const section=(name==='appearance'||name==='preferences'||name==='providers'||name==='system')?name:'conversation';
+  const section=(name==='appearance'||name==='preferences'||name==='providers'||name==='plugins'||name==='system')?name:'conversation';
   _settingsSection=section;
   _currentSettingsSection=section;
-  const map={conversation:'Conversation',appearance:'Appearance',preferences:'Preferences',providers:'Providers',system:'System'};
+  const map={conversation:'Conversation',appearance:'Appearance',preferences:'Preferences',providers:'Providers',plugins:'Plugins',system:'System'};
   // Sidebar menu items
   document.querySelectorAll('#settingsMenu .side-menu-item').forEach(it=>{
     it.classList.toggle('active', it.dataset.settingsSection===section);
   });
   // Panes in main
-  ['conversation','appearance','preferences','providers','system'].forEach(key=>{
+  ['conversation','appearance','preferences','providers','plugins','system'].forEach(key=>{
     const pane=$('settingsPane'+map[key]);
     if(pane) pane.classList.toggle('active', key===section);
   });
   // Sync mobile dropdown
   const dd=$('settingsSectionDropdown');
   if(dd && dd.value!==section) dd.value=section;
-  // Lazy-load providers when the tab is opened
+  // Lazy-load integration panels when their tabs are opened
   if(section==='providers') loadProvidersPanel();
+  if(section==='plugins') loadPluginsPanel();
 }
 
 function _syncHermesPanelSessionActions(){
@@ -4272,11 +4388,67 @@ async function loadSettingsPanel(){
       if(disableBtn) disableBtn.style.display='none';
     }
     _syncHermesPanelSessionActions();
+    if(typeof loadDashboardSettings==='function') loadDashboardSettings();
     loadProvidersPanel(); // load provider cards in background
+    loadPluginsPanel(); // load plugin/hook visibility in background
     switchSettingsSection(_settingsSection);
   }catch(e){
     showToast(t('settings_load_failed')+e.message);
   }
+}
+
+
+// ── Plugins panel (read-only plugin/hook visibility) ───────────────────────
+
+async function loadPluginsPanel(){
+  const list=$('pluginsList');
+  const empty=$('pluginsEmpty');
+  if(!list) return;
+  try{
+    const data=await api('/api/plugins');
+    const plugins=Array.isArray((data||{}).plugins)?data.plugins:[];
+    list.innerHTML='';
+    if(plugins.length===0){
+      list.style.display='none';
+      if(empty) empty.style.display='';
+      return;
+    }
+    if(empty) empty.style.display='none';
+    list.style.display='';
+    for(const plugin of plugins){
+      list.appendChild(_buildPluginCard(plugin));
+    }
+  }catch(e){
+    list.innerHTML='<div style="color:var(--error);padding:12px;font-size:13px">Failed to load plugins: '+esc(e.message||String(e))+'</div>';
+  }
+}
+
+function _buildPluginCard(plugin){
+  const card=document.createElement('div');
+  card.className='provider-card plugin-card';
+  card.dataset.plugin=(plugin&&plugin.key)||'';
+  const hooks=Array.isArray(plugin&&plugin.hooks)?plugin.hooks:[];
+  const hookHtml=hooks.length
+    ? hooks.map(h=>`<span class="plugin-hook-badge">${esc(h)}</span>`).join('')
+    : '<span class="plugin-hook-empty">No registered lifecycle hooks</span>';
+  const version=(plugin&&plugin.version)?` · v${esc(plugin.version)}`:'';
+  const desc=(plugin&&plugin.description)?esc(plugin.description):'No description provided.';
+  const enabled=plugin&&plugin.enabled!==false;
+  card.innerHTML=`
+    <div class="provider-card-header plugin-card-header">
+      <div class="provider-card-info">
+        <div class="provider-card-name">${esc((plugin&&plugin.name)||'Unnamed plugin')}</div>
+        <div class="provider-card-meta">${esc((plugin&&plugin.key)||'plugin')}${version}</div>
+      </div>
+      <span class="provider-card-badge ${enabled?'':'plugin-card-badge-disabled'}">${enabled?'Enabled':'Disabled'}</span>
+    </div>
+    <div class="provider-card-body plugin-card-body">
+      <div class="provider-card-hint">${desc}</div>
+      <div class="provider-card-label">Registered hooks</div>
+      <div class="plugin-hook-list">${hookHtml}</div>
+    </div>
+  `;
+  return card;
 }
 
 // ── Providers panel ───────────────────────────────────────────────────────
@@ -4885,93 +5057,104 @@ function dismissErrorBanner(){
 
 
 // ── MCP Server Management ──
+function _mcpStatusLabel(status){
+  const key={
+    active:'mcp_status_active',
+    configured:'mcp_status_configured',
+    disabled:'mcp_status_disabled',
+    invalid_config:'mcp_status_invalid_config',
+  }[status]||'mcp_status_unknown';
+  return t(key);
+}
 function loadMcpServers(){
   const list=$('mcpServerList');
   if(!list) return;
+  list.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:6px 0">${esc(t('loading'))}</div>`;
   api('/api/mcp/servers').then(r=>{
-    if(!r||!r.servers) return;
+    if(!r||!Array.isArray(r.servers)) return;
     if(!r.servers.length){
-      list.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:6px 0">${t('mcp_no_servers')}</div>`;
+      list.innerHTML=`<div class="mcp-empty-state" style="color:var(--muted);font-size:12px;padding:6px 0">${esc(t('mcp_no_servers'))}</div>`;
       return;
     }
+    const toggleNote=r.toggle_supported?'':'<div class="mcp-readonly-note">'+esc(t('mcp_toggle_followup'))+'</div>';
     list.innerHTML=r.servers.map(s=>{
-      const transportLabel=s.transport==='http'?'HTTP':s.transport==='stdio'?'stdio':(''+s.transport);
+      const transportLabel=s.transport==='http'?'HTTP':s.transport==='stdio'?'stdio':(''+(s.transport||'unknown'));
       const transportClass=s.transport==='http'?'mcp-http':s.transport==='stdio'?'mcp-stdio':'mcp-unknown';
-      const badge=`<span class="mcp-transport-badge ${transportClass}">${esc(transportLabel)}</span>`;
-      const detail=s.transport==='http'?s.url:`${s.command} ${s.args?s.args.join(' '):''}`;
+      const transportBadge=`<span class="mcp-transport-badge ${transportClass}">${esc(transportLabel)}</span>`;
+      const status=s.status||'configured';
+      const statusBadge=`<span class="mcp-status-badge mcp-status-${esc(status)}">${esc(_mcpStatusLabel(status))}</span>`;
+      const toolCount=s.tool_count===null||typeof s.tool_count==='undefined'?'—':String(s.tool_count);
+      const detail=s.transport==='http'
+        ? (s.url||'')
+        : (s.transport==='stdio'?`${s.command||''} ${Array.isArray(s.args)?s.args.join(' '):''}`:t('mcp_status_invalid_config'));
       const envInfo=s.env?Object.entries(s.env).map(([k,v])=>`${k}=${v}`).join(', '):'';
+      const headersInfo=s.headers?Object.entries(s.headers).map(([k,v])=>`${k}=${v}`).join(', '):'';
+      const secretInfo=[envInfo,headersInfo].filter(Boolean).join(' | ');
       return `<div class="mcp-server-row">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="mcp-server-name">${esc(s.name)}</span>${badge}
+        <div class="mcp-server-row-head">
+          <span class="mcp-server-name">${esc(s.name)}</span>
+          ${transportBadge}
+          ${statusBadge}
         </div>
-        <div class="mcp-server-detail">${esc(detail)}${envInfo?' | '+esc(envInfo):''}</div>
-        <button class="mcp-delete-btn" data-mcp-name="${esc(s.name)}" title="Delete">&times;</button>
+        <div class="mcp-server-detail">${esc(detail)}${secretInfo?' | '+esc(secretInfo):''}</div>
+        <div class="mcp-server-meta"><span class="mcp-tool-count">${esc(t('mcp_tool_count',toolCount))}</span><span>${esc(t(s.enabled===false?'mcp_enabled_no':'mcp_enabled_yes'))}</span></div>
       </div>`;
-    }).join('');
-  }).catch(()=>{list.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:6px 0">${t('mcp_load_failed')}</div>`});
-  // Delegate delete-button clicks — uses data-mcp-name to avoid inline onclick XSS
-  if(list&&!list._mcpDeleteBound){
-    list._mcpDeleteBound=true;
-    list.addEventListener('click',function(e){
-      const btn=e.target.closest('.mcp-delete-btn');
-      if(!btn) return;
-      const name=btn.getAttribute('data-mcp-name');
-      if(name) deleteMcpServer(name);
-    });
-  }
+    }).join('')+toggleNote;
+  }).catch(()=>{list.innerHTML=`<div class="mcp-error-state" style="color:#ef4444;font-size:12px;padding:6px 0">${esc(t('mcp_load_failed'))}</div>`});
 }
-
-function showMcpAddForm(){
-  const wrap=$('mcpAddFormWrap');
-  if(wrap) wrap.style.display='block';
-}
-function hideMcpAddForm(){
-  const wrap=$('mcpAddFormWrap');
-  if(wrap) wrap.style.display='none';
-  ['mcpName','mcpCommand','mcpArgs','mcpUrl','mcpTimeout'].forEach(id=>{
-    const el=$(id);if(el)el.value=id==='mcpTimeout'?'120':'';
+let _mcpToolsCache=[];
+function _filterMcpToolsForSearch(tools, query){
+  const q=(query||'').trim().toLowerCase();
+  if(!q) return Array.isArray(tools)?tools:[];
+  return (Array.isArray(tools)?tools:[]).filter(tool=>{
+    const hay=[tool.name,tool.server,tool.description].map(v=>String(v||'').toLowerCase()).join(' ');
+    return hay.includes(q);
   });
-  const tr=$('mcpTransport');if(tr)tr.value='stdio';
-  mcpTransportChanged();
 }
-function mcpTransportChanged(){
-  const tr=$('mcpTransport');
-  const isHttp=tr&&tr.value==='http';
-  const cmdF=$('mcpCommandField');if(cmdF)cmdF.style.display=isHttp?'none':'';
-  const argsF=$('mcpArgsField');if(argsF)argsF.style.display=isHttp?'none':'';
-  const urlF=$('mcpUrlField');if(urlF)urlF.style.display=isHttp?'block':'none';
+function _mcpToolSchemaText(schemaSummary){
+  if(!Array.isArray(schemaSummary)||!schemaSummary.length) return t('mcp_tools_schema_empty');
+  return schemaSummary.map(p=>{
+    const req=p.required?'*':'';
+    const desc=p.description?` — ${p.description}`:'';
+    return `${p.name}${req}: ${p.type||'unknown'}${desc}`;
+  }).join('\n');
 }
-function saveMcpServer(){
-  const name=($('mcpName')||{}).value||'';
-  if(!name.trim()){showToast(t('mcp_name_required'));return;}
-  const tr=($('mcpTransport')||{}).value||'stdio';
-  const timeout=parseInt(($('mcpTimeout')||{}).value)||120;
-  const body={timeout};
-  if(tr==='http'){
-    body.url=($('mcpUrl')||{}).value||'';
-    if(!body.url.trim()){showToast(t('mcp_url_required'));return;}
-  }else{
-    body.command=($('mcpCommand')||{}).value||'';
-    if(!body.command.trim()){showToast(t('mcp_command_required'));return;}
-    const argsStr=($('mcpArgs')||{}).value||'';
-    if(argsStr.trim()) body.args=argsStr.split(',').map(a=>a.trim()).filter(Boolean);
+function _renderMcpTools(tools, query){
+  const list=$('mcpToolList');
+  if(!list) return;
+  const filtered=_filterMcpToolsForSearch(tools, query);
+  if(!filtered.length){
+    const key=query?'mcp_tools_no_matches':'mcp_tools_no_tools';
+    list.innerHTML=`<div class="mcp-tool-empty-state" style="color:var(--muted);font-size:12px;padding:6px 0">${esc(t(key))}</div>`;
+    return;
   }
-  const encName=encodeURIComponent(name.trim());
-  api(`/api/mcp/servers/${encName}`,{method:'PUT',body:JSON.stringify(body)})
-    .then(r=>{
-      if(r&&r.ok){showToast(t('mcp_saved'));hideMcpAddForm();loadMcpServers();}
-      else{showToast((r&&r.error)||t('mcp_save_failed'));}
-    }).catch(()=>{showToast(t('mcp_save_failed'));});
+  list.innerHTML=filtered.map(tool=>{
+    const status=tool.status||'unknown';
+    const statusBadge=`<span class="mcp-status-badge mcp-status-${esc(status)}">${esc(_mcpStatusLabel(status))}</span>`;
+    const schemaText=_mcpToolSchemaText(tool.schema_summary);
+    return `<div class="mcp-tool-row">
+      <div class="mcp-server-row-head">
+        <span class="mcp-tool-name">${esc(tool.name)}</span>
+        <span class="mcp-tool-server">${esc(tool.server||'unknown')}</span>
+        ${statusBadge}
+      </div>
+      <div class="mcp-server-detail">${esc(tool.description||'')}</div>
+      <pre class="mcp-tool-schema">${esc(schemaText)}</pre>
+    </div>`;
+  }).join('');
 }
-async function deleteMcpServer(name){
-  const _ok=await showConfirmDialog({title:t('mcp_delete_confirm_title'),message:t('mcp_delete_confirm_message',name),confirmLabel:t('delete_title'),danger:true,focusCancel:true});
-  if(!_ok) return;
-  const encName=encodeURIComponent(name);
-  api(`/api/mcp/servers/${encName}`,{method:'DELETE'})
-    .then(r=>{
-      if(r&&r.ok){showToast(t('mcp_deleted'));loadMcpServers();}
-      else{showToast((r&&r.error)||t('mcp_delete_failed'));}
-    }).catch(()=>{showToast(t('mcp_delete_failed'));});
+function filterMcpTools(){
+  const input=$('mcpToolSearch');
+  _renderMcpTools(_mcpToolsCache,input?input.value:'');
+}
+function loadMcpTools(){
+  const list=$('mcpToolList');
+  if(!list) return;
+  list.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:6px 0">${esc(t('loading'))}</div>`;
+  api('/api/mcp/tools').then(r=>{
+    _mcpToolsCache=(r&&Array.isArray(r.tools))?r.tools:[];
+    filterMcpTools();
+  }).catch(()=>{list.innerHTML=`<div class="mcp-tool-error-state" style="color:#ef4444;font-size:12px;padding:6px 0">${esc(t('mcp_tools_load_failed'))}</div>`});
 }
 function loadGatewayStatus(){
   const card=$('gatewayStatusCard');
@@ -4999,7 +5182,7 @@ function loadGatewayStatus(){
 const _origSwitchSettings=switchSettingsSection;
 switchSettingsSection=function(name){
   _origSwitchSettings(name);
-  if(name==='system'){loadMcpServers();loadGatewayStatus();}
+  if(name==='system'){loadMcpServers();loadMcpTools();loadGatewayStatus();}
 };
 
 // ── Checkpoints / Rollback ──────────────────────────────────────────────────
