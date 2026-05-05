@@ -1,5 +1,51 @@
 # Hermes Web UI -- Changelog
 
+## [v0.51.3] — 2026-05-04 — 3-PR follow-up batch (#1671, #1673, #1676) + test-fragility fix
+
+### Added
+
+- **PR #1671** by @Michaelyklam — Active provider quota status (refs #706). New `GET /api/provider/quota?provider=X` endpoint with OpenRouter implementation: `_PROVIDER_QUOTA_TIMEOUT_SECONDS = 3.0`, server-side credentials only, sanitized output (`limit_remaining`, `usage`, `limit`, `status`). Safe states for no active provider, missing OpenRouter key, invalid key, timeout, unsupported provider. New "Active provider quota" card in Settings → Providers panel above existing provider cards. 7 regression tests pin route, success, error paths, and UI wiring.
+- **PR #1673** by @Michaelyklam — LLM Gateway routing metadata (refs #732). Surfaces gateway routing telemetry inline in chat without requiring refresh. New `Session.gateway_routing` (latest) + `Session.gateway_routing_history` (per-turn, capped at 50 entries). SSE `done` payload now carries `usage.gateway_routing`. Assistant message footers display served model+provider when failover or model-switch occurs. Sidebar session metadata uses gateway-aware label via `_formatSessionModelWithGateway(s)`. Bounded persistence: `routing` array capped at 12 attempts, scalar strings capped at 240 chars. 28 regression tests pin metadata capture, fallback, persistence, and display hooks.
+- **PR #1676** by @Michaelyklam — Hermes agent heartbeat alert (closes #716). New `api/agent_health.py` module with `health_check_agent()` returning `{alive, checked_at, details}` (alive can be `true`/`false`/`null`). Uses `gateway.status` runtime metadata + `get_running_pid(cleanup_stale=False)`. **No shell-outs, no psutil dependency** — explicit regression tests assert `"import psutil" not in src` and `"import subprocess" not in src` in agent_health.py. Sticky banner above composer (default-hidden) with 30s visible-tab polling and dismiss persistence. Visibility-tab gate prevents banner spam during background-tab idle. Allowlist-filtered runtime details (no `cwd`/`cmdline`/`environ`/`username`/`exe` leakage). 12 regression tests.
+
+### Fixed
+
+- **`tests/test_session_lineage_collapse.py` MAX_ARG_STRLEN failure** — Pre-existing test fragility: `_run_node` invoked `subprocess.run([NODE, "-e", source])` where `<source>` embeds the entire `static/sessions.js` content. Linux's `MAX_ARG_STRLEN` is 131,072 bytes per argv arg; with sessions.js plus the test scaffolding (eval'ing 5+ functions), the source string crossed that threshold after #1673's additions, producing `OSError: [Errno 7] Argument list too long`. Switched `_run_node` to pass source via stdin (no argv-size limit). No behavioral change to the tests themselves.
+
+### Pre-release verification
+
+- Full pytest sequential pass: 4457 → **4477 passing** (+20). 0 regressions.
+- JS syntax check on 4 modified `.js` files via `node -c`: all clean.
+- Python syntax check on 10 modified `.py` files: all compile clean.
+- QA harness: ALL CHECKS PASSED.
+- Live browser verification on 56-session sidebar:
+  - `/api/provider/quota` returns 200 with proper "No active provider" empty state. Settings → Providers shows quota card.
+  - `/api/health/agent` returns 200. Banner exists in DOM but `hidden=true` and not `.visible` (correct — agent healthy in fixture).
+  - All 4 gateway helpers (`_formatGatewayModelLabel`, `_gatewayRoutingFailoverText`, `_gatewayModelWarningText`, `_formatSessionModelWithGateway`) defined in global scope.
+  - Sidebar scroll fix from v0.51.2 still works (regression check).
+- Independent review: Opus advisor on stage-300 diff (1050 LOC). 7/7 verification questions verified clean: process-field filtering, OpenRouter error sanitization, gateway-model label correctness, sidebar fallback when no routing data, loop preamble + segments-map population, banner positioning, visibility-tab gate. **Verdict: SHIP.** 0 MUST-FIX, 0 SHOULD-FIX. Only nit: dead `position:sticky;bottom:0` on `.agent-health-banner` (harmless cosmetic CSS, deferred to follow-up).
+
+### Surgical conflict resolution highlights
+
+All 3 PRs branched off pre-v0.51.0 master and required surgical resolution:
+
+- **#1671 routes.py**: kept master's `_handle_plugins` route from v0.51.1 #1663 + added new quota route below (both routes preserved adjacent).
+- **#1673 sessions.js**: kept master's `_getChannelLabel` + `readOnly` metaBits AND swapped master's `if(s.model) metaBits.push(s.model)` for contributor's `_formatSessionModelWithGateway(s)` call. Net effect: gateway-aware model line + existing channel/readOnly bits preserved.
+- **#1673 ui.js**: 2 conflicts in the assistant-footer rebuild loop. Kept master's `renderedAssistantIdxs=[...assistantSegments.keys()].sort()` pattern (more robust than contributor's DOM-index-based `asstRows[ai]`), added contributor's gateway-routing extractions inside the loop. Footer skip-condition extended with `&&!gatewayText&&!failoverText&&!modelWarningText`. Selector check extended for new inline class names.
+- **#1676**: clean rebase, no conflicts.
+
+Both #1671, #1673, and #1676 rebased branches force-pushed back to @Michaelyklam's fork via maintainer write access, preserving `Co-authored-by:` attribution.
+
+### UX gate re-evaluation
+
+PRs #1671, #1673, #1676 had been UX-gated in the v0.51.1 sweep, then on second-look determined to NOT warrant the gate per the "main-conversation-view-only" threshold:
+- **#1671** is a Settings → Providers panel (not main conversation surface).
+- **#1673** adds metadata to assistant message footers, but only conditionally visible when failover or model-switch actually happens. Most users never see it.
+- **#1676** banner is `hidden` by default and only appears when agent becomes unreachable. Conditional safety indicator, not active UX surface.
+
+UX label cleared, Aron stand-down comments deleted on all 3, all 3 swept into this batch.
+
+
 ## [v0.51.2] — 2026-05-04 — 3-PR follow-up batch (deferred from v0.51.1) + sidebar scroll hotfix
 
 ### Fixed

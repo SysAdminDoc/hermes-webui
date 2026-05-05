@@ -479,6 +479,7 @@ from api.helpers import (
     redact_session_data,
     _redact_text,
 )
+from api.agent_health import build_agent_health_payload
 
 
 def _clear_stale_stream_state(session) -> bool:
@@ -1358,7 +1359,7 @@ from api.workspace import (
 )
 from api.upload import handle_upload, handle_upload_extract, handle_transcribe
 from api.streaming import _sse, _run_agent_streaming, cancel_stream
-from api.providers import get_providers, set_provider_key, remove_provider_key
+from api.providers import get_providers, get_provider_quota, set_provider_key, remove_provider_key
 from api.onboarding import (
     apply_onboarding_setup,
     get_onboarding_status,
@@ -2487,6 +2488,9 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/health":
         return _handle_health(handler, parsed)
 
+    if parsed.path == "/api/health/agent":
+        return j(handler, build_agent_health_payload())
+
     if parsed.path == "/api/models":
         return j(handler, get_available_models())
 
@@ -2515,6 +2519,10 @@ def handle_get(handler, parsed) -> bool:
     # ── Plugins/hooks visibility (read-only, no callback/source internals) ──
     if parsed.path == "/api/plugins":
         return _handle_plugins(handler, parsed)
+    if parsed.path == "/api/provider/quota":
+        query = parse_qs(parsed.query)
+        provider_id = (query.get("provider", [""])[0] or None)
+        return j(handler, get_provider_quota(provider_id))
 
     if parsed.path == "/api/settings":
         settings = load_settings()
