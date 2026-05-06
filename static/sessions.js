@@ -2509,15 +2509,31 @@ function renderSessionListFromCache(){
     let _tapTimer=null;
     let _pointerDownX=0;
     let _pointerDownY=0;
+    let _pointerActive=false;
     let _isDragging=false;
     let _clearDragTimer=null;
+    const _clearPointerDragState=()=>{
+      _pointerActive=false;
+      if(_isDragging){
+        _isDragging=false;
+        if(_clearDragTimer){clearTimeout(_clearDragTimer);_clearDragTimer=null;}
+        _clearDragTimer=setTimeout(()=>{el.classList.remove('dragging');_clearDragTimer=null;},50);
+      }
+    };
     el.onpointerdown=(e)=>{
       if(e.pointerType==='mouse' && e.button!==0) return;
+      _pointerActive=true;
       _pointerDownX=e.clientX;
       _pointerDownY=e.clientY;
       _isDragging=false;
+      if(_clearDragTimer){clearTimeout(_clearDragTimer);_clearDragTimer=null;}
+      el.classList.remove('dragging');
     };
     el.onpointermove=(e)=>{
+      // Plain hover also dispatches pointermove. Only mark a row as dragging
+      // after an actual press starts on this row; otherwise hovered rows stay
+      // faded until the next sidebar rerender clears their DOM nodes.
+      if(!_pointerActive) return;
       if(_isDragging) return;
       const dx=Math.abs(e.clientX-_pointerDownX);
       const dy=Math.abs(e.clientY-_pointerDownY);
@@ -2528,8 +2544,11 @@ function renderSessionListFromCache(){
         if(_clearDragTimer){clearTimeout(_clearDragTimer);_clearDragTimer=null;}
       }
     };
+    el.onpointercancel=_clearPointerDragState;
+    el.onpointerleave=()=>{ if(_pointerActive) _clearPointerDragState(); };
     el.onpointerup=(e)=>{
       if(e.pointerType==='mouse' && e.button!==0) return;  // ignore right/middle click
+      _pointerActive=false;
       if(_renamingSid) return;
       if(actions&&actions.contains(e.target)) return;
       if(e.target&&e.target.closest&&e.target.closest('.session-child-count,.session-child-sessions,.session-child-session')) return;
