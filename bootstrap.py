@@ -179,7 +179,16 @@ def ensure_python_has_webui_deps(python_exe: str, agent_dir: Path | None = None)
     )
     if not venv_python.exists():
         info(f"Creating local virtualenv at {venv_dir}")
-        venv.EnvBuilder(with_pip=True).create(venv_dir)
+        # symlinks=True: some Python builds (notably mise/asdf shared-library
+        # installs on macOS) default venv to copy mode. The copied binary still
+        # uses @executable_path/../lib/libpython3.X.dylib for its load command,
+        # so the venv binary aborts with SIGABRT on first import because the
+        # dylib never gets copied into .venv/lib. Symlinking the interpreter
+        # keeps @executable_path resolving back to the original install.
+        # CPython's venv falls back to copy mode automatically when symlink
+        # creation fails (e.g. older Windows without SeCreateSymbolicLinkPrivilege),
+        # so this is safe to set unconditionally.
+        venv.EnvBuilder(with_pip=True, symlinks=True).create(venv_dir)
 
     info("Installing WebUI dependencies into local virtualenv")
     subprocess.run(
