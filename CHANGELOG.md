@@ -14,9 +14,13 @@
 
 - **`tests/test_streaming_markdown.py` + `tests/test_subpath_frontend_routes.py`** — tightened the smd-import-shape assertions to require the `./` relative form and forbid BOTH bare specifier (broken by ES spec, #1849) AND root-absolute (breaks `/hermes/` subpath mounts). The original tests only forbade root-absolute, which let the bare-specifier regression land unnoticed in the first place. PR #1851's original fix used the root-absolute form (which would have re-broken subpath deployments); the corrected `./` form satisfies both constraints. Subpath safety verified: `new URL('./static/vendor/smd.min.js', 'http://host/hermes/').href === 'http://host/hermes/static/vendor/smd.min.js'`.
 
+- **`static/ui.js` + `tests/test_issue347.py`** (commit `d703959` by @nesquena, opus-4.7-paired) — fix code-fence-vs-math stash ordering in `_renderUserFencedBlocks`. PR #1848 added a math stash to the user-bubble path so backslash LaTeX delimiters survive `esc()` and reach KaTeX, but the math stash ran BEFORE the existing code-fence stash. Result: a user-typed code block containing LaTeX-like syntax (e.g. `` ``` ``\n`\[ a + b \]`\n`` ``` ``) had its math content extracted as KaTeX and rendered as a `<div class="katex-block">` placeholder INSIDE `<pre><code>`, replacing the user's literal source with rendered math. The assistant path (`renderMd()`) had the correct ordering already; the user-bubble path inherited the mistake from the inverted stash order. Fix reorders fences-first, then math, mirroring `renderMd()`. Two regression tests added: one fails pre-fix and asserts no KaTeX wrappers inside `<pre><code>`, one is a sibling guard against an over-correction that would disable user-bubble math entirely.
+
+- **`tests/test_issue1850_csp_connect_src_jsdelivr.py`** (absorbed from PR #1852 follow-up by @ChaseFlorell) — switched to `Path(__file__).resolve().parents[1]` rooting so the test survives being run from a non-repo-root cwd. Matches the pattern in `test_issue1112_csp_google_fonts.py`.
+
 ### Tests
 
-4810 → **4815 collected** (+5). Three new from #1848 augmenting `test_issue347.py` (Node-driven `_run_renderers()` harness for assistant + user pipelines), two new in `test_issue1850_csp_connect_src_jsdelivr.py`. **4788 passed, 0 failed**, 4 skipped, 3 xpassed in 142s.
+4810 → **4817 collected** (+7). Three from #1848 augmenting `test_issue347.py` (Node-driven `_run_renderers()` harness for assistant + user pipelines), two new in `test_issue1850_csp_connect_src_jsdelivr.py`, two from the d703959 user-bubble code-fence-vs-math ordering fix.
 
 ### Pre-release verification
 
