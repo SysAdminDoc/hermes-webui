@@ -84,6 +84,42 @@ def _activate_spawn_fake_agent(fake_agent_root: Path):
         sys.modules.pop(module_name, None)
 
 
+def _real_hermes_agent_editable_install_present() -> bool:
+    """Detect a developer-machine editable install of hermes-agent.
+
+    The two tests that spawn a real subprocess + import the fake `cron.scheduler`
+    from ``HERMES_WEBUI_AGENT_DIR`` only work when the spawn child does NOT have
+    a competing real `cron.scheduler` reachable via the venv's editable finder.
+    On CI runners (and most production installs) there's no editable install,
+    so the fake at ``fake_agent_root`` is the only `cron.scheduler` Python can
+    resolve; on a maintainer's dev machine an editable install of hermes-agent
+    is registered through a `.pth` file in site-packages, and the spawn child
+    will resolve the real `cron.scheduler` first — which then fails because the
+    real `run_job` requires a configured inference provider.
+
+    Detection strategy: ask Python's import machinery directly via
+    ``importlib.util.find_spec`` whether `cron.scheduler` is currently
+    resolvable. If yes AND the resolved origin is outside any tmp dir
+    (i.e., not a fake we just wrote), assume a competing real install is
+    present. This is more robust than name-pattern matching against
+    site-packages entries, which misses PEP 660 schemes (hatchling/poetry)
+    and legacy egg-links.
+    """
+    try:
+        import importlib.util
+        spec = importlib.util.find_spec("cron.scheduler")
+    except Exception:
+        return False
+    if spec is None or not spec.origin:
+        return False
+    origin = str(spec.origin)
+    # Tests write fake cron.scheduler under tmp_path; tmp paths shouldn't
+    # count as a "real" competing install. Treat anything outside common tmp
+    # roots as a real install that will out-resolve the fake.
+    tmp_prefixes = ("/tmp/", "/var/folders/", os.path.expandvars("$TMPDIR/") if os.environ.get("TMPDIR") else "")
+    return not any(p and origin.startswith(p) for p in tmp_prefixes)
+
+
 def _large_cron_payload_runner(profile_home, result_queue):
     try:
         fake_agent_root = Path(profile_home).parent / "fake-agent"
@@ -210,6 +246,13 @@ def test_spawn_context_does_not_inherit_parent_thread_locks(tmp_path):
 
 def test_manual_cron_subprocess_drains_large_result_before_join(tmp_path):
     """A >100 KB result must not deadlock the parent before it can persist output."""
+    if _real_hermes_agent_editable_install_present():
+        import pytest as _pytest
+        _pytest.skip(
+            "skipped on dev machines with an editable hermes-agent install — "
+            "the spawn child resolves the real cron.scheduler first instead of "
+            "the fake one written under HERMES_WEBUI_AGENT_DIR. Runs cleanly on CI."
+        )
     # Use fork only for the outer test harness so this pytest module does not
     # need to be importable as a package. The product helper under test owns its
     # own multiprocessing context.
@@ -307,6 +350,13 @@ def test_manual_cron_run_does_not_hold_profile_lock_for_job_duration(tmp_path, m
 
 
 def test_cron_job_subprocess_executes_under_selected_profile_home(tmp_path, monkeypatch):
+    if _real_hermes_agent_editable_install_present():
+        import pytest as _pytest
+        _pytest.skip(
+            "skipped on dev machines with an editable hermes-agent install — "
+            "the spawn child resolves the real cron.scheduler first instead of "
+            "the fake one written under HERMES_WEBUI_AGENT_DIR. Runs cleanly on CI."
+        )
     exec_home = tmp_path / "exec-profile"
     ctx = multiprocessing.get_context("fork")
     result_queue = ctx.Queue()
