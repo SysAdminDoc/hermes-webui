@@ -586,6 +586,11 @@ def _message_text(value) -> str:
     return _strip_thinking_markup(str(value or '').strip())
 
 
+def _strip_workspace_prefix(text: str) -> str:
+    """Remove WebUI's model-facing workspace tag from display identity text."""
+    return re.sub(r'^\s*\[Workspace:[^\]]+\]\s*', '', str(text or '')).strip()
+
+
 def _first_exchange_snippets(messages):
     """Return (first_user_text, first_assistant_text) snippets for title generation.
 
@@ -1433,6 +1438,12 @@ def _message_identity(msg):
     role = str(msg.get('role') or '')
     content = msg.get('content', '')
     text = _message_text(content)
+    if role == 'user':
+        # WebUI sends the model a workspace-prefixed user_message while the
+        # visible optimistic bubble contains only the human text. Treat them as
+        # the same turn for merge/dedup purposes; otherwise compaction results
+        # render two adjacent user bubbles ("Ok" and "[Workspace...]\nOk").
+        text = _strip_workspace_prefix(text)
     if not text and not msg.get('tool_call_id') and not msg.get('tool_calls'):
         return None
     return (
@@ -1471,7 +1482,7 @@ def _find_current_user_turn(messages, msg_text):
         if not isinstance(msg, dict) or msg.get('role') != 'user':
             continue
         fallback = idx
-        text = " ".join(_message_text(msg.get('content', '')).split())
+        text = " ".join(_strip_workspace_prefix(_message_text(msg.get('content', ''))).split())
         if needle and (needle in text or text in needle):
             return idx
     return fallback
@@ -1558,7 +1569,11 @@ def _merge_display_messages_after_agent_result(previous_display, previous_contex
             continue
         if _is_context_compression_marker(msg) and key is not None and key in seen:
             continue
-        merged.append(copy.deepcopy(msg))
+        display_msg = msg
+        if key is not None and key == current_user_key and isinstance(msg, dict) and msg.get('role') == 'user':
+            display_msg = copy.deepcopy(msg)
+            display_msg['content'] = msg_text
+        merged.append(copy.deepcopy(display_msg))
         if key is not None:
             seen.add(key)
     return merged
@@ -2903,13 +2918,24 @@ def _run_agent_streaming(
                 _a0 = ''
                 if _should_bg_title:
                     _u0, _a0 = _first_exchange_snippets(s.messages)
-                # Read token/cost usage from the agent object (if available)
+                # Read token/cost usage from the agent object (if available).
+                # Per-turn overwrite (#1857): replace cumulative session totals with the
+                # agent's most recent values, which already represent the current turn's
+                # full prompt+completion (input_tokens are the entire context, not delta).
+                # Defensive: only overwrite when the agent reports non-zero / non-None
+                # values. A rebuilt-from-cache-miss agent (post-restart, post-LRU-eviction)
+                # starts at zero; without this guard, the next turn would zero out the
+                # persisted disk total before any new tokens were spent. Per Opus advisor
+                # on stage-320: prevents restart-induced regression of session usage data.
                 input_tokens = getattr(agent, 'session_prompt_tokens', 0) or 0
                 output_tokens = getattr(agent, 'session_completion_tokens', 0) or 0
                 estimated_cost = getattr(agent, 'session_estimated_cost_usd', None)
-                s.input_tokens = input_tokens
-                s.output_tokens = output_tokens
-                s.estimated_cost = estimated_cost
+                if input_tokens > 0:
+                    s.input_tokens = input_tokens
+                if output_tokens > 0:
+                    s.output_tokens = output_tokens
+                if estimated_cost is not None:
+                    s.estimated_cost = estimated_cost
                 # Persist tool-call summaries even when the final message history only
                 # kept bare tool rows and omitted explicit assistant tool_call IDs.
                 tool_calls = _extract_tool_calls_from_messages(
