@@ -1679,6 +1679,14 @@ async function createKanbanTask(){
 let _kanbanTaskModalMode = 'create';   // 'create' | 'edit'
 let _kanbanTaskModalEditingId = null;  // task id when mode === 'edit'
 let _kanbanProfileNamesCache = null;   // populated lazily on first modal open
+// Status the modal *displayed* on edit-mode open.  If the user doesn't touch
+// the dropdown, we must NOT send `status` in the PATCH payload — otherwise
+// editing a task whose real status is non-editable in this dropdown
+// (running/blocked/done/archived → mapped to 'triage' for display) would
+// silently demote the task on save.  See the regression caught during PR
+// review: editing a 'running' task without touching status was reclaiming
+// the worker and moving the task back to triage.
+let _kanbanTaskModalInitialDisplayedStatus = null;
 
 async function _kanbanLoadProfileNames(){
   // Hit /api/profiles once per session and cache; refresh is cheap if needed.
@@ -1757,6 +1765,7 @@ function openKanbanCreate(){
   if (!modal) return;
   _kanbanTaskModalMode = 'create';
   _kanbanTaskModalEditingId = null;
+  _kanbanTaskModalInitialDisplayedStatus = null;  // create mode: always send status
   // Default new tasks to "ready" so they're immediately claimable by the
   // dispatcher (assuming the user picks an assignee).  Triage is for staging
   // tasks that need human review before being marked actionable; users who
@@ -1801,10 +1810,18 @@ async function openKanbanEdit(taskId){
   if (!task) return;
   _kanbanTaskModalMode = 'edit';
   _kanbanTaskModalEditingId = task.id;
+  // Track the displayed status so submitKanbanTaskModal can detect whether
+  // the user actually picked a new value vs. the dropdown's mapped default.
+  // Without this, editing a 'running'/'blocked'/'done'/'archived' task whose
+  // real status maps to 'triage' for display would silently demote the task
+  // (the mapped 'triage' would land in the PATCH payload, and _patch_task
+  // would call _set_status_direct → reclaim worker → move to triage).
+  const initialDisplayedStatus = _kanbanEditableStatusFor(task.status);
+  _kanbanTaskModalInitialDisplayedStatus = initialDisplayedStatus;
   _kanbanResetTaskModalFields({
     title: task.title || '',
     body: task.body || '',
-    status: _kanbanEditableStatusFor(task.status),
+    status: initialDisplayedStatus,
     tenant: task.tenant || '',
     priority: typeof task.priority === 'number' ? task.priority : 0,
   });
@@ -1873,6 +1890,7 @@ function closeKanbanTaskModal(){
   if (modal) modal.hidden = true;
   _kanbanTaskModalMode = 'create';
   _kanbanTaskModalEditingId = null;
+  _kanbanTaskModalInitialDisplayedStatus = null;
   document.removeEventListener('keydown', _kanbanTaskModalKey);
 }
 
@@ -1923,7 +1941,13 @@ async function submitKanbanTaskModal(){
     payload.body = bodyVal;
     payload.assignee = assigneeVal || null;
     payload.tenant = tenantVal || null;
-    if (statusVal) payload.status = statusVal;
+    // Only send status if the user actually changed the dropdown from the
+    // value the modal opened with.  Otherwise editing a 'running'/'blocked'/
+    // 'done'/'archived' task — whose real status maps to the dropdown's
+    // 'triage' default — would silently demote the task on every save.
+    if (statusVal && statusVal !== _kanbanTaskModalInitialDisplayedStatus) {
+      payload.status = statusVal;
+    }
     const n = parseInt(priorityRaw, 10);
     payload.priority = Number.isNaN(n) ? 0 : n;
   } else {

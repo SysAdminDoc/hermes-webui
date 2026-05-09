@@ -237,6 +237,72 @@ def test_kanban_task_detail_has_edit_button_and_modal_supports_edit_mode():
     assert label_match and "edit" in label_match.group(1)
 
 
+def test_kanban_edit_mode_preserves_status_when_dropdown_untouched():
+    """Regression: editing a task whose real status is non-editable in the
+    modal's status dropdown (running/blocked/done/archived → mapped to
+    'triage' for display) must NOT silently demote the task on save.
+
+    The dropdown only offers triage/todo/ready, so `_kanbanEditableStatusFor`
+    maps any other status to 'triage' for display.  If the user just edits
+    the title and saves, the dropdown's 'triage' default would land in the
+    PATCH payload and the backend would call `_set_status_direct` which
+    reclaims any active worker and demotes the task.
+
+    Fix: track the displayed default in `_kanbanTaskModalInitialDisplayedStatus`
+    and only include `status` in the PATCH payload when the user actually
+    picked a different value.
+    """
+    # 1. The tracking variable is declared at module scope.
+    assert "_kanbanTaskModalInitialDisplayedStatus" in PANELS, (
+        "Edit-mode status preservation requires tracking the initial displayed "
+        "status so submit can detect whether the user actually changed it."
+    )
+
+    # 2. openKanbanEdit captures the initial displayed status from the task.
+    open_edit_match = re.search(
+        r"async function openKanbanEdit\([^)]*\)\{(.*?)\n\}", PANELS, re.DOTALL
+    )
+    assert open_edit_match, "openKanbanEdit() not found"
+    open_edit_body = open_edit_match.group(1)
+    assert "_kanbanTaskModalInitialDisplayedStatus" in open_edit_body, (
+        "openKanbanEdit must record the initial displayed status."
+    )
+    assert "_kanbanEditableStatusFor(task.status)" in open_edit_body
+
+    # 3. Submit's edit branch only sends status when it differs from the
+    #    initial displayed value.
+    submit_match = re.search(
+        r"async function submitKanbanTaskModal\(\)\{(.*?)\n\}", PANELS, re.DOTALL
+    )
+    assert submit_match
+    submit_body = submit_match.group(1)
+    assert "statusVal !== _kanbanTaskModalInitialDisplayedStatus" in submit_body, (
+        "Edit submit must skip `status` in the payload when the dropdown's "
+        "displayed value is unchanged — otherwise running/blocked/done/archived "
+        "tasks get silently demoted on save."
+    )
+
+    # 4. openKanbanCreate explicitly nulls the tracker (create always sends).
+    create_match = re.search(
+        r"function openKanbanCreate\(\)\{(.*?)\n\}", PANELS, re.DOTALL
+    )
+    assert create_match
+    create_body = create_match.group(1)
+    assert "_kanbanTaskModalInitialDisplayedStatus = null" in create_body, (
+        "openKanbanCreate must reset the tracker to null so create-mode "
+        "submits always include status in the POST payload."
+    )
+
+    # 5. closeKanbanTaskModal clears the tracker so a stale value can't leak
+    #    into the next open.
+    close_match = re.search(
+        r"function closeKanbanTaskModal\(\)\{(.*?)\n\}", PANELS, re.DOTALL
+    )
+    assert close_match
+    close_body = close_match.group(1)
+    assert "_kanbanTaskModalInitialDisplayedStatus = null" in close_body
+
+
 def test_kanban_assignee_dropdown_uses_select_not_freetext():
     """Assignee must be a <select> populated from /api/profiles + board history,
     not a free-text input. Free-text invites typos that the dispatcher silently
