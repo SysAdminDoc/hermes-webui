@@ -1,5 +1,11 @@
 # Hermes Web UI -- Changelog
 
+## [Unreleased]
+
+### Added
+
+- **feat(kanban): Edit task button + real "Run dispatcher" button + assignee dropdown.** Three connected gaps in the Kanban UX, fixed together because they're load-bearing for the actual work-queue lifecycle. (1) The task detail view now has an Edit button that opens the existing modal pre-filled with the task's current title/body/status/priority/assignee/tenant, switches the header to "Edit task" and the submit button to "Save", and PATCHes `/api/kanban/tasks/<id>` instead of POSTing. (2) The assignee field is now a real `<select>` populated from `/api/profiles` (Hermes profile names like `default`, `archivist`, `orchestrator`) with historical board assignees grouped under "Other", plus an explicit "— Unassigned (won't auto-run) —" option. Helper text under the field explains the dispatcher claim contract — without an assignee that matches a Hermes profile, the dispatcher in `hermes_cli/kanban_db.py:3567` skips the task forever, so the dropdown removes the foot-gun. Custom SVG chevron makes the dropdown read visually as a dropdown. (3) New `runKanbanDispatcher()` button (lightning-bolt icon in the board header, primary "Run dispatcher" button in the sidebar bulk bar) calls `/api/kanban/dispatch` WITHOUT `dry_run=1`, after a `showConfirmDialog` confirmation because it spawns subprocess workers. The existing dry-run preview button is preserved and clearly labeled. Toast result reports concrete numbers from `dispatch_once()` — e.g. "Dispatched: 1 spawned, 2 skipped (no assignee)" — so users see what actually happened. New default status for new tasks is `ready` (was `triage`); soft warning if user picks Unassigned + Ready. 19 new i18n keys translated across all 8 supported locales. Adds 3 regression tests in `tests/test_kanban_ui_static.py` pinning the Edit modal flow, the `<select>`-not-`<input>` assignee contract, and the runKanbanDispatcher / nudgeKanbanDispatcher dry-run distinction.
+
 ## [v0.51.31] — 2026-05-09 — Release H (12-PR contributor batch: image-mode + race fixes + composer drafts + locale parity)
 
 ### Added
