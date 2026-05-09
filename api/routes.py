@@ -4024,6 +4024,20 @@ def handle_post(handler, parsed) -> bool:
         sid = body["session_id"]
         text = body.get("text")
         files = body.get("files")
+        # Stage-326 hardening (per Opus advisor): size + type validation on
+        # the draft inputs. Without this, a misbehaving or malicious client
+        # can persist multi-MB strings into the session JSON on every keystroke
+        # via the 400ms debounced auto-save.
+        _MAX_DRAFT_TEXT = 50_000  # 50 KB cap on textarea content
+        _MAX_DRAFT_FILES = 50  # max number of attached file references
+        if text is not None and not isinstance(text, str):
+            text = ""
+        if isinstance(text, str) and len(text) > _MAX_DRAFT_TEXT:
+            text = text[:_MAX_DRAFT_TEXT]
+        if files is not None and not isinstance(files, list):
+            files = []
+        if isinstance(files, list) and len(files) > _MAX_DRAFT_FILES:
+            files = files[:_MAX_DRAFT_FILES]
         try:
             s = get_session(sid)
         except KeyError:
