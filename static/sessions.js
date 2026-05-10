@@ -2102,7 +2102,14 @@ function _collapseSessionLineageForSidebar(sessions){
   }
   for(const [key,items] of groups.entries()){
     if(items.length<=1){result.push(items[0]);continue;}
-    const sorted=[...items].sort((a,b)=>_sessionTimestampMs(b)-_sessionTimestampMs(a));
+    const sorted=[...items].sort((a,b)=>{
+      const bSeg=Number(b&&b._compression_segment_count||0);
+      const aSeg=Number(a&&a._compression_segment_count||0);
+      if(bSeg||aSeg){
+        if(bSeg!==aSeg) return bSeg-aSeg;
+      }
+      return _sessionTimestampMs(b)-_sessionTimestampMs(a);
+    });
     const chosen=sorted[0];
     result.push({...chosen,_lineage_key:key,_lineage_collapsed_count:items.length,_lineage_segments:sorted});
   }
