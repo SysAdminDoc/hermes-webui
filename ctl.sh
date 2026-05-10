@@ -39,7 +39,7 @@ _load_repo_dotenv_preserving_env() {
     key="${key#export }"
     key="${key//[[:space:]]/}"
     [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-    if [[ -v ${key} ]]; then
+    if [[ -n "${!key+x}" ]]; then
       value="${!key}"
       preserved+=("${key}=${value}")
     fi
