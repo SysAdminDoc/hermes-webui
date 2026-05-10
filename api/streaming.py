@@ -20,6 +20,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from api.config import (
+    get_config,
     STREAMS, STREAMS_LOCK, CANCEL_FLAGS, AGENT_INSTANCES, STREAM_PARTIAL_TEXT,
     STREAM_REASONING_TEXT, STREAM_LIVE_TOOL_CALLS,
     STREAM_GOAL_RELATED, PENDING_GOAL_CONTINUATION,
@@ -84,6 +85,19 @@ def _is_quota_error_text(err_text: str) -> bool:
         or 'used up your usage' in _err_lower
         or ('plan' in _err_lower and 'limit' in _err_lower and 'reached' in _err_lower)
     )
+
+
+def _clarify_timeout_seconds(default: int = 120) -> int:
+    """Resolve clarify timeout from config, with bounded fallback."""
+    try:
+        cfg = get_config()
+        raw = cfg.get("clarify", {}).get("timeout", default)
+        timeout_seconds = int(raw)
+        if timeout_seconds <= 0:
+            return default
+        return timeout_seconds
+    except Exception:
+        return default
 
 
 def _classify_provider_error(err_str: str, exc=None, *, silent_failure: bool = False) -> dict:
@@ -2123,7 +2137,7 @@ def _run_agent_streaming(
 
         def _clarify_callback_impl(question, choices, sid, cancel_evt, put_event):
             """Bridge Hermes clarify prompts to the WebUI."""
-            timeout = 120
+            timeout = _clarify_timeout_seconds()
             choices_list = [str(choice) for choice in (choices or [])]
             data = {
                 'question': str(question or ''),
@@ -2131,6 +2145,7 @@ def _run_agent_streaming(
                 'session_id': sid,
                 'kind': 'clarify',
                 'requested_at': time.time(),
+                'timeout_seconds': timeout,
             }
             try:
                 from api.clarify import submit_pending as _submit_clarify_pending, clear_pending as _clear_clarify_pending
