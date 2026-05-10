@@ -1161,14 +1161,6 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
         if((d.session_id||activeSid)!==activeSid) return;
         if(d.usage&&typeof _syncCtxIndicator==='function'){
           S.lastUsage={...(S.lastUsage||{}),...d.usage};
-          if(S.session&&S.session.session_id===activeSid){
-            S.session.input_tokens=d.usage.input_tokens??S.session.input_tokens;
-            S.session.output_tokens=d.usage.output_tokens??S.session.output_tokens;
-            S.session.estimated_cost=d.usage.estimated_cost??S.session.estimated_cost;
-            S.session.context_length=d.usage.context_length??S.session.context_length;
-            S.session.threshold_tokens=d.usage.threshold_tokens??S.session.threshold_tokens;
-            S.session.last_prompt_tokens=d.usage.last_prompt_tokens??S.session.last_prompt_tokens;
-          }
           _syncCtxIndicator(S.lastUsage);
         }
         if(d.estimated===true||d.tps_available!==true||typeof d.tps!=='number'||d.tps<=0){

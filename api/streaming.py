@@ -1939,6 +1939,7 @@ def _run_agent_streaming(
 
     agent = None
     _live_prompt_estimate_tokens = [0]
+    _live_prompt_exact_tokens = [0]
     _live_prompt_estimate_seen_ids = set()
 
     def _seed_live_prompt_estimate() -> int:
@@ -1961,6 +1962,7 @@ def _run_agent_streaming(
             except Exception:
                 _base = 0
         _live_prompt_estimate_tokens[0] = int(_base or 0)
+        _live_prompt_exact_tokens[0] = _live_prompt_estimate_tokens[0]
         return _live_prompt_estimate_tokens[0]
 
     def _bump_live_prompt_estimate(messages) -> int:
@@ -2023,7 +2025,11 @@ def _run_agent_streaming(
                     except Exception:
                         pass
 
-        if _live_prompt_estimate_tokens[0] > (_usage.get('last_prompt_tokens') or 0):
+        _real_prompt_tokens = int(_usage.get('last_prompt_tokens') or 0)
+        if _real_prompt_tokens and _real_prompt_tokens != _live_prompt_exact_tokens[0]:
+            _live_prompt_exact_tokens[0] = _real_prompt_tokens
+            _live_prompt_estimate_tokens[0] = _real_prompt_tokens
+        elif _live_prompt_estimate_tokens[0] > _real_prompt_tokens:
             _usage['last_prompt_tokens'] = _live_prompt_estimate_tokens[0]
 
         return _usage
