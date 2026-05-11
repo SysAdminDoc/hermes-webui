@@ -29,13 +29,22 @@ if os.environ.get("HERMES_WEBUI_TEST_NETWORK_BLOCK", "").strip() in ("1", "true"
     _REAL_CREATE_CONN = socket.create_connection
     _REAL_SOCK_CONNECT = socket.socket.connect
 
+    import re as _re
+
+    def _re_match_unique_local_ipv6(h):
+        """Match IPv6 fc00::/7 (canonical syntax). Tighter than startswith('fc')
+        so we don't mistakenly classify hostnames like 'food.example.com' as local."""
+        return bool(_re.match(r"^f[cd][0-9a-f]{0,2}:", h))
+
     def _addr_is_local(host):
         if not isinstance(host, str):
             return False
         h = host.strip().lower()
         if not h:
             return False
-        if h in ("::1", "0:0:0:0:0:0:0:1") or h.startswith("fe80:") or h.startswith("fc") or h.startswith("fd"):
+        # IPv6 unique-local fc00::/7: require hex pair + colon to avoid
+        # matching hostnames like "food.example.com" or "fdsa.test".
+        if h in ("::1", "0:0:0:0:0:0:0:1") or h.startswith("fe80:") or _re_match_unique_local_ipv6(h):
             return True
         if h == "localhost" or h.endswith(".localhost"):
             return True

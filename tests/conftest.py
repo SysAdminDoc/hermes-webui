@@ -216,7 +216,12 @@ def _hermes_addr_is_local(host: str) -> bool:
     if not h:
         return False
     # IPv6 loopback / link-local
-    if h in ('::1', '0:0:0:0:0:0:0:1') or h.startswith('fe80:') or h.startswith('fc') or h.startswith('fd'):
+    # IPv6 unique-local: fc00::/7 — any address starting with fc?? or fd?? (?? = hex pair).
+    # Loose "startswith('fc')" / "startswith('fd')" would also match the hostnames
+    # "food.example.com" or "fdsa.test", so require the second char to be a hex
+    # digit followed by either a colon or another hex digit (canonical IPv6 syntax).
+    import re as _re
+    if h in ('::1', '0:0:0:0:0:0:0:1') or h.startswith('fe80:') or _re.match(r'^f[cd][0-9a-f]{0,2}:', h):
         return True
     # Hostname allow-list (RFC2606/6761 reserved TLDs + localhost)
     if h == 'localhost' or h.endswith('.localhost'):

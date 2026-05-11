@@ -97,20 +97,38 @@ def test_public_ipv4_is_blocked():
     assert _conftest._hermes_addr_is_local("204.0.113.0") is False  # outside
 
 
-def test_allow_outbound_network_fixture_unblocks(allow_outbound_network):
-    """When a test opts in to the fixture, real outbound works again."""
-    # We use a real DNS lookup to a reserved invalid TLD — the fixture should
-    # let us BYPASS the block, and the real DNS will fail with gaierror. The
-    # difference: pre-fixture, our wrapper raises OSError("hermes test network
-    # isolation"). With fixture, we get the real gaierror or a connect error,
-    # not our wrapper's message.
-    with pytest.raises((OSError, socket.gaierror)) as exc_info:
-        socket.create_connection(
-            ("this-definitely-cannot-resolve-zxq987.invalid", 443),
-            timeout=1,
-        )
-    msg = str(exc_info.value)
-    # Must NOT be our wrapper's message.
-    assert "hermes test network isolation" not in msg, (
-        f"allow_outbound_network fixture should disable the block, but got: {msg}"
+def test_allow_outbound_network_fixture_disables_the_block_for_a_public_ip(allow_outbound_network):
+    """When a test opts in to the fixture, the block does NOT fire on a
+    destination that is otherwise blocked.
+
+    Uses 8.8.8.8 (Google DNS, a real public IPv4 not in any allow-list)
+    so we can prove the fixture actually disabled the wrapper.  Without
+    the fixture, the wrapper would raise OSError("hermes test network
+    isolation: ...").  With the fixture, the real socket.create_connection
+    runs and we either succeed (port 53 is genuinely open) or fail with
+    a *real* connect error — never with our wrapper's message.
+    """
+    err_msg = ""
+    try:
+        sock = socket.create_connection(("8.8.8.8", 53), timeout=2)
+        sock.close()
+        # Success is fine — proves the wrapper got out of the way.
+        return
+    except OSError as e:
+        err_msg = str(e)
+
+    # If we did get an OSError, it must NOT be from our wrapper.
+    assert "hermes test network isolation" not in err_msg, (
+        f"allow_outbound_network fixture should disable the block, but got: {err_msg}"
     )
+
+
+def test_block_is_active_outside_the_fixture():
+    """Sanity: a test that does NOT request the fixture has the block active.
+
+    Pairs with the test above to prove the fixture toggle is real — without
+    this paired test the fixture test would self-pass even if the toggle
+    didn't work (since the block is on by default and the wrapper-or-real
+    distinction is what matters)."""
+    with pytest.raises(OSError, match="hermes test network isolation"):
+        socket.create_connection(("8.8.8.8", 53), timeout=1)
