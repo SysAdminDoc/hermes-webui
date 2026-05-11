@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed custom provider names such as `Local (127.0.0.1:15721)` producing colon-bearing name slugs that corrupted `@custom:...:model` parsing; name-derived slugs now strip slug-hostile punctuation consistently across model routing, provider cards, key detection, and key removal while preserving endpoint-derived `custom:<host>:<port>` slugs (#2047).
+
 ## [v0.51.44] — 2026-05-11 — Release T (5-PR contributor batch — security + worktree sessions + LM Studio + onboarding docs + transcript dedup, plus comprehensive test-suite network isolation)
 
 ### Added
