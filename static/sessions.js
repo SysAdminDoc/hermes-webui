@@ -248,8 +248,14 @@ function _purgeStaleInflightEntries() {
   // streaming. This prevents the in-memory cache from growing unbounded
   // when streams end abnormally. (#2066)
   if (typeof INFLIGHT !== 'object' || !INFLIGHT) return;
+  const sessionsById = new Map();
+  if (Array.isArray(_allSessions)) {
+    for (const s of _allSessions) {
+      if (s && s.session_id) sessionsById.set(s.session_id, s);
+    }
+  }
   for (const sid of Object.keys(INFLIGHT)) {
-    const s = _allSessionsById.get(sid);
+    const s = sessionsById.get(sid);
     if (s && !s.is_streaming) {
       delete INFLIGHT[sid];
       if (typeof clearInflightState === 'function') clearInflightState(sid);
