@@ -25,6 +25,7 @@ Three integration points:
 """
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import shutil
@@ -174,6 +175,120 @@ def _orphaned_backup_live_paths(
     return paths
 
 
+def _new_audit_item(
+    session_id: str,
+    kind: str,
+    category: str,
+    recommendation: str,
+    live_messages: int = -1,
+    bak_messages: int = -1,
+) -> dict:
+    return {
+        "session_id": session_id,
+        "kind": kind,
+        "category": category,
+        "recommendation": recommendation,
+        "live_messages": live_messages,
+        "bak_messages": bak_messages,
+    }
+
+
+def _read_index_session_ids(index_path: Path) -> set[str]:
+    try:
+        data = json.loads(index_path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return set()
+    if not isinstance(data, list):
+        return set()
+    ids: set[str] = set()
+    for entry in data:
+        if isinstance(entry, dict) and isinstance(entry.get('session_id'), str):
+            ids.add(entry['session_id'])
+    return ids
+
+
+def audit_session_recovery(session_dir: Path, state_db_path: Path | None = None) -> dict:
+    """Read-only audit of session recovery state.
+
+    The audit intentionally does not mutate files. It classifies only the safe
+    recovery primitives this module knows how to perform: backup restores and
+    derived index rebuilds. Call ``recover_all_sessions_on_startup`` separately
+    for safe repairs.
+    """
+    if not session_dir.exists():
+        return {
+            "status": "ok",
+            "summary": {"ok": 0, "repairable": 0, "unsafe_to_repair": 0},
+            "items": [],
+        }
+
+    items: list[dict] = []
+    live_paths = sorted(p for p in session_dir.glob('*.json') if not p.name.startswith('_'))
+    live_ids = {p.stem for p in live_paths}
+
+    for live_path in live_paths:
+        status = inspect_session_recovery_status(live_path)
+        if status.get('recommend') == 'restore':
+            items.append(_new_audit_item(
+                status['session_id'],
+                "shrunken_live",
+                "repairable",
+                "restore_from_bak",
+                status.get('live_messages', -1),
+                status.get('bak_messages', -1),
+            ))
+
+    for bak_path in sorted(session_dir.glob('*.json.bak')):
+        live_path = bak_path.with_suffix('')
+        if live_path.exists() or live_path.name.startswith('_'):
+            continue
+        bak_messages = _msg_count(bak_path)
+        session_id = live_path.stem
+        if bak_messages < 0:
+            items.append(_new_audit_item(
+                session_id, "malformed_orphan_backup", "unsafe_to_repair", "manual_review", -1, bak_messages
+            ))
+        elif _state_db_has_session(session_id, state_db_path):
+            items.append(_new_audit_item(
+                session_id, "orphan_backup", "repairable", "restore_from_bak", -1, bak_messages
+            ))
+        else:
+            items.append(_new_audit_item(
+                session_id,
+                "orphan_backup_without_state_row",
+                "unsafe_to_repair",
+                "manual_review",
+                -1,
+                bak_messages,
+            ))
+
+    index_path = session_dir / '_index.json'
+    if index_path.exists():
+        index_ids = _read_index_session_ids(index_path)
+        for session_id in sorted(index_ids - live_ids):
+            items.append(_new_audit_item(
+                session_id, "index_missing_file", "repairable", "rebuild_index"
+            ))
+        for session_id in sorted(live_ids - index_ids):
+            items.append(_new_audit_item(
+                session_id, "index_missing_entry", "repairable", "rebuild_index",
+                _msg_count(session_dir / f"{session_id}.json"), -1,
+            ))
+
+    summary = {"ok": len(live_paths), "repairable": 0, "unsafe_to_repair": 0}
+    for item in items:
+        category = item.get('category')
+        if category in summary:
+            summary[category] += 1
+    if summary["unsafe_to_repair"]:
+        overall = "needs_manual_review"
+    elif summary["repairable"]:
+        overall = "warn"
+    else:
+        overall = "ok"
+    return {"status": overall, "summary": summary, "items": items}
+
+
 def recover_all_sessions_on_startup(
     session_dir: Path,
     rebuild_index: bool = False,
@@ -228,3 +343,20 @@ def recover_all_sessions_on_startup(
         "orphaned_backups": len(orphan_paths),
         "details": details,
     }
+
+
+def _main() -> int:
+    parser = argparse.ArgumentParser(description="Audit Hermes WebUI session recovery state")
+    parser.add_argument("--audit", action="store_true", help="run a read-only recovery audit")
+    parser.add_argument("--session-dir", type=Path, required=True, help="path to WebUI sessions directory")
+    parser.add_argument("--state-db", type=Path, default=None, help="optional Hermes state.db path")
+    args = parser.parse_args()
+    if not args.audit:
+        parser.error("currently only --audit is supported")
+    report = audit_session_recovery(args.session_dir, state_db_path=args.state_db)
+    print(json.dumps(report, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
