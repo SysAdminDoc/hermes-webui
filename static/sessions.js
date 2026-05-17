@@ -1319,7 +1319,7 @@ function _playQueuedSessionReflowAnimation(){
   const before=_pendingSessionReflowPositions;
   _pendingSessionReflowPositions=null;
   if(!before||!before.size) return;
-  const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce=_sessionPrefersReducedMotion();
   if(reduce) return;
   const list=$('sessionList');
   if(!list) return;
@@ -1327,13 +1327,29 @@ function _playQueuedSessionReflowAnimation(){
     const oldTop=before.get(row.dataset.sid);
     if(oldTop===undefined) return;
     const delta=oldTop-row.getBoundingClientRect().top;
-    if(Math.abs(delta)<1||typeof row.animate!=='function') return;
-    const anim=row.animate(
-      [{transform:`translateY(${delta}px)`},{transform:'translateY(0)'}],
-      {duration:360,easing:'cubic-bezier(.2,.8,.2,1)'}
-    );
-    if(anim&&anim.finished) anim.finished.catch(()=>{});
+    if(Math.abs(delta)<1) return;
+    row.style.setProperty('--session-reflow-offset',delta+'px');
+    row.classList.add('session-reflowing');
+    row.getBoundingClientRect();
+    row.style.setProperty('--session-reflow-offset','0px');
+    let reflowCleared=false;
+    const clearReflow=()=>{
+      if(reflowCleared) return;
+      reflowCleared=true;
+      row.classList.remove('session-reflowing');
+      row.style.removeProperty('--session-reflow-offset');
+      row.removeEventListener('transitionend',onReflowEnd);
+    };
+    const onReflowEnd=(event)=>{
+      if(event.propertyName==='transform') clearReflow();
+    };
+    row.addEventListener('transitionend',onReflowEnd);
+    setTimeout(clearReflow,420);
   });
+}
+
+function _sessionPrefersReducedMotion(){
+  return Boolean(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 const SESSION_VIRTUAL_ROW_HEIGHT = 52;
 const SESSION_VIRTUAL_BUFFER_ROWS = 12;
@@ -1621,7 +1637,7 @@ function _appendSessionDuplicateAction(menu, session){
 
 function _playSessionActionMenuEntrance(menu){
   if(!menu) return;
-  const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce=_sessionPrefersReducedMotion();
   if(reduce) return;
   if(typeof menu.animate==='function'){
     try{
@@ -3251,7 +3267,7 @@ function renderSessionListFromCache(){
     const _longPressDelay=400;
     const _swipeActionThreshold=144;
     const _swipeCancelRatio=0.75;
-    const _committedSwipeDuration=420;
+    const _committedSwipeDuration=_sessionPrefersReducedMotion()?0:420;
     const _clearLongPressTimer=()=>{
       if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
       if(!_longPressMenuOpened) el.classList.remove('long-pressing');

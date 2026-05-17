@@ -25,6 +25,8 @@ def test_session_menu_has_subtle_open_animation():
     assert "@keyframes session-menu-in" in STYLE_CSS
     assert "@media (prefers-reduced-motion:reduce)" in STYLE_CSS
     assert ".session-action-menu{animation:none;will-change:auto;}" in STYLE_CSS
+    assert ".session-item,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}" in STYLE_CSS
+    assert ".session-item.long-pressing{animation:none;}" in STYLE_CSS
 
 
 def test_mobile_session_menu_opens_from_long_press_and_hides_dots():
@@ -59,7 +61,7 @@ def test_session_swipes_archive_right_and_delete_left():
     assert "_swipeTracking=true" in SESSIONS_JS
     assert "const _trackHorizontalSwipe=(dx,dy)=>{" in SESSIONS_JS
     assert "_swipeActionThreshold=144" in SESSIONS_JS
-    assert "_committedSwipeDuration=420" in SESSIONS_JS
+    assert "_committedSwipeDuration=_sessionPrefersReducedMotion()?0:420" in SESSIONS_JS
     assert "const _handleSessionSwipe=(signedDx,signedDy)=>{" in SESSIONS_JS
     assert "if(_isSessionSwipeTarget()&&(_swipeTracking||Math.abs(signedDx)>Math.abs(signedDy))) _paintSessionSwipe(signedDx)" in SESSIONS_JS
     assert "if(_isSessionSwipeTarget()&&(_swipeTracking||dx>dy)) _paintSessionSwipe(signedDx)" in SESSIONS_JS
@@ -128,12 +130,15 @@ def test_session_removal_reflows_surviving_rows_smoothly():
     assert "function _captureSessionReflowPositions(){" in SESSIONS_JS
     assert "positions.set(row.dataset.sid,row.getBoundingClientRect().top);" in SESSIONS_JS
     assert "function _playQueuedSessionReflowAnimation(){" in SESSIONS_JS
-    assert "window.matchMedia('(prefers-reduced-motion: reduce)').matches" in SESSIONS_JS
+    assert "function _sessionPrefersReducedMotion(){" in SESSIONS_JS
     assert "const delta=oldTop-row.getBoundingClientRect().top;" in SESSIONS_JS
-    assert "{duration:360,easing:'cubic-bezier(.2,.8,.2,1)'}" in SESSIONS_JS
+    assert "row.style.setProperty('--session-reflow-offset',delta+'px')" in SESSIONS_JS
+    assert "row.classList.add('session-reflowing')" in SESSIONS_JS
+    assert "row.style.setProperty('--session-reflow-offset','0px')" in SESSIONS_JS
     assert SESSIONS_JS.count("const reflowPositions=_captureSessionReflowPositions();") >= 2
     assert SESSIONS_JS.count("_pendingSessionReflowPositions=reflowPositions;") >= 2
     assert "_playQueuedSessionReflowAnimation();" in SESSIONS_JS
+    assert ".session-item.session-reflowing{transition:background .15s,color .15s,transform .36s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}" in STYLE_CSS
 
 
 def test_ios_touch_events_drive_session_swipes():
