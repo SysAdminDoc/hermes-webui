@@ -4035,7 +4035,13 @@ def handle_get(handler, parsed) -> bool:
         stream_id = parse_qs(parsed.query).get("stream_id", [""])[0]
         if not stream_id:
             return bad(handler, "stream_id required")
-        cancelled = cancel_stream(stream_id)
+        from api.runtime_adapter import LegacyJournalRuntimeAdapter, runtime_adapter_enabled
+
+        if runtime_adapter_enabled():
+            adapter = LegacyJournalRuntimeAdapter(cancel_delegate=cancel_stream)
+            cancelled = adapter.cancel_run(stream_id).accepted
+        else:
+            cancelled = cancel_stream(stream_id)
         return j(handler, {"ok": True, "cancelled": cancelled, "stream_id": stream_id})
 
     if parsed.path == "/api/chat/stream":
