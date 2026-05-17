@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **PR #2482** by @Michaelyklam (refs #2453) — Add a durable source/API boundary inventory for the WebUI's remaining Hermes Agent source dependencies: chat execution, runtime events, profiles, goals, slash/plugin commands, provider/auth/model catalogs, redaction parity, and imported Agent/Gateway sessions. The new RFC tracks replacement API contracts before the source mount can be removed.
+
+### Changed
+
+- **PR #2482** by @Michaelyklam (refs #2453) — Make the multi-container source boundary more explicit: Docker docs and README now link the boundary inventory, and `docker_init.bash` emits a startup warning when the WebUI sees a writable agent-source mount instead of the default read-only `hermes-agent-src` mount.
+
 ## [v0.51.85] — 2026-05-17 — Release BI (stage-378 — 3-PR batch — workspace-prefix display leakage fix + release-tag update banner + Slice 3a cancel-control gate RFC)
 
 ### Fixed

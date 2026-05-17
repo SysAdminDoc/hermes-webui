@@ -391,6 +391,15 @@ else
     fi
   done
   if [ -n "$_agent_src" ]; then
+    if [ -w "$_agent_src" ]; then
+      echo ""
+      echo "!! WARNING: hermes-agent source mount is writable from the WebUI container."
+      echo "!!   Path: $_agent_src"
+      echo "!! The multi-container compose defaults use a read-only mount for defence-in-depth."
+      echo "!! If this is not an intentional local development checkout, switch the WebUI"
+      echo "!! agent source volume/bind mount to read-only. See docs/rfcs/agent-source-boundary.md."
+      echo ""
+    fi
     uv pip install "$_agent_src[all]" --trusted-host pypi.org --trusted-host files.pythonhosted.org || error_exit "Failed to install hermes-agent's requirements"
   else
     echo ""
