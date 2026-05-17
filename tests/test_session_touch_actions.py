@@ -93,20 +93,25 @@ def test_session_swipes_show_visual_feedback_and_touch_load_clears():
     assert "requestAnimationFrame(()=>requestAnimationFrame(_clearSessionSwipePaint))" in SESSIONS_JS
     assert ".session-item.swiping-right" in STYLE_CSS
     assert ".session-item.swiping-left" in STYLE_CSS
+    assert "const _makeSessionSwipeAffordance=(side,icon,label)=>{" in SESSIONS_JS
+    assert "_makeSessionSwipeAffordance('right',s.archived?'undo':'archive'" in SESSIONS_JS
+    assert "_makeSessionSwipeAffordance('left','trash-2'" in SESSIONS_JS
+    assert ".session-swipe-affordance{" in STYLE_CSS
     assert "opacity:var(--session-swipe-progress,0)" in STYLE_CSS
-    assert "transform:translateX(calc(-1 * var(--session-swipe-offset,0px)))" in STYLE_CSS
-    assert STYLE_CSS.count("background:transparent;") >= 3
+    assert ".session-item.swiping-right .session-swipe-affordance-right" in STYLE_CSS
+    assert ".session-item.swiping-left .session-swipe-affordance-left" in STYLE_CSS
+    assert "transform:translateX(calc(-1 * var(--session-swipe-offset,0px))) scale(calc(.82 + var(--session-swipe-progress,0) * .18))" in STYLE_CSS
+    assert ".session-swipe-badge{" in STYLE_CSS
+    assert ".session-swipe-label{" in STYLE_CSS
     assert "transform .5s cubic-bezier(.2,.8,.2,1)" in STYLE_CSS
     assert ".session-item.dragging.swiping-right" in STYLE_CSS
     assert ".session-item.dragging.swiping-left" in STYLE_CSS
     assert ".session-item.active.swiping-right" in STYLE_CSS
     assert ".session-item.active.swiping-left" in STYLE_CSS
-    assert 'content:"Archive"' in STYLE_CSS
-    assert 'content:"Delete"' in STYLE_CSS
     assert ".session-item.dragging{transition:background .15s,color .15s,box-shadow .15s ease;}" in STYLE_CSS
     assert ".session-item.swipe-committed" in STYLE_CSS
     assert "transform .42s cubic-bezier(.2,.8,.2,1)" in STYLE_CSS
-    assert ".session-item.swipe-committed::after{transition:opacity .18s ease;}" in STYLE_CSS
+    assert ".session-item.swipe-committed .session-swipe-affordance{transition:opacity .18s ease,transform .18s ease;}" in STYLE_CSS
     assert ".session-item.long-pressing" in STYLE_CSS
     assert "@keyframes session-long-press" in STYLE_CSS
     assert "transform:translateX(var(--session-swipe-offset,0))" in STYLE_CSS

@@ -3175,6 +3175,25 @@ function renderSessionListFromCache(){
       el.appendChild(actions);
     }
 
+    const _makeSessionSwipeAffordance=(side,icon,label)=>{
+      const affordance=document.createElement('div');
+      affordance.className='session-swipe-affordance session-swipe-affordance-'+side;
+      const badge=document.createElement('span');
+      badge.className='session-swipe-badge';
+      badge.innerHTML=li(icon,18);
+      const text=document.createElement('span');
+      text.className='session-swipe-label';
+      text.textContent=label;
+      affordance.append(badge,text);
+      return affordance;
+    };
+    if(!readOnly){
+      el.append(
+        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?t('session_restore'):t('session_batch_archive')),
+        _makeSessionSwipeAffordance('left','trash-2',t('session_batch_delete')),
+      );
+    }
+
     // Use pointerup + manual double-tap detection instead of onclick/ondblclick.
     // onclick/ondblclick are unreliable on touch devices (iPad Safari especially):
     // hover-triggered layout shifts, ghost clicks, and 300ms delay all break
