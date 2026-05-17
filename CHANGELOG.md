@@ -57,9 +57,6 @@
 ### Changed
 
 - **PR #2466** by @franksong2702 (closes #2465) — Clarify `Compact tool activity` semantics in Preferences: the setting now describes compact inline activity that preserves the agent timeline, matching the current long-running turn behavior where thinking cards, visible progress notes, and tool Activity bursts stay in chronological order instead of being described as one top-of-turn collapsed block. Renderer behavior is unchanged; this is a description-only correction plus the `simplified_tool_calling` default comment and regression-test wording.
-### Fixed
-
-- OpenViking and other batch-extraction memory providers now follow the same lifecycle split as Hermes CLI: completed WebUI turns are synced and marked as pending work, while extraction/commit runs only at session boundaries such as starting a new chat from a previous session, cache eviction, or shutdown drain. This avoids per-turn extraction while preserving reliable boundary commits for cached and reopened WebUI sessions.
 
 ## [v0.51.82] — 2026-05-17 — Release BF (stage-375 — 2-PR batch — table renderer pipe protection + Catppuccin appearance skin)
 
