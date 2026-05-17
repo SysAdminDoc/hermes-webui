@@ -3313,8 +3313,11 @@ function renderSessionListFromCache(){
       return _isSessionSwipeTarget()&&!_isMessagingSession(s)&&!_isCliSession(s);
     };
     const _paintSessionSwipe=(signedDx)=>{
-      const offset=Math.max(-72,Math.min(72,signedDx*.55));
-      const progress=Math.min(1,Math.abs(offset)/72);
+      const rawOffset=signedDx*.55;
+      const revealedOffset=Math.max(-72,Math.min(72,rawOffset));
+      const overshoot=Math.max(0,Math.abs(rawOffset)-72);
+      const offset=Math.sign(rawOffset)*(Math.abs(revealedOffset)+Math.sqrt(overshoot)*5);
+      const progress=Math.min(1,Math.abs(revealedOffset)/72);
       el.style.setProperty('--session-swipe-offset',offset+'px');
       el.style.setProperty('--session-swipe-progress',Math.pow(progress,1.5));
       el.classList.toggle('swiping-right',offset>0);

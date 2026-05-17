@@ -79,8 +79,12 @@ def test_session_swipes_archive_right_and_delete_left():
 
 def test_session_swipes_show_visual_feedback_and_touch_load_clears():
     assert "const _paintSessionSwipe=(signedDx)=>{" in SESSIONS_JS
+    assert "const rawOffset=signedDx*.55" in SESSIONS_JS
+    assert "const revealedOffset=Math.max(-72,Math.min(72,rawOffset))" in SESSIONS_JS
+    assert "const overshoot=Math.max(0,Math.abs(rawOffset)-72)" in SESSIONS_JS
+    assert "Math.sqrt(overshoot)*5" in SESSIONS_JS
     assert "el.style.setProperty('--session-swipe-offset',offset+'px')" in SESSIONS_JS
-    assert "const progress=Math.min(1,Math.abs(offset)/72)" in SESSIONS_JS
+    assert "const progress=Math.min(1,Math.abs(revealedOffset)/72)" in SESSIONS_JS
     assert "el.style.setProperty('--session-swipe-progress',Math.pow(progress,1.5))" in SESSIONS_JS
     assert "const _clearSessionSwipePaint=()=>{" in SESSIONS_JS
     assert "const _settleSessionSwipePaint=()=>{" in SESSIONS_JS
