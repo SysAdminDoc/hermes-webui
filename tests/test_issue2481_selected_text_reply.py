@@ -10,12 +10,17 @@ def read(rel: str) -> str:
 
 
 def _locale_blocks(src: str) -> dict[str, str]:
-    matches = list(re.finditer(r"\n  ([a-z]{2}(?:-[A-Z]{2})?): \{", src))
+    matches = list(
+        re.finditer(
+            r"\n  (?:(['\"])([A-Za-z][A-Za-z0-9-]*)\1|([A-Za-z][A-Za-z0-9-]*)): \{",
+            src,
+        )
+    )
     blocks: dict[str, str] = {}
     for idx, match in enumerate(matches):
         start = match.end()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else src.rfind("\n};")
-        blocks[match.group(1)] = src[start:end]
+        blocks[match.group(2) or match.group(3)] = src[start:end]
     return blocks
 
 
@@ -67,9 +72,14 @@ def test_selected_text_reply_styles_and_i18n_exist_for_all_locales():
     assert "position:fixed" in css
     assert "pointer-events:none" in css
     assert "pointer-events:auto" in css
+    assert "border:2px solid var(--accent)" in css
+    assert "background:var(--bg)" in css
+    assert "color:var(--text)" in css
+    assert "outline:2px solid var(--focus-ring)" in css
 
     blocks = _locale_blocks(i18n)
     assert blocks, "No locale blocks found"
+    assert "zh-Hant" in blocks, "Locale parser must include quoted script locales"
     required = {
         "selected_text_reply",
         "selected_text_reply_title",
