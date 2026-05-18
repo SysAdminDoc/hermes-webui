@@ -8158,6 +8158,7 @@ def _handle_chat_sync(handler, body):
             )
             from api.streaming import (
                 _merge_display_messages_after_agent_result,
+                _restore_display_reasoning_metadata,
                 _restore_reasoning_metadata,
                 _sanitize_messages_for_api,
                 _context_messages_for_new_turn,
@@ -8210,7 +8211,7 @@ def _handle_chat_sync(handler, body):
         s.messages = _merge_display_messages_after_agent_result(
             _previous_messages,
             _previous_context_messages,
-            _restore_reasoning_metadata(_previous_messages, _result_messages),
+            _restore_display_reasoning_metadata(_previous_messages, _result_messages),
             msg,
         )
         # Only auto-generate title when still default; preserves user renames

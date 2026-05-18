@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **PR #2536** (closes #2514, refs #2535) — Stop reasoning-only Thinking entries from being replayed into provider-facing history as blank assistant turns, preventing long WebUI sessions from accumulating duplicated stale Thinking blocks and inflated Activity/tool metadata on later turns. Settled compact Activity rerenders now also clear previously inserted Thinking rows before rebuilding the visible transcript.
+
 ## [v0.51.90] — 2026-05-18 — Release BN (stage-383 — 10-PR full sweep batch — empty-gateway messaging history fix + previous-messaging-sessions setting + Kanban board switcher layout + UI/UX demo theme controls + Slice 3c queue/goal RFC gate + keyless custom endpoints + custom-provider remote model catalog parity + auto-compression elapsed timer + new-conversation cold-start guard + Kanban drag-drop detail open fix)
 
 ### Fixed
@@ -22,7 +26,6 @@
 
 - **PR #2511** by @franksong2702 (refs #2502 / #2503) — Update the `docs/ui-ux/` demo appearance controls to initialize as `class="dark" data-skin="slate"` instead of the deprecated `data-theme`-only buttons and legacy theme names. Brings the demo pages in line with the live Theme + Skin contract referenced from the new `docs/CONTRACTS.md` so contributors following the contract-index path don't land on stale demos.
 - **PR #2509** by @Michaelyklam (refs #1925) — Advance the runtime-adapter RFC after the Slice 3b approval/clarify seam shipped in v0.51.89. The RFC now marks Slice 3b as shipped and defines the next Slice 3c queue/continue + goal control gate: route those controls through `RuntimeAdapter.queue_message(...)` / `update_goal(...)` only after pinning stable response contracts, bounded unavailable-control behavior, replayable lifecycle/status evidence, ordering/idempotency expectations, and explicit non-goals for runner/sidecar ownership or a WebUI-owned queue/goal scheduler. Docs + adapter-seam regression test only — no runtime/control routing changes in this PR.
-
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed
