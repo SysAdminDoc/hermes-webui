@@ -357,7 +357,15 @@ class RuntimeAdapter:
 `queue_message` is named for the legacy `/api/session/queue` payload: it
 accepts follow-up chat text rather than arbitrary runtime input. The method name
 does not require the HTTP route to change; it documents the adapter-level control
-semantics that a later Slice 3c implementation should preserve.
+semantics that a later Slice 3c implementation should preserve. The method enters
+the protocol before route wiring so queue/continue can land as a separate, small
+control-routing follow-up instead of being coupled to goal routing.
+
+For `update_goal`, the `action` argument is the bounded adapter capability label.
+During the legacy-journal slice, the legacy goal parser still receives the full
+`text` payload and remains authoritative for details such as the body of
+`set <goal text>`. Future slices must not route goal semantics from `action`
+alone; doing so would drop the goal body and change `/api/goal` behavior.
 
 Required data classes / payload fields:
 

@@ -115,6 +115,13 @@ def _cursor_to_after_seq(cursor: str | None) -> int | None:
 
 
 def _active_control_result(value: Any) -> ControlResult:
+    """Normalize legacy delegate responses without changing their payloads.
+
+    ``status`` is an adapter-level summary used by current control tests and
+    future runtime backends.  For legacy goal payloads it may mirror the goal
+    action (``set`` / ``pause`` / ``status``), while public route behavior keeps
+    using the payload itself to preserve existing HTTP response shapes.
+    """
     if isinstance(value, ControlResult):
         return value
     if isinstance(value, dict):

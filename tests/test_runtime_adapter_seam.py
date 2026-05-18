@@ -237,7 +237,9 @@ def test_goal_route_uses_adapter_only_when_flag_enabled():
 
     assert "runtime_adapter_enabled()" in goal_body
     assert "LegacyJournalRuntimeAdapter(goal_delegate=_legacy_goal_update)" in goal_body
+    assert "goal_adapter_action = _runtime_adapter_goal_action(goal_args)" in goal_body
     assert "adapter.update_goal(" in goal_body
+    assert "goal_adapter_action," in goal_body
     assert "payload = dict(control_result.payload)" in goal_body
     assert "else:\n        payload = _legacy_goal_update" in goal_body
     assert "HERMES_WEBUI_RUNTIME_ADAPTER" not in goal_body

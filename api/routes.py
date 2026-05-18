@@ -7892,16 +7892,20 @@ def _handle_goal_command(handler, body):
             profile_home=profile_home,
         )
 
+    goal_adapter_action = _runtime_adapter_goal_action(goal_args)
     if runtime_adapter_enabled():
         adapter = LegacyJournalRuntimeAdapter(goal_delegate=_legacy_goal_update)
         control_result = adapter.update_goal(
             s.session_id,
-            _runtime_adapter_goal_action(goal_args),
+            goal_adapter_action,
             goal_args,
         )
+        # Slice 3c keeps the adapter as a structural seam only.  Preserve the
+        # public /api/goal response by passing through the legacy payload rather
+        # than deriving HTTP behavior from ControlResult.accepted/status.
         payload = dict(control_result.payload)
     else:
-        payload = _legacy_goal_update(s.session_id, _runtime_adapter_goal_action(goal_args), goal_args)
+        payload = _legacy_goal_update(s.session_id, goal_adapter_action, goal_args)
     if not payload.get("ok", True):
         status = 409 if payload.get("error") == "agent_running" else 400
         return j(handler, payload, status=status)
