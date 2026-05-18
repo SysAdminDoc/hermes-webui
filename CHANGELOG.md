@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **PR #2520** by @OneFat3 (refs #2247) — Route archive extraction (`/api/upload/extract`) through the per-session attachment inbox (`_session_attachment_dir`) instead of hardcoded `Path(s.workspace)`, matching the single-file upload path. Extracted archives now land at `<attachment_root>/<session_id>/<archive_stem>/` so session deletion cleanup covers them and per-session isolation is preserved when `HERMES_WEBUI_ATTACHMENT_DIR` is configured.
+
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed
