@@ -173,9 +173,10 @@ def _clarify_timeout_seconds(default: int = 120) -> int:
 _CANCEL_MARKER_PATTERNS = ('task cancelled', 'task canceled', 'response interrupted')
 
 
-_WEBUI_VISIBLE_PROGRESS_PROMPT = """
-WebUI progress contract:
-- For multi-step work that uses tools, provide brief user-visible progress updates as normal assistant content before continuing with tool calls.
+_WEBUI_PROGRESS_PROMPT = """
+WebUI progress guidance:
+- Match the normal Hermes messaging style; do not add extra status updates solely because this is a browser session.
+- For long multi-step work that uses tools, you may provide brief user-visible progress updates before continuing with tool calls.
 - Each update should say what you are about to check, what you just confirmed, or why the next tool call is needed.
 - Keep updates concise, factual, and in the user's language. One or two short sentences are enough.
 - Do not reveal hidden reasoning, chain-of-thought, private scratchpads, secrets, raw logs, or long tool output.
@@ -224,7 +225,7 @@ def _webui_ephemeral_system_prompt(
     surface_prompt = _webui_surface_context_prompt(surface_context)
     if surface_prompt:
         parts.append(surface_prompt)
-    parts.append(_WEBUI_VISIBLE_PROGRESS_PROMPT)
+    parts.append(_WEBUI_PROGRESS_PROMPT)
     return "\n\n".join(part for part in parts if part)
 
 

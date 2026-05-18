@@ -9,7 +9,7 @@
 
 ### Changed
 
-- Add browser-surface session context to WebUI agent turns so the agent can distinguish a WebUI chat from messaging-platform transcripts while keeping the metadata ephemeral and out of saved history.
+- Add browser-surface session context to WebUI agent turns so the agent can distinguish a WebUI chat from messaging-platform transcripts while keeping the metadata ephemeral and out of saved history. WebUI progress guidance now explicitly preserves the normal Hermes messaging style instead of encouraging extra browser-only status chatter.
 
 ## [v0.51.90] — 2026-05-18 — Release BN (stage-383 — 10-PR full sweep batch — empty-gateway messaging history fix + previous-messaging-sessions setting + Kanban board switcher layout + UI/UX demo theme controls + Slice 3c queue/goal RFC gate + keyless custom endpoints + custom-provider remote model catalog parity + auto-compression elapsed timer + new-conversation cold-start guard + Kanban drag-drop detail open fix)
 
