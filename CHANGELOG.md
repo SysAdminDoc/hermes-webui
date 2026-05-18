@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **PR #2515** (closes #2513) — Keep named custom-provider model pickers populated from each configured endpoint even when `custom_providers[].model` is present. The singular `model` field now acts as a sticky/fallback entry instead of preventing remote `/models` catalog entries or sibling custom providers from appearing.
+
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed
