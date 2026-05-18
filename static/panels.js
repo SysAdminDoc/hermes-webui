@@ -3563,13 +3563,15 @@ async function deleteCurrentSkill() {
 
 // ── Memory (main view) ──
 let _memoryData = null;
-let _currentMemorySection = null; // 'memory' | 'user' | 'soul'
+let _notesSourcesData = null;
+let _currentMemorySection = null; // 'memory' | 'user' | 'soul' | 'external_notes'
 let _memoryMode = 'empty'; // 'empty' | 'read' | 'edit'
 
 const MEMORY_SECTIONS = [
   { key: 'memory', labelKey: 'my_notes', emptyKey: 'no_notes_yet', iconKey: 'brain' },
   { key: 'user',   labelKey: 'user_profile', emptyKey: 'no_profile_yet', iconKey: 'user' },
   { key: 'soul',   labelKey: 'agent_soul', emptyKey: 'no_soul_yet', iconKey: 'sparkles' },
+  { key: 'external_notes', labelKey: 'external_notes_sources', emptyKey: 'external_notes_empty', iconKey: 'book-open' },
 ];
 
 function _memorySectionMeta(key) {
@@ -3596,12 +3598,51 @@ function _setMemoryHeaderButtons(mode) {
   const editBtn = $('btnEditMemoryDetail');
   const cancelBtn = $('btnCancelMemoryDetail');
   const saveBtn = $('btnSaveMemoryDetail');
-  if (mode === 'read') { show(editBtn); hide(cancelBtn); hide(saveBtn); }
+  if (mode === 'read' && _currentMemorySection !== 'external_notes') { show(editBtn); hide(cancelBtn); hide(saveBtn); }
   else if (mode === 'edit') { hide(editBtn); show(cancelBtn); show(saveBtn); }
   else { hide(editBtn); hide(cancelBtn); hide(saveBtn); }
 }
 
+function _renderExternalNotesSources() {
+  const title = $('memoryDetailTitle');
+  const body = $('memoryDetailBody');
+  const empty = $('memoryDetailEmpty');
+  if (!title || !body) return;
+  title.textContent = t('external_notes_sources');
+  const data = _notesSourcesData || {};
+  const sources = Array.isArray(data.sources) ? data.sources : [];
+  const recall = data.automatic_recall_unchanged !== false
+    ? `<div class="memory-detail-mtime">${esc(t('external_notes_auto_recall_hint'))}</div>`
+    : '';
+  if (!sources.length) {
+    body.innerHTML = `<div class="main-view-content">${recall}<div class="memory-empty">${esc(t('external_notes_empty'))}</div></div>`;
+  } else {
+    const cards = sources.map(src => {
+      const status = src.active ? t('source_active') : (src.status || t('source_configured'));
+      const tools = Array.isArray(src.tools) ? src.tools : [];
+      const toolHtml = tools.length
+        ? `<ul class="notes-source-tools">${tools.map(tool => `<li><strong>${esc(tool.name||'')}</strong>${tool.description?` — ${esc(tool.description)}`:''}</li>`).join('')}</ul>`
+        : `<div class="memory-empty">${esc(t('external_notes_no_tools'))}</div>`;
+      return `<section class="notes-source-card">
+        <div class="notes-source-card-head"><strong>${esc(src.label||src.name||'')}</strong><span class="detail-badge ${src.active?'active':''}">${esc(status)}</span></div>
+        <div class="memory-detail-mtime">${esc(t('external_notes_tool_count', src.tool_count||0))}</div>
+        ${toolHtml}
+      </section>`;
+    }).join('');
+    body.innerHTML = `<div class="main-view-content">${recall}${cards}</div>`;
+  }
+  body.style.display = '';
+  if (empty) empty.style.display = 'none';
+  _memoryMode = 'read';
+  _setMemoryHeaderButtons('read');
+}
+
 function _renderMemoryDetail(section) {
+  if (section === 'external_notes') {
+    _renderExternalNotesSources();
+    return;
+  }
+
   const meta = _memorySectionMeta(section);
   const title = $('memoryDetailTitle');
   const body = $('memoryDetailBody');
@@ -3648,15 +3689,28 @@ function _renderMemoryEdit(section) {
   if (ta) ta.focus();
 }
 
-function openMemorySection(section, el) {
+async function loadNotesSources(force) {
+  if (_notesSourcesData && !force) return _notesSourcesData;
+  try {
+    _notesSourcesData = await api('/api/notes/sources');
+  } catch (e) {
+    _notesSourcesData = {sources: [], automatic_recall_unchanged: true, error: e && e.message ? e.message : String(e)};
+  }
+  return _notesSourcesData;
+}
+
+async function openMemorySection(section, el) {
   _currentMemorySection = section;
   document.querySelectorAll('#memoryPanel .side-menu-item').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
+  if (section === 'external_notes') {
+    await loadNotesSources(false);
+  }
   _renderMemoryDetail(section);
 }
 
 function editCurrentMemory() {
-  if (!_currentMemorySection) return;
+  if (!_currentMemorySection || _currentMemorySection === 'external_notes') return;
   _renderMemoryEdit(_currentMemorySection);
 }
 
@@ -4997,6 +5051,9 @@ async function loadMemory(force) {
   try {
     const data = await api('/api/memory');
     _memoryData = data;
+    if (_currentMemorySection === 'external_notes') {
+      await loadNotesSources(!!force);
+    }
     if (panel) {
       panel.innerHTML = '';
       for (const s of MEMORY_SECTIONS) {

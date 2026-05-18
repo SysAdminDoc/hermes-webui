@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add a read-only Third-party notes drawer to the Memory panel that lists configured note/knowledge MCP sources such as Joplin, Obsidian, Notion, and llm-wiki, while explicitly leaving automatic session recall unchanged.
+
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed

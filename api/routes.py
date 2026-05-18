@@ -4350,6 +4350,9 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/mcp/tools":
         return _handle_mcp_tools_list(handler)
 
+    if parsed.path == "/api/notes/sources":
+        return _handle_notes_sources_list(handler)
+
     # ── Checkpoints / Rollback (GET) ──
     if parsed.path == "/api/rollback/list":
         qs = parse_qs(parsed.query)
@@ -10528,6 +10531,106 @@ def _handle_mcp_tools_list(handler):
         "source": source,
         "inventory_scope": "already_known_runtime_only",
         "unavailable_servers": unavailable_servers,
+    })
+
+
+_NOTES_SOURCE_SERVER_HINTS = {
+    "joplin", "obsidian", "notion", "llm-wiki", "llmwiki", "wiki",
+    "notes", "note", "knowledge", "kb", "readwise", "logseq",
+}
+_NOTES_SOURCE_TOOL_HINTS = {
+    "note", "notes", "notebook", "page", "pages", "wiki", "knowledge",
+    "search_notes", "get_note", "list_notes", "read_note",
+}
+
+
+def _note_source_label(name: str) -> str:
+    labels = {
+        "joplin": "Joplin",
+        "obsidian": "Obsidian",
+        "notion": "Notion",
+        "llm-wiki": "LLM Wiki",
+        "llmwiki": "LLM Wiki",
+        "readwise": "Readwise",
+        "logseq": "Logseq",
+    }
+    lowered = str(name or "").strip().lower()
+    return labels.get(lowered, str(name or "").replace("_", " ").replace("-", " ").title())
+
+
+def _looks_like_notes_source(server_name: str, tool_rows: list[dict]) -> bool:
+    server_l = str(server_name or "").lower()
+    if any(hint in server_l for hint in _NOTES_SOURCE_SERVER_HINTS):
+        return True
+    for tool in tool_rows:
+        haystack = " ".join([
+            str(tool.get("name") or ""),
+            str(tool.get("description") or ""),
+        ]).lower()
+        if any(hint in haystack for hint in _NOTES_SOURCE_TOOL_HINTS):
+            return True
+    return False
+
+
+def _notes_sources_from_mcp_inventory(server_summaries: dict, tools: list[dict]) -> list[dict]:
+    """Build a safe notes/knowledge-source inventory from MCP servers/tools."""
+    by_server: dict[str, list[dict]] = {}
+    for tool in tools or []:
+        if not isinstance(tool, dict):
+            continue
+        server = str(tool.get("server") or "").strip()
+        if not server:
+            continue
+        by_server.setdefault(server, []).append(tool)
+
+    sources = []
+    for server, tool_rows in by_server.items():
+        if not _looks_like_notes_source(server, tool_rows):
+            continue
+        summary = server_summaries.get(server, {"name": server}) if isinstance(server_summaries, dict) else {"name": server}
+        safe_tools = []
+        for tool in tool_rows[:8]:
+            desc = _mcp_safe_display_text(tool.get("description") or "", limit=180)
+            desc = re.sub(r"(?i)\b(api[_-]?key|token|password|secret)\s*[:=]\s*\S+", "[REDACTED]", desc)
+            safe_tools.append({
+                "name": _mcp_safe_display_text(tool.get("name") or "", limit=96),
+                "description": desc,
+            })
+        sources.append({
+            "name": server,
+            "label": _note_source_label(server),
+            "enabled": bool(summary.get("enabled", True)),
+            "active": bool(summary.get("active")),
+            "status": summary.get("status") or "unknown",
+            "tool_count": len(tool_rows),
+            "tools": safe_tools,
+        })
+    sources.sort(key=lambda row: (not row.get("active"), row.get("label", "")))
+    return sources
+
+
+def _handle_notes_sources_list(handler):
+    """List note/knowledge MCP sources for the WebUI Notes drawer."""
+    cfg = get_config()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict):
+        servers = {}
+    runtime = _mcp_runtime_status_by_name()
+    server_summaries = {
+        str(name): _server_summary(str(name), scfg, runtime.get(str(name)))
+        for name, scfg in servers.items()
+    }
+    tools = _mcp_tools_from_runtime_status(runtime, server_summaries)
+    source = "mcp_runtime_status"
+    if not tools:
+        tools = _mcp_tools_from_registry(server_summaries)
+        source = "tool_registry" if tools else "none"
+    return j(handler, {
+        "sources": _notes_sources_from_mcp_inventory(server_summaries, tools),
+        "source": source,
+        "inventory_scope": "already_known_runtime_only",
+        "attach_supported": False,
+        "automatic_recall_unchanged": True,
     })
 
 
