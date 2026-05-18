@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **PR #2528** (closes #2518) — Guard New Conversation creation while a previous `/api/session/new` request is still in flight, so cold model/provider catalog resolution gives immediate pending feedback and rapid repeated clicks reuse the same create request instead of enqueueing duplicate blank sessions.
+
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed
