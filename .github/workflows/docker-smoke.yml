@@ -195,7 +195,11 @@ jobs:
           # "errorless", URL paths) are improbable for these specific tokens.
           echo "::group::Startup log scan"
           LOGS="$(docker compose -p "$PROJECT" -f "$COMPOSE_FILE" logs --no-color)"
-          BAD_PATTERNS='EROFS|Read-only file system|Traceback|PermissionError|error_exit|groupmod: cannot|usermod: cannot|Failed to set (UID|GID|owner|permissions|ownership)'
+          # `!! ERROR` + `!! Exiting script` are the actual strings emitted by
+          # docker_init.bash's error_exit() helper — the function name itself
+          # never appears in output. The literal token `error_exit` is kept as
+          # a belt-and-suspenders catch for any stray debug/echo of the name.
+          BAD_PATTERNS='EROFS|Read-only file system|Traceback|PermissionError|!! ERROR|!! Exiting script|error_exit|groupmod: cannot|usermod: cannot|Failed to set (UID|GID|owner|permissions|ownership)'
           if echo "$LOGS" | grep -E -i "$BAD_PATTERNS"; then
             echo "❌ Startup logs contain known-bad pattern (see above)"
             exit 1

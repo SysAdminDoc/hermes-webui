@@ -212,12 +212,43 @@ def test_docker_init_excludes_egg_info_during_staging():
     directories. setuptools takes a different (timestamp-update) code path
     when one is already present in the source tree, which itself hits the
     :ro mount through stat/utime calls. Excluding them keeps the build
-    happily on the fresh-build code path."""
+    happily on the fresh-build code path.
+
+    Tight assertions on both the rsync and cp-fallback paths — a loose
+    `"egg-info" in src` check would pass on a stray comment mention, so
+    we require the actual exclusion mechanics to be present.
+    """
     src = (REPO / "docker_init.bash").read_text(encoding="utf-8")
-    # Either rsync --exclude= form or the cp-fallback's explicit rm -rf —
-    # accept either provided the egg-info exclusion exists.
-    assert "egg-info" in src, (
-        "docker_init.bash staging must exclude *.egg-info from the copy "
-        "to avoid setuptools' timestamp-update code path."
+
+    # Find the staging block: rsync invocation OR cp-fallback. Both must
+    # actually exclude *.egg-info — a comment mention is not enough.
+    stage_idx = src.index("_stage_src=")
+    install_idx = src.index("uv pip install", stage_idx)
+    stage_block = src[stage_idx:install_idx]
+
+    # Rsync path must carry --exclude='*.egg-info'.
+    assert "--exclude='*.egg-info'" in stage_block, (
+        "docker_init.bash rsync invocation must include "
+        "--exclude='*.egg-info' so setuptools' timestamp-update code path "
+        "doesn't fire (which itself hits the :ro mount through stat/utime)."
+    )
+
+    # cp-fallback path must explicitly rm the egg-info dir after copy
+    # (cp -a has no --exclude flag, so the cleanup happens post-copy).
+    assert "*.egg-info" in stage_block, (
+        "docker_init.bash cp-fallback must remove $_stage_src/*.egg-info "
+        "after copy so the install runs on the fresh-build code path."
+    )
+
+    # Both build and dist must also be excluded — setuptools touches them
+    # under different conditions but the failure mode is identical.
+    assert "--exclude='build'" in stage_block, (
+        "rsync staging must --exclude='build' (setuptools build artifacts)."
+    )
+    assert "--exclude='dist'" in stage_block, (
+        "rsync staging must --exclude='dist' (setuptools build artifacts)."
+    )
+    assert "--exclude='__pycache__'" in stage_block, (
+        "rsync staging must --exclude='__pycache__' to keep the copy minimal."
     )
 
