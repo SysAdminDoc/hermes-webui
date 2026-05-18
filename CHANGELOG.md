@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **PR #2506** by @Michaelyklam (refs #2351) — Add a read-only WebUI/CLI session source switch in the chat sidebar when agent session sync is enabled. WebUI conversations stay in the default list, while imported CLI/agent sessions are surfaced under a separate `CLI sessions` tab with counts so large CLI histories do not clutter the normal conversation list.
+
 ## [v0.51.91] — 2026-05-18 — Release BO (stage-384 — 5-PR full sweep batch — reasoning-replay history fix + archive-extract per-session inbox + fallback streaming warnings + sanitized custom-provider env hints + Slice 3c queue/goal adapter routing)
 
 ### Fixed
