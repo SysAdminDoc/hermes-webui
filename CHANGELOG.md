@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 ### Fixed
 
 - Board selector menu labels no longer overlap board titles when board metadata uses a longer text label in the icon/color slot.
+=======
+### Documentation
+
+- Align the `docs/ui-ux/` demo appearance controls with the current Theme + Skin
+  model, replacing the stale `data-theme`-only buttons and legacy theme names.
+>>>>>>> pr-2511
 
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
