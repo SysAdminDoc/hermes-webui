@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Infrastructure
+
+- **PR TBD** — Add a Docker runtime smoke gate (`.github/workflows/docker-smoke.yml`) triggered on PRs and pushes to `master` that modify `Dockerfile`, `docker_init.bash`, `docker-compose*.yml`, `.dockerignore`, or `.env.docker.example`. Validates every compose file parses (`docker compose config`), then matrix-runs the single, two-container, and three-container variants end-to-end: rebuilds the local `Dockerfile` and re-tags it as `ghcr.io/nesquena/hermes-webui:latest` so the multi-container variants exercise PR-level changes rather than the previously-released registry image, `docker compose up -d --wait`s with a 120s health window, probes `/health`, and greps startup logs for known-bad signatures (`EROFS`, `Traceback`, `PermissionError`, `error_exit`, `groupmod: cannot`, `usermod: cannot`, `Failed to set`). Closes the source-only-test gap that let v0.51.84's `:ro`-mount × `chown -h ... {} +` startup regression reach review with 5800+ green pytests. Workflow runs with `permissions: contents: read`, uses per-run project names and a pre-flight orphan reaper for safe concurrency, and unconditionally tears down all volumes/networks in an `EXIT` trap.
+
 ## [v0.51.86] — 2026-05-17 — Release BJ (stage-379 — 4-PR review-bypass batch — memory-provider session lifecycle + cross-provider /model alias + RuntimeAdapter cancel seam + Fork-from-here messaging coord)
 
 ### Fixed
