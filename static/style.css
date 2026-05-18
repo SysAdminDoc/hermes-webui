@@ -910,6 +910,9 @@
   .notes-search-form{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .notes-search-form select,.notes-search-form input{min-height:34px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);padding:6px 10px;}
   .notes-search-form input{flex:1;min-width:220px;}
+  .notes-search-form button{min-height:34px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s,background .15s;}
+  .notes-search-form button:hover{border-color:var(--accent);color:var(--accent);background:var(--panel-soft);}
+  .notes-search-form button:disabled{opacity:.55;cursor:default;}
   .notes-search-results{display:grid;gap:8px;}
   .notes-ai-recent-list{display:grid;gap:8px;margin-top:10px;}
   .notes-ai-recent-head strong{display:inline-flex;align-items:center;gap:7px;}

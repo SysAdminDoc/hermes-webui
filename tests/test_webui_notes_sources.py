@@ -160,3 +160,15 @@ def test_external_notes_ui_uses_minimal_lucide_icons_for_ai_recent_notes():
     assert "Recently used by AI" not in notes_block  # i18n key, not hard-coded UI copy
     assert "🤖" not in notes_block
     assert "📚" not in notes_block
+
+
+def test_external_notes_search_button_matches_minimal_dark_controls():
+    from pathlib import Path
+
+    css = Path("static/style.css").read_text(encoding="utf-8")
+    assert ".notes-search-form button" in css
+    button_block = css[css.index(".notes-search-form button"):css.index(".notes-search-form button:hover")]
+    assert "background:var(--panel)" in button_block or "background:var(--surface)" in button_block
+    assert "border:1px solid var(--border)" in button_block
+    assert "color:var(--text)" in button_block
+    assert "border-radius:10px" in button_block
