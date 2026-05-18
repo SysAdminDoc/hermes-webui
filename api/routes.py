@@ -10542,6 +10542,29 @@ _NOTES_SOURCE_TOOL_HINTS = {
     "note", "notes", "notebook", "page", "pages", "wiki", "knowledge",
     "search_notes", "get_note", "list_notes", "read_note",
 }
+_NOTES_SOURCE_CONFIGURED_TOOL_HINTS = {
+    "joplin": [
+        {"name": "search_notes", "description": "Search Joplin notes by keyword."},
+        {"name": "list_notes", "description": "List notes from a Joplin notebook."},
+        {"name": "get_note", "description": "Read a specific Joplin note by ID."},
+    ],
+    "obsidian": [
+        {"name": "search_notes", "description": "Search Obsidian notes by keyword."},
+        {"name": "read_note", "description": "Read a specific Obsidian note or file."},
+    ],
+    "notion": [
+        {"name": "search_pages", "description": "Search Notion pages or databases."},
+        {"name": "get_page", "description": "Read a specific Notion page."},
+    ],
+    "llm-wiki": [
+        {"name": "query_knowledge_base", "description": "Query the LLM Wiki knowledge base."},
+        {"name": "read_page", "description": "Read a specific wiki page."},
+    ],
+    "llmwiki": [
+        {"name": "query_knowledge_base", "description": "Query the LLM Wiki knowledge base."},
+        {"name": "read_page", "description": "Read a specific wiki page."},
+    ],
+}
 
 
 def _note_source_label(name: str) -> str:
@@ -10570,6 +10593,34 @@ def _looks_like_notes_source(server_name: str, tool_rows: list[dict]) -> bool:
         if any(hint in haystack for hint in _NOTES_SOURCE_TOOL_HINTS):
             return True
     return False
+
+
+def _configured_note_tool_hints(server_name: str) -> list[dict]:
+    """Return safe expected note-tool hints for configured known sources."""
+    server_l = str(server_name or "").strip().lower()
+    hints = _NOTES_SOURCE_CONFIGURED_TOOL_HINTS.get(server_l)
+    if hints is None:
+        if any(hint in server_l for hint in ("wiki", "knowledge", "kb")):
+            hints = [
+                {"name": "search", "description": "Search this configured knowledge source."},
+                {"name": "read", "description": "Read an item from this configured knowledge source."},
+            ]
+        elif any(hint in server_l for hint in ("note", "notes")):
+            hints = [
+                {"name": "search_notes", "description": "Search this configured notes source."},
+                {"name": "read_note", "description": "Read a note from this configured notes source."},
+            ]
+        else:
+            hints = []
+    return [
+        {
+            "name": _mcp_safe_display_text(row.get("name") or "", limit=96),
+            "description": _mcp_safe_display_text(row.get("description") or "", limit=180),
+            "inferred": True,
+        }
+        for row in hints
+        if isinstance(row, dict)
+    ]
 
 
 def _notes_sources_from_mcp_inventory(server_summaries: dict, tools: list[dict]) -> list[dict]:
@@ -10603,6 +10654,7 @@ def _notes_sources_from_mcp_inventory(server_summaries: dict, tools: list[dict])
             continue
         summary = server_summaries.get(server, {"name": server}) if isinstance(server_summaries, dict) else {"name": server}
         safe_tools = []
+        tool_source = "runtime"
         for tool in tool_rows[:8]:
             desc = _mcp_safe_display_text(tool.get("description") or "", limit=180)
             desc = re.sub(r"(?i)\b(api[_-]?key|token|password|secret)\s*[:=]\s*\S+", "[REDACTED]", desc)
@@ -10610,13 +10662,18 @@ def _notes_sources_from_mcp_inventory(server_summaries: dict, tools: list[dict])
                 "name": _mcp_safe_display_text(tool.get("name") or "", limit=96),
                 "description": desc,
             })
+        if not safe_tools:
+            safe_tools = _configured_note_tool_hints(server)
+            if safe_tools:
+                tool_source = "configured_hint"
         sources.append({
             "name": server,
             "label": _note_source_label(server),
             "enabled": bool(summary.get("enabled", True)),
             "active": bool(summary.get("active")),
             "status": summary.get("status") or "unknown",
-            "tool_count": len(tool_rows),
+            "tool_count": len(safe_tools),
+            "tool_source": tool_source,
             "tools": safe_tools,
         })
     sources.sort(key=lambda row: (not row.get("active"), row.get("label", "")))

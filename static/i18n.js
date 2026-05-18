@@ -1060,6 +1060,7 @@ const LOCALES = {
     external_notes_auto_recall_hint: 'Automatic session recall is unchanged; this drawer only shows configured sources and available read/search tools.',
     external_notes_no_tools: 'No read/search tools are currently visible for this source.',
     external_notes_tool_count: (count) => `${count} note tool${Number(count)===1?'':'s'} available`,
+    external_notes_configured_hint: 'Tool names are expected from this configured source; live schemas will appear when the WebUI runtime exposes them.',
     source_active: 'active',
     source_configured: 'configured',
     no_notes_yet: 'No notes yet.',

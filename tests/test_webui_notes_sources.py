@@ -53,6 +53,8 @@ def test_notes_sources_shows_configured_note_servers_without_tool_inventory():
 
     assert [source["name"] for source in sources] == ["joplin"]
     assert sources[0]["label"] == "Joplin"
-    assert sources[0]["tool_count"] == 0
-    assert sources[0]["tools"] == []
+    assert sources[0]["tool_count"] == 3
+    assert [tool["name"] for tool in sources[0]["tools"]] == ["search_notes", "list_notes", "get_note"]
+    assert all(tool.get("inferred") is True for tool in sources[0]["tools"])
+    assert sources[0]["tool_source"] == "configured_hint"
     assert sources[0]["status"] == "configured"
