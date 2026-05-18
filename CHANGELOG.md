@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **PR #2496** by @Michaelyklam (refs #1925) — Route approval and clarify responses through the default-off `RuntimeAdapter.respond_approval(...)` / `respond_clarify(...)` seam when `HERMES_WEBUI_RUNTIME_ADAPTER=legacy-journal` is enabled. The default `legacy-direct` path still uses the existing callback helpers directly, legacy no-id responses keep their historical `ok: true` shape, and stale explicit approval ids are now bounded as not-active instead of falling back to the oldest queued command. No approval queue, clarify queue, callback registry, runner, sidecar, queue/goal migration, or cached-agent state is introduced.
+
 ### Fixed
 
 - **PR #2499** by @franksong2702 — Keep server-idle session rows from inheriting stale local streaming fields during sidebar optimistic merging, so PWA/browser caches cannot keep a completed session's spinner alive after `/api/sessions` reports no active stream or pending user message.
