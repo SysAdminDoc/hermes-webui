@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Treat named custom OpenAI-compatible endpoints with a configured `base_url` as key-optional at WebUI agent startup, so local keyless servers do not fail early with a synthetic `CUSTOM:<slug>_API_KEY` prompt before the request reaches the endpoint.
+
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed
