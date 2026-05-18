@@ -10573,7 +10573,13 @@ def _looks_like_notes_source(server_name: str, tool_rows: list[dict]) -> bool:
 
 
 def _notes_sources_from_mcp_inventory(server_summaries: dict, tools: list[dict]) -> list[dict]:
-    """Build a safe notes/knowledge-source inventory from MCP servers/tools."""
+    """Build a safe notes/knowledge-source inventory from MCP servers/tools.
+
+    Some WebUI deployments can read ``mcp_servers`` from config before their
+    local runtime/tool registry has hydrated MCP tool metadata.  Still show
+    configured note/knowledge servers (for example Joplin) in that case so the
+    drawer reflects connection/configuration state instead of appearing empty.
+    """
     by_server: dict[str, list[dict]] = {}
     for tool in tools or []:
         if not isinstance(tool, dict):
@@ -10582,6 +10588,14 @@ def _notes_sources_from_mcp_inventory(server_summaries: dict, tools: list[dict])
         if not server:
             continue
         by_server.setdefault(server, []).append(tool)
+
+    if isinstance(server_summaries, dict):
+        for server, summary in server_summaries.items():
+            server_name = str(server or "").strip()
+            if not server_name or server_name in by_server:
+                continue
+            if _looks_like_notes_source(server_name, []):
+                by_server.setdefault(server_name, [])
 
     sources = []
     for server, tool_rows in by_server.items():

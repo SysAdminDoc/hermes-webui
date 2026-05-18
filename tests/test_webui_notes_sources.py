@@ -39,3 +39,20 @@ def test_notes_sources_redacts_tool_descriptions_and_omits_plain_file_tools():
     assert source["name"] == "notion"
     assert "token" not in source["tools"][0]["description"].lower()
     assert "[REDACTED]" in source["tools"][0]["description"]
+
+
+def test_notes_sources_shows_configured_note_servers_without_tool_inventory():
+    from api.routes import _notes_sources_from_mcp_inventory
+
+    servers = {
+        "joplin": {"name": "joplin", "enabled": True, "active": False, "status": "configured"},
+        "filesystem": {"name": "filesystem", "enabled": True, "active": True, "status": "healthy"},
+    }
+
+    sources = _notes_sources_from_mcp_inventory(servers, [])
+
+    assert [source["name"] for source in sources] == ["joplin"]
+    assert sources[0]["label"] == "Joplin"
+    assert sources[0]["tool_count"] == 0
+    assert sources[0]["tools"] == []
+    assert sources[0]["status"] == "configured"
