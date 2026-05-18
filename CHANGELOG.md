@@ -5,6 +5,7 @@
 ### Documentation
 
 - **PR #2483** by @franksong2702 (refs #2364) — Add a narrow README note for the community ARM64 Android AVF field report: Hermes Agent + WebUI running inside a Debian 12 VM on a mid-range Android phone with cloud-hosted inference. The note frames the report as a compatibility signal rather than an official support baseline or provider/model benchmark, and records practical mobile caveats around first-install compile time, Android tab reloads, and battery optimization.
+- **PR #2487** by @Michaelyklam (refs #1925) — Advance the runtime-adapter RFC after the Slice 3a cancel-control implementation shipped in v0.51.86. The RFC now marks Slice 3a as shipped and defines the next Slice 3b gate for approval/clarify controls: route them through `RuntimeAdapter.respond_approval(...)` / `respond_clarify(...)` only after pinning response-shape stability, bounded missing-prompt behavior, replayable request/resolution events, duplicate-response safety, and explicit non-goals for queue/goal and runner/sidecar work.
 
 ## [v0.51.87] — 2026-05-18 — Release BK (stage-380 — 2-PR Docker hygiene + CI gate — read-only mount tmpfs staging + Docker runtime smoke workflow + agent-source boundary inventory + writable-mount startup warning)
 
