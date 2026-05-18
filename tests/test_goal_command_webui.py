@@ -230,6 +230,49 @@ def test_goal_endpoint_sets_goal_and_starts_kickoff_stream(monkeypatch, tmp_path
     assert started[0]["model_provider"] == "openai-codex"
 
 
+def test_goal_endpoint_preserves_response_shape_under_runtime_adapter_flag(monkeypatch, tmp_path):
+    """The Slice 3c adapter path delegates /goal without adding adapter-only fields."""
+    from api import goals as webui_goals
+    from api import routes
+
+    class FakeState:
+        goal = "ship the feature"
+        status = "active"
+        turns_used = 1
+        max_turns = 20
+        last_verdict = None
+        last_reason = None
+        paused_reason = None
+
+    class FakeGoalManager:
+        def __init__(self, session_id, default_max_turns=20):
+            self.state = FakeState()
+
+    class FakeSession:
+        session_id = "sid-goal-route"
+        profile = "default"
+        workspace = str(tmp_path)
+        model = "gpt-5.5"
+        model_provider = "openai-codex"
+        messages = []
+        context_messages = []
+        pending_user_message = None
+        active_stream_id = None
+
+    monkeypatch.setenv("HERMES_WEBUI_RUNTIME_ADAPTER", "legacy-journal")
+    monkeypatch.setattr(webui_goals, "GoalManager", FakeGoalManager)
+    monkeypatch.setattr(routes, "get_session", lambda sid: FakeSession())
+    monkeypatch.setattr(routes, "j", lambda handler, payload, status=200, **kwargs: {"status": status, "payload": payload})
+
+    result = routes._handle_goal_command(object(), {"session_id": "sid-goal-route", "args": "status"})
+
+    assert result["status"] == 200
+    assert result["payload"]["action"] == "status"
+    assert result["payload"]["message_key"] == "goal_status_active"
+    assert "run_id" not in result["payload"]
+    assert "active_controls" not in result["payload"]
+
+
 def test_routes_register_goal_endpoint_and_kickoff_stream():
     assert 'if parsed.path == "/api/goal"' in ROUTES_PY
     assert "return _handle_goal_command(handler, body)" in ROUTES_PY
