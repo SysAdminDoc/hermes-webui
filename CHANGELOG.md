@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Surface provider fallback and rate-limit lifecycle notices as auto-clearing fallback warnings in the streaming composer status, matching the frontend warning contract.
+
 ## [v0.51.90] — 2026-05-18 — Release BN (stage-383 — 10-PR full sweep batch — empty-gateway messaging history fix + previous-messaging-sessions setting + Kanban board switcher layout + UI/UX demo theme controls + Slice 3c queue/goal RFC gate + keyless custom endpoints + custom-provider remote model catalog parity + auto-compression elapsed timer + new-conversation cold-start guard + Kanban drag-drop detail open fix)
 
 ### Fixed
