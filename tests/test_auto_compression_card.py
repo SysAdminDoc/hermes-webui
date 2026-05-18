@@ -96,6 +96,31 @@ def test_auto_compression_running_card_renders_elapsed_timer_and_caps_updates():
     assert "_clearCompressionElapsedTimer();" in src
 
 
+def test_auto_compression_elapsed_cap_uses_non_frozen_label():
+    src = _read("static/ui.js")
+    start = src.find("function _compressionElapsedLabel")
+    assert start != -1, "elapsed label helper not found"
+    end = src.find("function _compressionElapsedExpired", start)
+    assert end != -1, "elapsed expiry helper not found after label helper"
+    helper = src[start:end]
+
+    assert "'5+ min'" in helper
+    assert "elapsed>=_COMPRESSION_ELAPSED_MAX_SECONDS" in helper
+    assert "return '05:00'" not in helper
+
+
+def test_auto_compression_running_detail_avoids_duplicate_message_text():
+    src = _read("static/ui.js")
+    start = src.find("function _autoCompressionDetailText")
+    assert start != -1, "auto compression detail helper not found"
+    end = src.find("function _autoCompressionCardsHtml", start)
+    assert end != -1, "auto compression card helper not found after detail helper"
+    helper = src[start:end]
+
+    assert "return elapsedLabel?`Elapsed: ${elapsedLabel}`:base;" in helper
+    assert "${base}\\nElapsed:" not in helper
+
+
 def test_auto_compression_live_card_keeps_elapsed_state_for_timer_refresh():
     src = _read("static/ui.js")
     start = src.find("function appendLiveCompressionCard")

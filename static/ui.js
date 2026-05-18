@@ -1976,7 +1976,8 @@ function _compressionElapsedStartedAt(state){const n=Number(state&&state.started
 function _compressionElapsedLabel(state){
   const started=_compressionElapsedStartedAt(state);
   if(!started)return'';
-  const elapsed=Math.min(Math.max(0,(Date.now()/1000)-started),_COMPRESSION_ELAPSED_MAX_SECONDS);
+  const elapsed=Math.max(0,(Date.now()/1000)-started);
+  if(elapsed>=_COMPRESSION_ELAPSED_MAX_SECONDS)return '5+ min';
   return _formatActiveElapsedTimer(elapsed);
 }
 function _compressionElapsedExpired(state){const started=_compressionElapsedStartedAt(state);return !!(started&&((Date.now()/1000)-started)>=_COMPRESSION_ELAPSED_MAX_SECONDS);}
@@ -5012,11 +5013,9 @@ function _autoCompressionPreviewText(state){
 }
 function _autoCompressionDetailText(state){
   const running=state&&state.phase==='running';
-  const detail=_autoCompressionBaseDetail(state);
+  const base=_autoCompressionBaseDetail(state);
   const elapsedLabel=running?_compressionElapsedLabel(state):'';
-  return running&&elapsedLabel
-    ? `${detail}\nElapsed: ${elapsedLabel}`
-    : detail;
+  return elapsedLabel?`Elapsed: ${elapsedLabel}`:base;
 }
 function _autoCompressionCardsHtml(state){
   const running=state&&state.phase==='running';
