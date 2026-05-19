@@ -150,7 +150,7 @@ def test_prefill_context_redacts_secret_shaped_errors(tmp_path):
     from api.streaming import _load_webui_prefill_context
 
     script = tmp_path / "leaky.py"
-    script.write_text("import sys\nsys.stderr.write('sk-proj-abcdefghijklmnopqrstuvwxyz123456 leaked')\nsys.exit(2)\n", encoding="utf-8")
+    script.write_text("import sys\nsys.stderr.write('api_key=redaction-test-placeholder leaked')\nsys.exit(2)\n", encoding="utf-8")
     result = _load_webui_prefill_context(
         {"prefill_messages_script": str(script)},
         python_exe=sys.executable,
