@@ -317,6 +317,43 @@ def test_metadata_fast_path_reports_reconciled_state_db_count(monkeypatch, tmp_p
     assert session["last_message_at"] == 1003.0
 
 
+def test_metadata_fast_path_excludes_state_db_rows_filtered_by_reconciliation(monkeypatch, tmp_path):
+    import api.routes as routes
+
+    sid = "webui_reconcile_metadata_filtered"
+    _install_test_session(
+        monkeypatch,
+        tmp_path,
+        sid,
+        [
+            {"role": "user", "content": "old user", "timestamp": 1000.0},
+            {"role": "assistant", "content": "old assistant", "timestamp": 1001.0},
+        ],
+    )
+    _make_state_db(
+        tmp_path / "state.db",
+        sid,
+        [
+            {"role": "user", "content": "old user", "timestamp": 1000.0},
+            {"role": "assistant", "content": "old assistant", "timestamp": 1001.0},
+            # This stale state.db-only row is older than the newest sidecar
+            # timestamp and lacks an explicit message id, so the full
+            # append-only merge filters it out. The metadata path must report
+            # the same count/last timestamp or sidebar refresh polling loops.
+            {"role": "tool", "content": "stale state row", "timestamp": 1000.5},
+        ],
+    )
+
+    handler = _GetHandler(f"/api/session?session_id={sid}&messages=0&resolve_model=0")
+    routes.handle_get(handler, urlparse(handler.path))
+
+    assert handler.status == 200
+    session = handler.response_json["session"]
+    assert session["messages"] == []
+    assert session["message_count"] == 2
+    assert session["last_message_at"] == 1001.0
+
+
 def test_state_db_reconciliation_preserves_tool_metadata(monkeypatch, tmp_path):
     import api.routes as routes
 

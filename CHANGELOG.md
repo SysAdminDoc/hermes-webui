@@ -6,6 +6,11 @@
 
 - **PR #TBD** by @Michaelyklam (refs #1925) — Add the first Slice 4b `RunnerRuntimeAdapter` facade for future runner/sidecar backends. The facade delegates `start_run`, `observe_run`, `get_run`, and control calls to an injected runner client, normalizes results into the existing RuntimeAdapter dataclasses, carries explicit profile/workspace/model payloads, and returns bounded unsupported-control results without owning `AIAgent`, stream, cancel, approval, clarify, goal, or queue state. No route wiring or default-on runner mode is introduced.
 
+### Fixed
+
+- **PR #2604** by @Michaelyklam (refs #2594) — Make the metadata-only `/api/session?messages=0` path report the same reconciled message count and last-message timestamp as a full session load. Sidebar refresh polling no longer loops forever when `state.db` retains old rows that the append-only merge correctly filters out.
+
+
 ## [v0.51.93] — 2026-05-19 — Release BQ (stage-386 — 10-PR full sweep batch — RFC Slice 4 runner/sidecar gate + workspace tree toggle width CSS variable + settled file:// markdown link rendering + prompt-cache coverage percentage fix + terminal shell shutdown reap + configured model picker provider preservation + profile-aware assistant display names + state.db reconciliation slice 1 + queued-message cross-session drain fix + stale-stream writeback supersede)
 
 ### Fixed
