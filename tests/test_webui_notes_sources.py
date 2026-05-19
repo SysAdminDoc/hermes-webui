@@ -31,7 +31,7 @@ def test_notes_sources_redacts_tool_descriptions_and_omits_plain_file_tools():
 
     servers = {"notion": {"name": "notion", "enabled": True, "active": True, "status": "healthy"}}
     tools = [
-        {"server": "notion", "name": "search_pages", "description": "Search notes token=abc123SECRET"},
+        {"server": "notion", "name": "search_pages", "description": "Search notes api_key=redaction-test-placeholder"},
     ]
 
     [source] = _notes_sources_from_mcp_inventory(servers, tools)
