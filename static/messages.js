@@ -1810,7 +1810,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       let d={};
       try{ d=JSON.parse(e.data||'{}')||{}; }catch(_){ d={}; }
       const eventSid=d.old_session_id||d.session_id||activeSid;
-      if(eventSid!==activeSid) return;
+      if(eventSid!==activeSid && d.new_session_id!==activeSid && d.continuation_session_id!==activeSid) return;
       const continuationSid=d.new_session_id||d.continuation_session_id||'';
       const message=String(d.message||'Context auto-compressed to continue the conversation').trim();
       if(d.usage&&typeof _syncCtxIndicator==='function'){

@@ -222,7 +222,11 @@ def test_auto_compression_sse_keeps_inactive_and_malformed_paths_safe():
     assert block.index(guard) < block.index("setCompressionUi")
     assert "try{ d=JSON.parse(e.data||'{}')||{}; }catch(_){ d={}; }" in block
     assert "const eventSid=d.old_session_id||d.session_id||activeSid;" in block
-    assert "if(eventSid!==activeSid) return;" in block
+    # The listener also accepts a rotated continuation session id so journal-
+    # replay reconnects after compression rotate land the done card.
+    # See Opus advisor followup on stage-385 (v0.51.92).
+    event_guard = "if(eventSid!==activeSid && d.new_session_id!==activeSid && d.continuation_session_id!==activeSid) return;"
+    assert event_guard in block
 
 
 def test_auto_compression_done_accepts_rotated_continuation_session_event():
@@ -234,8 +238,9 @@ def test_auto_compression_done_accepts_rotated_continuation_session_event():
     # continuation id as display metadata instead of dropping the event.
     assert "const eventSid=d.old_session_id||d.session_id||activeSid;" in block
     assert "const continuationSid=d.new_session_id||d.continuation_session_id||'';" in block
-    assert "if(eventSid!==activeSid) return;" in block
-    assert block.index("const eventSid=") < block.index("if(eventSid!==activeSid) return;")
+    event_guard = "if(eventSid!==activeSid && d.new_session_id!==activeSid && d.continuation_session_id!==activeSid) return;"
+    assert event_guard in block
+    assert block.index("const eventSid=") < block.index(event_guard)
     assert "continuationSessionId:continuationSid" in block
 
 
