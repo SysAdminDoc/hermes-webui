@@ -2358,6 +2358,53 @@ def _stream_writeback_is_current(session, stream_id):
     return bool(stream_id) and getattr(session, 'active_stream_id', None) == stream_id
 
 
+def _stream_writeback_can_supersede_recovery_marker(session, msg_text):
+    """Allow a finishing worker to replace its own stale-repair marker.
+
+    The stale-pending repair path can occasionally run while the original worker
+    is still alive but temporarily missing from the in-memory stream registry. It
+    clears ``active_stream_id`` and appends a "Response interrupted" marker. If
+    the original worker later finishes, treating ``active_stream_id is None`` as
+    stale drops the real answer and leaves the misleading marker visible.
+
+    This is intentionally narrow: only a session with no active/pending turn and
+    whose last visible row is the recovery marker for this exact user prompt may
+    be superseded. If a newer turn has appended anything after the marker, the
+    normal stale-writeback guard still wins.
+    """
+    if getattr(session, 'active_stream_id', None):
+        return False
+    if getattr(session, 'pending_user_message', None):
+        return False
+    if getattr(session, 'pending_attachments', None):
+        return False
+    messages = list(getattr(session, 'messages', None) or [])
+    if len(messages) < 2:
+        return False
+    last = messages[-1]
+    if not isinstance(last, dict) or not last.get('_error'):
+        return False
+    if last.get('type') != 'interrupted':
+        return False
+    content = str(last.get('content') or '')
+    if 'Response interrupted' not in content or 'WebUI process restarted' not in content:
+        return False
+
+    expected = ' '.join(str(msg_text or '').split())
+    if not expected:
+        return False
+    for msg in reversed(messages[:-1]):
+        if not isinstance(msg, dict):
+            continue
+        if msg.get('_error'):
+            continue
+        if msg.get('role') != 'user':
+            continue
+        actual = ' '.join(str(msg.get('content') or '').split())
+        return actual == expected
+    return False
+
+
 def _merge_display_messages_after_agent_result(previous_display, previous_context, result_messages, msg_text):
     """Keep UI transcript durable while allowing model context to compact.
 
@@ -4083,13 +4130,20 @@ def _run_agent_streaming(
                 return
             with _agent_lock:
                 if not ephemeral and not _stream_writeback_is_current(s, stream_id):
-                    logger.info(
-                        "Skipping stale stream writeback for session %s stream %s; active_stream_id=%s",
-                        getattr(s, 'session_id', session_id),
-                        stream_id,
-                        getattr(s, 'active_stream_id', None),
-                    )
-                    return
+                    if _stream_writeback_can_supersede_recovery_marker(s, msg_text):
+                        logger.info(
+                            "Superseding stale recovery marker for session %s stream %s",
+                            getattr(s, 'session_id', session_id),
+                            stream_id,
+                        )
+                    else:
+                        logger.info(
+                            "Skipping stale stream writeback for session %s stream %s; active_stream_id=%s",
+                            getattr(s, 'session_id', session_id),
+                            stream_id,
+                            getattr(s, 'active_stream_id', None),
+                        )
+                        return
                 _result_messages = result.get('messages') or _previous_context_messages
                 if cancel_event.is_set():
                     _finalize_cancelled_turn(s, ephemeral=False)

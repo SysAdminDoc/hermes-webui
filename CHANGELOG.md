@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Allow a still-running stream that was mistakenly marked interrupted by stale-pending recovery to replace its own recovery marker when it later finishes, while continuing to block stale writeback after any newer turn appends transcript content.
 
 ## [v0.51.92] — 2026-05-19 — Release BP (stage-385 — 7-PR full sweep batch — RFC Slice 3c clarification + workspace tree icon alignment + project move cache refresh + auto-compression handoff metadata + Grok OAuth provider catalog + anonymous custom endpoint picker fallback + PWA standalone reload + pull-to-refresh)
 
