@@ -3709,9 +3709,16 @@ def handle_get(handler, parsed) -> bool:
                     _all_msgs = merge_session_messages_append_only(cli_messages, sidecar_messages)
                 else:
                     _all_msgs = merge_session_messages_append_only(getattr(s, "messages", []) or [], state_db_messages)
-            if not load_messages and state_db_summary:
+            if not load_messages:
                 sidecar_messages = getattr(s, "messages", []) or []
                 sidecar_count = len(sidecar_messages)
+                if sidecar_count == 0:
+                    try:
+                        metadata_count = getattr(s, "_metadata_message_count", None)
+                        if metadata_count is not None:
+                            sidecar_count = max(0, int(metadata_count))
+                    except (TypeError, ValueError):
+                        sidecar_count = 0
                 try:
                     sidecar_last = max(
                         float((m or {}).get("timestamp") or 0)
@@ -3720,8 +3727,8 @@ def handle_get(handler, parsed) -> bool:
                     ) if sidecar_messages else 0
                 except (TypeError, ValueError):
                     sidecar_last = 0
-                state_count = int(state_db_summary.get("message_count") or 0)
-                state_last = float(state_db_summary.get("last_message_at") or 0)
+                state_count = int(state_db_summary.get("message_count") or 0) if state_db_summary else 0
+                state_last = float(state_db_summary.get("last_message_at") or 0) if state_db_summary else 0
                 _all_msgs = sidecar_messages
                 _summary_message_count = max(sidecar_count, state_count)
                 _summary_last_message_at = max(sidecar_last, state_last)
