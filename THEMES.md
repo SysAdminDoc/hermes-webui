@@ -4,7 +4,7 @@ Hermes Web UI splits **appearance** into two independent pickers:
 
 - **Theme** — the mode: `System`, `Dark`, or `Light`. Drives the background,
   text, surface, and chrome colors.
-- **Skin** — the accent palette: eleven named skins ship built-in. Drives only
+- **Skin** — the accent palette: built-in skins ship as named keys. Drives only
   the `--accent` family (active states, links, focus rings, primary actions).
 
 You pick one of each and they combine, so the look adapts to your environment
@@ -15,7 +15,7 @@ without losing your favorite accent — pure CSS, no Python changes needed.
 ## Switching Appearance
 
 **Settings panel:** Click the gear icon → **Appearance**. The **Theme** card
-toggles Light/Dark/System; the **Skin** grid offers eleven accent palettes.
+toggles Light/Dark/System; the **Skin** grid offers the built-in accent palettes.
 Preview is instant — the UI updates as you click.
 
 **Slash command:** Type `/theme <name>` in the composer. The command accepts
