@@ -5015,7 +5015,10 @@ function _autoCompressionDetailText(state){
   const running=state&&state.phase==='running';
   const base=_autoCompressionBaseDetail(state);
   const elapsedLabel=running?_compressionElapsedLabel(state):'';
-  return elapsedLabel?`Elapsed: ${elapsedLabel}`:base;
+  if(running)return elapsedLabel?`Elapsed: ${elapsedLabel}`:base;
+  const continuation=String(state&&state.continuationSessionId||'').trim();
+  const handoff=continuation?`Continued in compressed session: ${continuation}`:'';
+  return [base,handoff].filter(Boolean).join('\n');
 }
 function _autoCompressionCardsHtml(state){
   const running=state&&state.phase==='running';

@@ -11,6 +11,9 @@
 - **PR #2563** by @Michaelyklam (closes #2554) — Align workspace-tree file rows with sibling directory rows by reserving the same expand/collapse toggle slot for files. Expanded directories now show child files stepped in at the same icon column as child folders, while directory toggles and file interactions stay unchanged.
 
 
+- Surface automatic-compression handoff metadata through the `compressed` SSE event so the active browser stream keeps the completion card even after the backend rotates to a compressed continuation session. The event now carries both the origin session id and continuation id, and the automatic-compression detail line names the compressed session instead of silently dropping the done state.
+
+
 ## [v0.51.91] — 2026-05-18 — Release BO (stage-384 — 5-PR full sweep batch — reasoning-replay history fix + archive-extract per-session inbox + fallback streaming warnings + sanitized custom-provider env hints + Slice 3c queue/goal adapter routing)
 
 ### Fixed
