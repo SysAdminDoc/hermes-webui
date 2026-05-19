@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **PR #2582** by @Michaelyklam (refs #2577) — Harden embedded workspace-terminal shell cleanup so graceful WebUI shutdowns close/reap every active PTY shell and the spawned shell receives a Linux parent-death signal if the WebUI process dies. The terminal close path now waits again after SIGKILL so timed-out shells do not remain unreaped.
+
 
 ## [v0.51.92] — 2026-05-19 — Release BP (stage-385 — 7-PR full sweep batch — RFC Slice 3c clarification + workspace tree icon alignment + project move cache refresh + auto-compression handoff metadata + Grok OAuth provider catalog + anonymous custom endpoint picker fallback + PWA standalone reload + pull-to-refresh)
 
