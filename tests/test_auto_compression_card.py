@@ -217,16 +217,15 @@ def test_auto_compression_sse_uses_transient_card_not_fake_message():
 def test_auto_compression_sse_keeps_inactive_and_malformed_paths_safe():
     block = _compressed_listener_block()
 
-    guard = "if(!S.session||S.session.session_id!==activeSid) return;"
+    guard = "if(!S.session) return;"
     assert guard in block
     assert block.index(guard) < block.index("setCompressionUi")
     assert "try{ d=JSON.parse(e.data||'{}')||{}; }catch(_){ d={}; }" in block
     assert "const eventSid=d.old_session_id||d.session_id||activeSid;" in block
-    # The listener also accepts a rotated continuation session id so journal-
-    # replay reconnects after compression rotate land the done card.
-    # See Opus advisor followup on stage-385 (v0.51.92).
-    event_guard = "if(eventSid!==activeSid && d.new_session_id!==activeSid && d.continuation_session_id!==activeSid) return;"
+    assert "const eventMatchesCurrent=" in block
+    event_guard = "if(!eventMatchesCurrent) return;"
     assert event_guard in block
+    assert block.index("const eventMatchesCurrent=") < block.index(event_guard)
 
 
 def test_auto_compression_done_accepts_rotated_continuation_session_event():
@@ -238,10 +237,27 @@ def test_auto_compression_done_accepts_rotated_continuation_session_event():
     # continuation id as display metadata instead of dropping the event.
     assert "const eventSid=d.old_session_id||d.session_id||activeSid;" in block
     assert "const continuationSid=d.new_session_id||d.continuation_session_id||'';" in block
-    event_guard = "if(eventSid!==activeSid && d.new_session_id!==activeSid && d.continuation_session_id!==activeSid) return;"
+    event_guard = "if(!eventMatchesCurrent) return;"
     assert event_guard in block
-    assert block.index("const eventSid=") < block.index(event_guard)
+    assert block.index("const eventSid=") < block.index("const eventMatchesCurrent=")
     assert "continuationSessionId:continuationSid" in block
+
+
+def test_auto_compression_done_accepts_event_after_current_session_rotates():
+    block = _compressed_listener_block()
+
+    # The final compressed event can arrive/replay after another event has already
+    # updated S.session to the continuation session id. Do not drop it just
+    # because the active browser session no longer equals the original activeSid.
+    strict_active_guard = "if(!S.session||S.session.session_id!==activeSid) return;"
+    assert strict_active_guard not in block
+    assert "if(!S.session) return;" in block
+    assert "const currentSid=S.session.session_id;" in block
+    assert "const eventMatchesCurrent=" in block
+    assert "const displaySid=currentSid;" in block
+    assert "sessionId:displaySid" in block
+    assert block.index("const eventSid=") < block.index("const eventMatchesCurrent=")
+    assert block.index("const displaySid=") < block.index("setCompressionUi(state)")
 
 
 def test_auto_compression_done_sse_refreshes_context_indicator_usage():
