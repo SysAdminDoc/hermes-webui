@@ -401,6 +401,7 @@ const LOCALES = {
     reveal_in_finder: 'Reveal in File Manager',
     reveal_failed: 'Failed to reveal: ',
     copy_file_path: 'Copy file path',
+    download_folder: 'Download Folder',
     path_copied: 'File path copied to clipboard',
     path_copy_failed: 'Failed to copy path: ',
     session_rename: 'Rename conversation',
