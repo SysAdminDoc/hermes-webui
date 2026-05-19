@@ -732,6 +732,7 @@ const MODEL_STATE_KEY='hermes-webui-model-state';
 // first colliding entry.
 function _getOptionProviderId(opt){
   if(!opt) return '';
+  if(opt.dataset && opt.dataset.provider) return opt.dataset.provider;
   const group=opt.parentElement;
   if(group && group.tagName==='OPTGROUP' && group.dataset && group.dataset.provider){
     return group.dataset.provider;
@@ -1416,6 +1417,8 @@ async function selectModelFromDropdown(value){
     opt.value=value;
     opt.textContent=getModelLabel(value);
     opt.dataset.custom='1';
+    const badge=(window._configuredModelBadges||{})[value];
+    if(badge&&badge.provider) opt.dataset.provider=badge.provider;
     // Remove any previous custom option before adding new one
     sel.querySelectorAll('option[data-custom]').forEach(o=>o.remove());
     sel.appendChild(opt);
