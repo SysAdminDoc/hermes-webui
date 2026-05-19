@@ -19,6 +19,7 @@ from api.config import (
     get_effective_default_model, _get_session_agent_lock,
 )
 from api.workspace import get_last_workspace
+from api.usage import prompt_cache_hit_percent
 from api.agent_sessions import (
     _is_continuation_session,
     read_importable_agent_session_rows,
@@ -634,6 +635,7 @@ class Session:
             'estimated_cost': self.estimated_cost,
             'cache_read_tokens': self.cache_read_tokens,
             'cache_write_tokens': self.cache_write_tokens,
+            'cache_hit_percent': prompt_cache_hit_percent(self.cache_read_tokens, self.input_tokens),
             'personality': self.personality,
             'compression_anchor_visible_idx': self.compression_anchor_visible_idx,
             'compression_anchor_message_key': self.compression_anchor_message_key,

@@ -39,6 +39,7 @@ from api.compression_anchor import visible_messages_for_anchor
 from api.metering import meter
 from api.run_journal import RunJournalWriter
 from api.turn_journal import append_turn_journal_event_for_stream
+from api.usage import prompt_cache_hit_percent
 
 # Global lock for os.environ writes. Per-session locks (_agent_lock) prevent
 # concurrent runs of the SAME session, but two DIFFERENT sessions can still
@@ -2988,6 +2989,7 @@ def _run_agent_streaming(
             'estimated_cost': 0,
             'cache_read_tokens': 0,
             'cache_write_tokens': 0,
+            'cache_hit_percent': None,
             'context_length': 0,
             'threshold_tokens': 0,
             'last_prompt_tokens': 0,
@@ -3025,6 +3027,10 @@ def _run_agent_streaming(
                         pass
 
         _real_prompt_tokens = int(_usage.get('last_prompt_tokens') or 0)
+        _usage['cache_hit_percent'] = prompt_cache_hit_percent(
+            _usage.get('cache_read_tokens') or 0,
+            _usage.get('input_tokens') or 0,
+        )
         if _real_prompt_tokens and _real_prompt_tokens != _live_prompt_exact_tokens[0]:
             _live_prompt_exact_tokens[0] = _real_prompt_tokens
             _live_prompt_estimate_tokens[0] = _real_prompt_tokens
@@ -4474,6 +4480,15 @@ def _run_agent_streaming(
                 estimated_cost = getattr(agent, 'session_estimated_cost_usd', None)
                 cache_read_tokens = getattr(agent, 'session_cache_read_tokens', 0) or 0
                 cache_write_tokens = getattr(agent, 'session_cache_write_tokens', 0) or 0
+                prev_input_tokens = getattr(s, 'input_tokens', 0) or 0
+                prev_cache_read_tokens = getattr(s, 'cache_read_tokens', 0) or 0
+                turn_input_tokens = max(0, input_tokens - prev_input_tokens)
+                turn_cache_read_tokens = max(0, cache_read_tokens - prev_cache_read_tokens)
+                # Per-turn percent is computed server-side from persisted session
+                # counters so the message label uses the same denominator as the
+                # final usage payload even if the browser missed an intermediate event.
+                cache_hit_percent = prompt_cache_hit_percent(cache_read_tokens, input_tokens)
+                turn_cache_hit_percent = prompt_cache_hit_percent(turn_cache_read_tokens, turn_input_tokens)
                 if input_tokens > 0:
                     s.input_tokens = input_tokens
                 if output_tokens > 0:
@@ -4730,6 +4745,8 @@ def _run_agent_streaming(
                 'estimated_cost': estimated_cost,
                 'cache_read_tokens': cache_read_tokens,
                 'cache_write_tokens': cache_write_tokens,
+                'cache_hit_percent': cache_hit_percent,
+                'turn_cache_hit_percent': turn_cache_hit_percent,
                 'duration_seconds': round(_turn_duration_seconds, 3),
             }
             if _turn_tps is not None:
