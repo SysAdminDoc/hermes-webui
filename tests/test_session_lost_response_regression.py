@@ -240,7 +240,7 @@ def test_concurrent_get_session_serializes_lazy_journal_retry(hermes_home, monke
     counter_lock = threading.Lock()
     calls = 0
 
-    def slow_retry(session):
+    def slow_retry(session, *, preserve_arriving_budget=False):
         nonlocal calls
         with counter_lock:
             calls += 1
@@ -259,4 +259,38 @@ def test_concurrent_get_session_serializes_lazy_journal_retry(hermes_home, monke
         assert first.result(timeout=2) is s
 
     assert calls == 1
+
+
+def test_still_arriving_journal_does_not_consume_retry_budget(hermes_home, monkeypatch):
+    sid = "retry_arriving_sid"
+    stream_id = "retry_arriving_stream"
+    s = _make_pending_retry_session(sid, stream_id=stream_id)
+    models.SESSIONS[sid] = s
+
+    monkeypatch.setattr(models, "_append_journaled_partial_output", lambda *a, **kw: False)
+    monkeypatch.setattr(models, "_journal_is_still_arriving", lambda *a, **kw: True)
+
+    for _ in range(20):
+        assert models.get_session(sid) is s
+
+    marker = s.messages[-1]
+    assert marker["_journal_retry_attempts"] == 0
+    assert marker["_pending_journal_recovery"] is True
+    assert marker["content"] == models._INTERRUPTED_PENDING_RETRY_WORDING
+
+
+def test_sealed_empty_journal_consumes_retry_budget_and_demotes_at_max(hermes_home, monkeypatch):
+    sid = "retry_sealed_sid"
+    stream_id = "retry_sealed_stream"
+    s = _make_pending_retry_session(sid, stream_id=stream_id)
+    s.messages[-1]["_journal_retry_attempts"] = models._JOURNAL_RETRY_MAX_ATTEMPTS - 1
+    append_run_event(sid, stream_id, "stream_end", {})
+    models.SESSIONS[sid] = s
+
+    assert models.get_session(sid) is s
+
+    marker = s.messages[-1]
+    assert marker["content"] == models._INTERRUPTED_NEUTRAL_WORDING
+    _assert_retry_meta_removed(marker)
+    assert not any(m.get("_recovered_from_run_journal") for m in s.messages)
 
