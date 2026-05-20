@@ -530,6 +530,8 @@ const LOCALES = {
     plugins_registered_hooks: 'Registered hooks',
     plugins_enabled: 'Enabled',
     plugins_disabled: 'Disabled',
+    plugins_active_provider: 'Active (provider)',
+    plugins_provider_no_hooks: 'Provider plugin — no agent-visibility hooks',
     plugins_load_failed: 'Failed to load plugins: ',
     settings_tab_system: 'System',
     settings_title: 'Settings',
