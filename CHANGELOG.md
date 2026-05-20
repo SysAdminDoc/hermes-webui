@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Make chat profile switching feel immediate by applying returned profile defaults and refreshing the visible session list before clearing the switch animation, while refreshing workspace metadata in the background and loading the model catalog lazily when the picker opens. The session list now eases in on profile changes and first app load instead of appearing abruptly, the first sidebar fetch no longer waits for workspace/onboarding metadata, and completed installs skip the extra onboarding status check on boot.
 
 ## [v0.51.95] — 2026-05-20 — Release BS (stage-388 — 5-PR batch — live tool callback event dedup + browser-only dashboard links + messaging transcript merge alignment + Geist Contrast skin + SSE runtime diagnostics)
 

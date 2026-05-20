@@ -518,7 +518,11 @@ async function newSession(flash, options={}){
       });
     }
     updateQueueBadge(S.session.session_id);
-    syncTopbar();renderMessages();loadDir('.');
+    syncTopbar();renderMessages();
+    const dirLoad=loadDir('.');
+    // Hidden workspace trees should not block new-chat/profile-switch flow.
+    // When the panel is visible, wait so the file list lands with the session.
+    if(options&&options.awaitWorkspaceLoad) await dirLoad;
     // don't call renderSessionList here - callers do it when needed
   })();
   try{
@@ -1914,6 +1918,56 @@ window.addEventListener('resize',()=>{
 // concurrently. Without this guard, a slower older response can overwrite _allSessions
 // with stale data, causing sessions to vanish from the sidebar.
 let _renderSessionListGen = 0;
+let _sessionListRefreshAnimationPending = false;
+let _sessionListFirstRenderAnimated = false;
+let _sessionListEnterAllAnimationPending = false;
+
+function animateNextSessionListRefresh(options={}){
+  _sessionListRefreshAnimationPending = true;
+  if(options&&options.enterAll) _sessionListEnterAllAnimationPending = true;
+}
+
+function _captureSessionListFlipPositions(){
+  const list=$('sessionList');
+  if(!list) return null;
+  const positions=new Map();
+  list.querySelectorAll('.session-item[data-sid]').forEach(row=>{
+    positions.set(row.dataset.sid,row.getBoundingClientRect().top);
+  });
+  return positions;
+}
+
+function _sessionListPrefersReducedMotion(){
+  try{return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
+  catch(_){return false;}
+}
+
+function _playSessionListFlipAnimation(before){
+  if(!before||!before.size||_sessionListPrefersReducedMotion()) return;
+  const list=$('sessionList');
+  if(!list) return;
+  list.querySelectorAll('.session-item[data-sid]').forEach(row=>{
+    const oldTop=before.get(row.dataset.sid);
+    if(oldTop===undefined) return;
+    const delta=oldTop-row.getBoundingClientRect().top;
+    if(Math.abs(delta)<1) return;
+    row.style.setProperty('--session-reflow-offset',delta+'px');
+    row.classList.add('session-reflowing');
+    row.getBoundingClientRect();
+    row.style.setProperty('--session-reflow-offset','0px');
+    let cleared=false;
+    const clear=()=>{
+      if(cleared) return;
+      cleared=true;
+      row.classList.remove('session-reflowing');
+      row.style.removeProperty('--session-reflow-offset');
+      row.removeEventListener('transitionend',onEnd);
+    };
+    const onEnd=(event)=>{ if(event.propertyName==='transform') clear(); };
+    row.addEventListener('transitionend',onEnd);
+    setTimeout(clear,460);
+  });
+}
 
 function _isOptimisticFirstTurnSessionRow(s){
   if(!s||!s.session_id||s.archived) return false;
@@ -2018,6 +2072,10 @@ function _applySessionListPayload(sessData, projData){
   }
   ensureSessionTimeRefreshPoll();
   ensureActiveSessionExternalRefreshPoll();
+  if(!_sessionListFirstRenderAnimated&&Array.isArray(_allSessions)&&_allSessions.length){
+    animateNextSessionListRefresh({enterAll:true});
+    if(S&&S._bootReady) _sessionListFirstRenderAnimated=true;
+  }
   renderSessionListFromCache();  // no-ops if rename is in progress
 }
 
@@ -2817,6 +2875,11 @@ function renderSessionListFromCache(){
   _syncSidebarExpansionForActiveSession(sessions, activeSidForSidebar);
   const archivedCount=projectFiltered.filter(s=>s.archived).length;
   const list=$('sessionList');
+  const animateRefresh=_sessionListRefreshAnimationPending;
+  _sessionListRefreshAnimationPending=false;
+  const enterAllAnimatedRows=animateRefresh&&_sessionListEnterAllAnimationPending;
+  _sessionListEnterAllAnimationPending=false;
+  const flipBefore=animateRefresh?_captureSessionListFlipPositions():null;
   const listScrollTopBeforeRender=list.scrollTop||0;
   list.innerHTML='';
   // Batch select bar (when in select mode)
@@ -3055,6 +3118,9 @@ function renderSessionListFromCache(){
     toggleBtn.onclick=(e)=>{e.stopPropagation();toggleSessionSelectMode();};
     list.appendChild(toggleBtn);
   }
+  if(animateRefresh){
+    _playSessionListFlipAnimation(flipBefore);
+  }
   // Note: declared after the groups loop but available via function hoisting.
   function _renderOneSession(s, isPinnedGroup=false){
     const el=document.createElement('div');
@@ -3065,6 +3131,9 @@ function renderSessionListFromCache(){
     const hasUnread=_hasUnreadForSession(s)&&!isActive;
     const readOnly=_isReadOnlySession(s);
     el.className='session-item'+(isActive?' active':'')+(isActive&&S.session&&S.session._flash?' new-flash':'')+(s.archived?' archived':'')+(isStreaming?' streaming':'')+(hasUnread?' unread':'');
+    if(animateRefresh&&(enterAllAnimatedRows||!(flipBefore&&flipBefore.has(s.session_id)))){
+      el.classList.add('session-list-flip-enter');
+    }
     if(s.is_cli_session){
       el.classList.add('cli-session');
       el.dataset.source=_getChannelLabel(s)||'CLI';
