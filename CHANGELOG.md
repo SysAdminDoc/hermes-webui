@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+
+- **PR #2614** by @Michaelyklam (refs #2508) — Tighten session pinning around the clarified sidebar workflow: right-clicking a conversation row now opens the existing action menu, pin attempts are capped at three active pinned conversations, and the backend rejects a fourth pin until one is unpinned.
 
 ## [v0.51.95] — 2026-05-20 — Release BS (stage-388 — 5-PR batch — live tool callback event dedup + browser-only dashboard links + messaging transcript merge alignment + Geist Contrast skin + SSE runtime diagnostics)
 
