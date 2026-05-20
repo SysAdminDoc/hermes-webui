@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Route WebUI session title generation through the configured `auxiliary.title_generation` provider, model, and base URL instead of leaving the auxiliary client to fall back to the chat model.
+
 
 ## [v0.51.95] — 2026-05-20 — Release BS (stage-388 — 5-PR batch — live tool callback event dedup + browser-only dashboard links + messaging transcript merge alignment + Geist Contrast skin + SSE runtime diagnostics)
 
