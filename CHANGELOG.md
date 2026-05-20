@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- **PR #2627** by @Michaelyklam (refs #1925) — Advance the RuntimeAdapter RFC after the Slice 4b `RunnerRuntimeAdapter` facade shipped in v0.51.94. The RFC now defines the next Slice 4c runner-backend harness gate: feature-flagged runner backend selection, explicit start payload validation, durable status/event observation across WebUI adapter recreation, bounded controls, and a restart/reattach harness before any live chat route is switched to a runner backend.
 
 ## [v0.51.95] — 2026-05-20 — Release BS (stage-388 — 5-PR batch — live tool callback event dedup + browser-only dashboard links + messaging transcript merge alignment + Geist Contrast skin + SSE runtime diagnostics)
 
