@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Limit the CLI/agent session sidebar bridge to a recent candidate window before joining message rows, so `show_cli_sessions` no longer aggregates every historical `state.db` message before applying the visible sidebar cap. Closes #2628.
 
 ## [v0.51.98] — 2026-05-20 — Release BV (stage-391 — 1-PR follow-on — custom_providers allowlist priority over live /v1/models)
 
