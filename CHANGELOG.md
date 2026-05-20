@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+<<<<<<< HEAD
+=======
+- Deduplicate messaging/CLI session transcript rows when the sidecar and state store encode the same no-id message with equivalent timestamps in different formats, preventing repeated visible chat messages after session reconstruction.
+>>>>>>> stage388-pr2607
 
 - Surface live tool activity when Hermes Agent reports tools through its dedicated `tool_start_callback` / `tool_complete_callback` path, so browser chat shows the existing running tool cards instead of appearing idle until the final answer.
 
