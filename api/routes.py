@@ -30,6 +30,11 @@ from api.agent_sessions import (
     read_session_lineage_report,
 )
 from api.compression_anchor import visible_messages_for_anchor
+from api.session_events import (
+    publish_session_list_changed,
+    subscribe_session_events,
+    unsubscribe_session_events,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -827,6 +832,7 @@ def _run_cron_tracked(job, profile_home=None, execution_profile_home=None):
             logger.debug("Failed to mark manual cron run failure for %s", job_id)
     finally:
         _mark_cron_done(job_id)
+        publish_session_list_changed("cron_complete")
 
 _PROVIDER_ALIASES = {
     "claude": "anthropic",
@@ -4253,6 +4259,9 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == '/api/sessions/gateway/stream':
         return _handle_gateway_sse_stream(handler, parsed)
 
+    if parsed.path == '/api/sessions/events':
+        return _handle_session_events_stream(handler)
+
     if parsed.path == "/api/media":
         return _handle_media(handler, parsed)
 
@@ -4631,6 +4640,8 @@ def handle_post(handler, parsed) -> bool:
             project_id=body.get("project_id") or None,
             worktree_info=worktree_info,
         )
+        if worktree_info:
+            publish_session_list_changed("session_new")
         return j(handler, {"session": s.compact() | {"messages": s.messages}})
 
     if parsed.path == "/api/session/duplicate":
@@ -4692,6 +4703,7 @@ def handle_post(handler, parsed) -> bool:
             # Without this explicit save, the duplicate is in-memory only — if the user
             # refreshes before sending a turn, the duplicate vanishes.
             copied_session.save()
+            publish_session_list_changed("session_duplicate")
 
             return j(handler, {"session": copied_session.compact() | {"messages": copied_session.messages}})
         except Exception as e:
@@ -4785,6 +4797,7 @@ def handle_post(handler, parsed) -> bool:
         with _get_session_agent_lock(body["session_id"]):
             s.title = str(body["title"]).strip()[:80] or "Untitled"
             s.save()
+        publish_session_list_changed("session_rename")
         return j(handler, {"session": s.compact()})
 
     if parsed.path == "/api/personality/set":
@@ -5039,6 +5052,7 @@ def handle_post(handler, parsed) -> bool:
                 delete_cli_session(sid)
             except Exception:
                 logger.debug("Failed to delete CLI session %s", sid)
+        publish_session_list_changed("session_delete")
         return j(handler, {"ok": True, **worktree_retained})
 
     if parsed.path == "/api/session/clear":
@@ -5164,6 +5178,7 @@ def handle_post(handler, parsed) -> bool:
         # Persist only if there are messages (matches new_session pattern)
         if forked_messages:
             branch.save()
+            publish_session_list_changed("session_branch")
 
         return j(handler, {
             "session_id": branch.session_id,
@@ -5634,6 +5649,7 @@ def handle_post(handler, parsed) -> bool:
         with _get_session_agent_lock(body["session_id"]):
             s.pinned = bool(body.get("pinned", True))
             s.save()
+        publish_session_list_changed("session_pin")
         return j(handler, {"ok": True, "session": s.compact()})
 
     # ── Session archive (POST) ──
@@ -5710,6 +5726,7 @@ def handle_post(handler, parsed) -> bool:
         with _get_session_agent_lock(sid):
             s.archived = bool(body.get("archived", True))
             s.save(touch_updated_at=False)
+        publish_session_list_changed("session_archive")
         return j(handler, {"ok": True, "session": s.compact(), **_worktree_retained_payload(s)})
 
     # ── Session move to project (POST) ──
@@ -5738,6 +5755,7 @@ def handle_post(handler, parsed) -> bool:
         with _get_session_agent_lock(body["session_id"]):
             s.project_id = target_pid
             s.save()
+        publish_session_list_changed("session_move")
         return j(handler, {"ok": True, "session": s.compact()})
 
     # ── Project CRUD (POST) ──
@@ -6499,6 +6517,32 @@ def _handle_gateway_sse_stream(handler, parsed):
         pass
     finally:
         watcher.unsubscribe(q)
+    return True
+
+
+def _handle_session_events_stream(handler):
+    """SSE endpoint for lightweight session-list invalidation events."""
+    handler.send_response(200)
+    handler.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+    handler.send_header('Cache-Control', 'no-cache')
+    handler.send_header('X-Accel-Buffering', 'no')
+    handler.send_header('Connection', 'keep-alive')
+    handler.end_headers()
+
+    q = subscribe_session_events()
+    try:
+        while True:
+            try:
+                event_data = q.get(timeout=_SSE_HEARTBEAT_INTERVAL_SECONDS)
+            except queue.Empty:
+                handler.wfile.write(b': keepalive\n\n')
+                handler.wfile.flush()
+                continue
+            _sse(handler, event_data.get('type', 'sessions_changed'), event_data)
+    except _CLIENT_DISCONNECT_ERRORS:
+        pass
+    finally:
+        unsubscribe_session_events(q)
     return True
 
 
@@ -8003,6 +8047,7 @@ def _start_chat_stream_for_session(
             model_provider=model_provider,
             stream_id=stream_id,
         )
+    publish_session_list_changed("chat_start")
     diag.stage("turn_journal_submitted") if diag else None
     journal_event = {}
     try:
@@ -10415,6 +10460,7 @@ def _handle_session_import_cli(handler, body):
                     changed = True
         if changed:
             existing.save(touch_updated_at=False)
+            publish_session_list_changed("session_import_cli")
         return j(
             handler,
             {
@@ -10531,6 +10577,7 @@ def _handle_session_import_cli(handler, body):
     s.platform = cli_platform
     s._cli_origin = sid
     s.save(touch_updated_at=False)
+    publish_session_list_changed("session_import_cli")
     return j(
         handler,
         {
@@ -10571,6 +10618,7 @@ def _handle_session_import(handler, body):
         while len(SESSIONS) > SESSIONS_MAX:
             SESSIONS.popitem(last=False)
     s.save()
+    publish_session_list_changed("session_import")
     return j(handler, {"ok": True, "session": s.compact() | {"messages": s.messages}})
 
 
