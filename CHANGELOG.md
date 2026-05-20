@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- **PR #2619** by @Michaelyklam (closes #2595) — Move the long human-facing Hermes comparison document from root `HERMES.md` to `docs/why-hermes.md` so Hermes Agent sessions in this repository load `AGENTS.md` as the project-specific assistant guidance. README links now point to the new docs path and a regression test prevents root `HERMES.md` / `.hermes.md` context files from shadowing `AGENTS.md` again.
 
 ## [v0.51.95] — 2026-05-20 — Release BS (stage-388 — 5-PR batch — live tool callback event dedup + browser-only dashboard links + messaging transcript merge alignment + Geist Contrast skin + SSE runtime diagnostics)
 
