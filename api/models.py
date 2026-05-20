@@ -734,27 +734,69 @@ def _get_profile_home(profile) -> Path:
         return Path(os.environ.get('HERMES_HOME') or '~/.hermes').expanduser()
 
 
-def _interrupted_recovery_marker(*, recovered_output: bool = False) -> dict:
+_INTERRUPTED_RECOVERED_WORDING = (
+    '**Response interrupted.**\n\n'
+    'The WebUI process restarted before this turn finished. '
+    'The partial output above was recovered from the run journal, '
+    'but the interrupted agent process could not continue.'
+)
+_INTERRUPTED_NO_OUTPUT_WORDING = (
+    '**Response interrupted.**\n\n'
+    'The WebUI process restarted before this turn finished. '
+    'The user message above was preserved, but no agent output was recovered.'
+)
+_INTERRUPTED_PENDING_RETRY_WORDING = (
+    '**Response interrupted.**\n\n'
+    'The WebUI process restarted before this turn finished. '
+    'Recovering the partial output from the run journal — '
+    'reload this session to retry.'
+)
+# Neutral wording used when the lazy retry path gives up (max attempts reached
+# or the marker has been pending longer than _JOURNAL_RETRY_GIVEUP_SECONDS).
+_INTERRUPTED_NEUTRAL_WORDING = (
+    '**Response interrupted.**\n\n'
+    'The WebUI process restarted before this turn finished. '
+    'Partial output may have been lost.'
+)
+
+
+def _interrupted_recovery_marker(
+    *,
+    recovered_output: bool = False,
+    pending_retry: bool = False,
+) -> dict:
+    """Build the standard interrupted-turn marker.
+
+    ``recovered_output=True`` means the run journal already yielded visible
+    text on this repair pass — the marker advertises that the partial output
+    has been recovered.
+
+    ``pending_retry=True`` is the lazy-retry hook: the journal was unreadable
+    on this pass (page-cache loss, un-fsynced writes on slow FS, etc.). The
+    marker carries a ``_pending_journal_recovery`` flag so a later
+    ``get_session()`` can re-attempt recovery without baking a permanent
+    "no output" claim into the transcript.
+
+    The two are mutually exclusive; ``recovered_output`` wins if both are
+    set so the caller cannot accidentally re-arm retry on a successful
+    repair.
+    """
     if recovered_output:
-        content = (
-            '**Response interrupted.**\n\n'
-            'The WebUI process restarted before this turn finished. '
-            'The partial output above was recovered from the run journal, '
-            'but the interrupted agent process could not continue.'
-        )
+        content = _INTERRUPTED_RECOVERED_WORDING
+    elif pending_retry:
+        content = _INTERRUPTED_PENDING_RETRY_WORDING
     else:
-        content = (
-            '**Response interrupted.**\n\n'
-            'The WebUI process restarted before this turn finished. '
-            'The user message above was preserved, but no agent output was recovered.'
-        )
-    return {
+        content = _INTERRUPTED_NO_OUTPUT_WORDING
+    marker = {
         'role': 'assistant',
         'content': content,
         'timestamp': int(time.time()),
         '_error': True,
         'type': 'interrupted',
     }
+    if pending_retry and not recovered_output:
+        marker['_pending_journal_recovery'] = True
+    return marker
 
 
 def _truncate_journal_tool_args(args, limit: int = 4) -> dict:
@@ -1038,6 +1080,226 @@ def _append_journaled_partial_output(
     return appended_any
 
 
+# ── Lazy run-journal recovery (read-side self-heal) ─────────────────────────
+#
+# When sidecar repair runs before the run-journal for the dead stream is
+# visible on disk (page-cache loss on WSL2 9p / DrvFs, an un-fsynced journal
+# tail, a slow network FS, …), `_append_journaled_partial_output` returns
+# False even though the journaled events will appear on disk shortly. Without
+# the helpers below the repair path baked a permanent "no agent output was
+# recovered" claim into the marker, and a later session read could never
+# correct it.
+#
+# The contract is:
+#
+#   * Sidecar repair (`_apply_core_sync_or_error_marker`) writes a marker
+#     with `_pending_journal_recovery=True` whenever it could not recover
+#     visible output AND the stream id is known. Three retry-meta keys go
+#     onto the marker: `_journal_retry_stream_id`, `_journal_retry_attempts`,
+#     `_journal_retry_first_seen_ts`.
+#   * Every `get_session()` call that returns the full session checks the
+#     latest assistant marker; if the flag is set it re-runs
+#     `_append_journaled_partial_output` with `dedupe_existing=True`. On
+#     success the marker is promoted in place to the recovered-output
+#     wording, the journaled rows are reordered to sit above the marker,
+#     and all retry meta is stripped. On failure attempts is incremented.
+#   * After `_JOURNAL_RETRY_MAX_ATTEMPTS` failed retries or
+#     `_JOURNAL_RETRY_GIVEUP_SECONDS` of wall-clock age, the marker is
+#     demoted to the neutral wording ("Partial output may have been lost.")
+#     so users do not see "reload to retry" prompts forever.
+_JOURNAL_RETRY_MAX_ATTEMPTS = 12
+_JOURNAL_RETRY_GIVEUP_SECONDS = 24 * 3600
+
+
+def _build_recovery_marker_with_retry_hook(
+    *, recovered_output: bool, stream_id: str | None,
+) -> dict:
+    """Build an interrupted-turn marker, arming the lazy-retry hook when
+    visible output was not recovered yet but a stream id is available."""
+    if recovered_output:
+        return _interrupted_recovery_marker(recovered_output=True)
+    if not stream_id:
+        return _interrupted_recovery_marker(recovered_output=False)
+    marker = _interrupted_recovery_marker(pending_retry=True)
+    marker['_journal_retry_stream_id'] = str(stream_id)
+    marker['_journal_retry_attempts'] = 0
+    marker['_journal_retry_first_seen_ts'] = int(time.time())
+    return marker
+
+
+def _session_has_pending_journal_retry(session) -> bool:
+    """Cheap short-circuit: scan from the tail until the most recent normal
+    assistant turn. Any `_pending_journal_recovery` flag found before then
+    means a retry is queued.
+    """
+    messages = getattr(session, 'messages', None) or []
+    for msg in reversed(messages):
+        if not isinstance(msg, dict):
+            continue
+        if msg.get('_pending_journal_recovery'):
+            return True
+        if msg.get('role') == 'assistant' and not msg.get('_error'):
+            # A normal assistant turn after any pending marker — nothing to
+            # retry above this point.
+            return False
+    return False
+
+
+def _strip_journal_retry_meta(marker: dict) -> None:
+    marker.pop('_pending_journal_recovery', None)
+    marker.pop('_journal_retry_stream_id', None)
+    marker.pop('_journal_retry_attempts', None)
+    marker.pop('_journal_retry_first_seen_ts', None)
+
+
+def _reorder_journal_tail_above_marker(session, marker_idx: int) -> None:
+    """Move `_recovered_from_run_journal=True` rows appended *after*
+    ``marker_idx`` to sit immediately above the marker so chronological
+    order is preserved (journaled output happened during the turn, marker
+    annotates its end).
+    """
+    messages = session.messages
+    if marker_idx < 0 or marker_idx >= len(messages):
+        return
+    tail = messages[marker_idx + 1 :]
+    if not tail:
+        return
+    journaled = [
+        m for m in tail
+        if isinstance(m, dict) and m.get('_recovered_from_run_journal')
+    ]
+    if not journaled:
+        return
+    rest = [
+        m for m in tail
+        if not (isinstance(m, dict) and m.get('_recovered_from_run_journal'))
+    ]
+    marker = messages[marker_idx]
+    new_messages = (
+        messages[:marker_idx]
+        + journaled
+        + [marker]
+        + rest
+    )
+    # Rebase any tool_calls.assistant_msg_idx values that pointed into the
+    # journaled rows when they were appended at the tail.
+    old_journaled_idx_base = marker_idx + 1
+    new_journaled_idx_base = marker_idx
+    shift = new_journaled_idx_base - old_journaled_idx_base  # = -1
+    for tool_call in session.tool_calls or []:
+        if not isinstance(tool_call, dict):
+            continue
+        idx = tool_call.get('assistant_msg_idx')
+        if isinstance(idx, int) and idx >= old_journaled_idx_base \
+                and idx < old_journaled_idx_base + len(journaled):
+            tool_call['assistant_msg_idx'] = idx + shift
+    session.messages = new_messages
+
+
+def _retry_journal_recovery_in_place(session) -> bool:
+    """Re-attempt run-journal recovery for the most recent pending marker.
+
+    Returns True if the marker was promoted to the recovered-output wording.
+    Never raises — caller is best-effort.
+    """
+    try:
+        messages = session.messages or []
+        for idx in range(len(messages) - 1, -1, -1):
+            msg = messages[idx]
+            if not isinstance(msg, dict):
+                continue
+            if msg.get('role') == 'assistant' and not msg.get('_error') \
+                    and not msg.get('_pending_journal_recovery'):
+                # Walked past the pending marker without finding it.
+                return False
+            if not (
+                msg.get('type') == 'interrupted'
+                and msg.get('_pending_journal_recovery')
+            ):
+                continue
+            stream_id = msg.get('_journal_retry_stream_id')
+            first_seen = msg.get('_journal_retry_first_seen_ts') or 0
+            attempts = int(msg.get('_journal_retry_attempts') or 0)
+            now = time.time()
+            give_up = (
+                attempts >= _JOURNAL_RETRY_MAX_ATTEMPTS
+                or (
+                    first_seen
+                    and now - float(first_seen) > _JOURNAL_RETRY_GIVEUP_SECONDS
+                )
+            )
+            if not stream_id:
+                # No stream id to retry against; demote immediately.
+                msg['content'] = _INTERRUPTED_NEUTRAL_WORDING
+                _strip_journal_retry_meta(msg)
+                try:
+                    session.save(touch_updated_at=False)
+                except Exception:
+                    logger.debug(
+                        "save() failed while demoting marker for session %s",
+                        getattr(session, 'session_id', '?'),
+                        exc_info=True,
+                    )
+                return False
+            if give_up:
+                msg['content'] = _INTERRUPTED_NEUTRAL_WORDING
+                _strip_journal_retry_meta(msg)
+                try:
+                    session.save(touch_updated_at=False)
+                except Exception:
+                    logger.debug(
+                        "save() failed while demoting marker for session %s",
+                        getattr(session, 'session_id', '?'),
+                        exc_info=True,
+                    )
+                return False
+            tail_len_before = len(session.messages)
+            ok = _append_journaled_partial_output(
+                session, stream_id, dedupe_existing=True,
+            )
+            if ok:
+                msg['content'] = _INTERRUPTED_RECOVERED_WORDING
+                _strip_journal_retry_meta(msg)
+                # The journaled rows were appended at the end of messages;
+                # only the rows past the previous tail count as "newly
+                # journaled" and need to move above the marker.
+                _ = tail_len_before  # informational; helper below scans
+                _reorder_journal_tail_above_marker(session, idx)
+                try:
+                    session.save(touch_updated_at=False)
+                except Exception:
+                    logger.debug(
+                        "save() failed while promoting marker for session %s",
+                        getattr(session, 'session_id', '?'),
+                        exc_info=True,
+                    )
+                logger.info(
+                    "Session %s: lazy journal-recovery promoted marker for "
+                    "stream %s after %d attempts",
+                    getattr(session, 'session_id', '?'),
+                    stream_id,
+                    attempts,
+                )
+                return True
+            msg['_journal_retry_attempts'] = attempts + 1
+            try:
+                session.save(touch_updated_at=False)
+            except Exception:
+                logger.debug(
+                    "save() failed while incrementing retry counter for session %s",
+                    getattr(session, 'session_id', '?'),
+                    exc_info=True,
+                )
+            return False
+        return False
+    except Exception:
+        logger.exception(
+            "_retry_journal_recovery_in_place failed for session %s",
+            getattr(session, 'session_id', '?'),
+        )
+        return False
+
+
 def _apply_core_sync_or_error_marker(
     session,
     core_path,
@@ -1105,11 +1367,16 @@ def _apply_core_sync_or_error_marker(
             session,
             stream_id_for_recheck or session.active_stream_id,
         )
+        _stream_id = stream_id_for_recheck or session.active_stream_id
         session.active_stream_id = None
         session.pending_user_message = None
         session.pending_attachments = []
         session.pending_started_at = None
-        session.messages.append(_interrupted_recovery_marker(recovered_output=recovered_output))
+        session.messages.append(
+            _build_recovery_marker_with_retry_hook(
+                recovered_output=recovered_output, stream_id=_stream_id,
+            )
+        )
         session.save(touch_updated_at=touch_updated_at)
         logger.info(
             "Session %s: recovered pending user turn (messages non-empty), added error marker",
@@ -1160,6 +1427,17 @@ def _apply_core_sync_or_error_marker(
                 session.messages.append(
                     _interrupted_recovery_marker(recovered_output=True)
                 )
+            # NOTE: when the core transcript was synced in but the run journal
+            # is not yet visible, intentionally do NOT append a lazy-retry
+            # marker here. In this branch the canonical history is the core
+            # transcript itself (which has already been written to s.messages
+            # above) and the marker is purely advisory — the existing contract
+            # is "marker only when there is a recovered partial turn to
+            # annotate". Adding a pending-retry marker on every empty-journal
+            # core-sync would surface a spurious "reload to retry" banner on
+            # sessions whose journal is legitimately absent (e.g. archived
+            # streams). The first and third branches handle the lost-response
+            # case where the marker is the only signal the user gets.
             session.save(touch_updated_at=touch_updated_at)
             logger.info(
                 "Session %s: synced %d messages from core transcript%s",
@@ -1182,11 +1460,16 @@ def _apply_core_sync_or_error_marker(
         session,
         stream_id_for_recheck or session.active_stream_id,
     )
+    _stream_id = stream_id_for_recheck or session.active_stream_id
     session.active_stream_id = None
     session.pending_user_message = None
     session.pending_attachments = []
     session.pending_started_at = None
-    session.messages.append(_interrupted_recovery_marker(recovered_output=recovered_output))
+    session.messages.append(
+        _build_recovery_marker_with_retry_hook(
+            recovered_output=recovered_output, stream_id=_stream_id,
+        )
+    )
     session.save(touch_updated_at=touch_updated_at)
     logger.info("Session %s: no core transcript found, added error marker", sid)
     return True
@@ -1306,9 +1589,19 @@ def get_session(sid, metadata_only=False):
     actual message history (e.g., for fast sidebar switching).
     """
     with LOCK:
-        if sid in SESSIONS:
+        cached = SESSIONS.get(sid)
+        if cached is not None:
             SESSIONS.move_to_end(sid)  # LRU: mark as recently used
-            return SESSIONS[sid]
+    if cached is not None:
+        if not metadata_only and _session_has_pending_journal_retry(cached):
+            try:
+                _retry_journal_recovery_in_place(cached)
+            except Exception:
+                logger.debug(
+                    "lazy journal-retry failed on cache hit for session %s",
+                    sid, exc_info=True,
+                )
+        return cached
     if metadata_only:
         s = Session.load_metadata_only(sid)
         if s:
@@ -1324,6 +1617,18 @@ def get_session(sid, metadata_only=False):
         if not metadata_only:
             try:
                 repaired = _repair_stale_pending(s)
+                # If the stale-pending repair did not fire but the session
+                # already carries a pending-journal-retry marker (e.g. set on
+                # a previous repair pass), give the lazy-retry path one
+                # chance to self-heal on this read.
+                if not repaired and _session_has_pending_journal_retry(s):
+                    try:
+                        _retry_journal_recovery_in_place(s)
+                    except Exception:
+                        logger.debug(
+                            "lazy journal-retry failed on cold load for session %s",
+                            sid, exc_info=True,
+                        )
                 # If repair had to bail because the per-session lock was held,
                 # do not pin the still-stale sidecar in the LRU cache forever.
                 # Leaving it cached would prevent future get_session() calls from
