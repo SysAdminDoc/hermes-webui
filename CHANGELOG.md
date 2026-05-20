@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Limit the CLI/agent session sidebar bridge to a recent candidate window before joining message rows, so `show_cli_sessions` no longer aggregates every historical `state.db` message before applying the visible sidebar cap. Closes #2628.
 
 ## [v0.51.96] — 2026-05-20 — Release BT (stage-389 — 8-PR batch — IPv6 dashboard link normalization + configured title-generation provider routing + sidebar pinned-session 3-cap + external-refresh sidecar count preference + Hermes overview docs relocation + legacy dedup timestamp granularity + custom provider /models endpoint error surfacing + RuntimeAdapter Slice 4c harness gate RFC)
 
