@@ -15,10 +15,6 @@ The scenario this test pins down:
    assistant text/tools into the transcript in the correct chronological
    position.
 """
-import json
-import queue
-from pathlib import Path
-
 import pytest
 
 import api.models as models

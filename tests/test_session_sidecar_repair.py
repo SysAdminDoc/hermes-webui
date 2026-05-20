@@ -1475,6 +1475,109 @@ class TestLazyRetryBackwardsCompat:
         assert last.get("_journal_retry_first_seen_ts") == 1779200000
 
 
+class TestJournalToolDedupeScoping:
+    """`_journal_tool_already_present` must only collapse against tool cards
+    recovered from the same stream — a repeated tool (e.g. ``terminal: ls``)
+    in a previous turn must NOT pre-empt this turn's recovery."""
+
+    def test_repeated_tool_in_earlier_turn_does_not_block_recovery(self, hermes_home, monkeypatch):
+        sid = "dedupe_scope_sid"
+        stream_id = "dedupe_scope_stream"
+        s = _make_session(session_id=sid, messages=[
+            {"role": "user", "content": "earlier turn"},
+            {"role": "assistant", "content": "earlier reply"},
+            {"role": "user", "content": "later turn", "_recovered": True},
+        ])
+        # Pre-existing tool card from an earlier turn with same (name, preview)
+        # but a different recovered-stream-id. The retry must NOT see this as a
+        # hit when dedupe_existing is asked to scope to ``stream_id``.
+        s.tool_calls = [
+            {
+                "name": "terminal",
+                "preview": "ls",
+                "snippet": "ls",
+                "tid": "old-1",
+                "_recovered_from_run_journal": True,
+                "_recovered_stream_id": "earlier_stream",
+                "done": True,
+            }
+        ]
+        marker = models._interrupted_recovery_marker(pending_retry=True)
+        marker["_journal_retry_stream_id"] = stream_id
+        marker["_journal_retry_attempts"] = 0
+        marker["_journal_retry_first_seen_ts"] = int(time.time())
+        s.messages.append(marker)
+        s.save()
+        append_run_event(sid, stream_id, "token", {"text": "Listing."})
+        append_run_event(
+            sid, stream_id, "tool",
+            {"name": "terminal", "preview": "ls", "args": {"cmd": "ls"}},
+        )
+
+        ok = models._retry_journal_recovery_in_place(s)
+        assert ok is True
+
+        # Two tool cards now: the old one untouched, plus a new one for this
+        # stream. If dedupe were session-wide the new one would be dropped.
+        scoped = [
+            tc for tc in s.tool_calls
+            if tc.get("_recovered_stream_id") == stream_id
+        ]
+        assert len(scoped) == 1
+        assert scoped[0]["name"] == "terminal"
+        assert scoped[0]["preview"] == "ls"
+        # Old tool card is preserved.
+        assert any(
+            tc.get("_recovered_stream_id") == "earlier_stream"
+            for tc in s.tool_calls
+        )
+
+    def test_untagged_tool_still_matches_for_core_transcript_invariant(self, hermes_home, monkeypatch):
+        """Tool cards without ``_recovered_stream_id`` (live tools, or tools
+        carried over from the core transcript) match regardless of the
+        ``stream_id`` argument. This preserves the "core transcript already
+        contains this tool, don't duplicate it" invariant the original repair
+        path relies on."""
+        s = _make_session(messages=[
+            {"role": "user", "content": "x"},
+            {"role": "assistant", "content": "y"},
+        ])
+        s.tool_calls = [
+            {"name": "terminal", "preview": "ls", "snippet": "ls"},
+        ]
+        # No stream_id → legacy session-wide check returns True.
+        assert models._journal_tool_already_present(s, "terminal", "ls") is True
+        # With a stream_id, untagged tool cards still match (different stream
+        # ids only override the match decision when the existing card itself
+        # is tagged with a stream id that disagrees).
+        assert models._journal_tool_already_present(
+            s, "terminal", "ls", stream_id="some_stream",
+        ) is True
+
+    def test_tagged_tool_with_different_stream_does_not_match(self, hermes_home, monkeypatch):
+        """A tool card tagged with a different recovered_stream_id must NOT
+        be considered a duplicate when the retry is scoped to a different
+        stream."""
+        s = _make_session(messages=[
+            {"role": "user", "content": "x"},
+        ])
+        s.tool_calls = [
+            {
+                "name": "terminal",
+                "preview": "ls",
+                "snippet": "ls",
+                "_recovered_stream_id": "other_stream",
+            },
+        ]
+        assert models._journal_tool_already_present(
+            s, "terminal", "ls", stream_id="this_stream",
+        ) is False
+        # But scoping to the same stream id matches.
+        assert models._journal_tool_already_present(
+            s, "terminal", "ls", stream_id="other_stream",
+        ) is True
+
+
 class TestWslPageCacheRace:
     """Cover the WSL2 / network-FS shape: read_run_events returns empty / errors
     first, recovers on a later call."""

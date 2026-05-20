@@ -883,9 +883,33 @@ def _find_existing_assistant_for_journal_content(session, content: str) -> int |
     return None
 
 
-def _journal_tool_already_present(session, name: str, preview: str) -> bool:
+def _journal_tool_already_present(
+    session,
+    name: str,
+    preview: str,
+    *,
+    stream_id: str | None = None,
+) -> bool:
+    """Return True when an equivalent tool card already exists.
+
+    Matching rule:
+
+    * If the existing tool card carries ``_recovered_stream_id``, that means a
+      previous journal-recovery run materialized it.  The retry can safely
+      collapse against it only when both stream ids match — otherwise a
+      legitimately-repeated tool (e.g. a second ``terminal: ls`` in a
+      different turn) would be dropped.
+    * If the existing tool card has no ``_recovered_stream_id`` (a live tool
+      card, or a tool card carried over from a core transcript that pre-dates
+      stream-id tagging), the legacy name+preview match still wins.  This
+      preserves the "core transcript already has this tool, don't duplicate
+      it" invariant the original repair path established.
+    * When ``stream_id`` is omitted, the helper degrades cleanly to its
+      pre-fix session-wide behaviour.
+    """
     candidate_name = str(name or '')
     candidate_preview = _normalize_journal_recovery_text(preview)
+    candidate_stream = str(stream_id) if stream_id else None
     for tool_call in session.tool_calls or []:
         if not isinstance(tool_call, dict):
             continue
@@ -894,8 +918,17 @@ def _journal_tool_already_present(session, name: str, preview: str) -> bool:
         existing_preview = _normalize_journal_recovery_text(
             tool_call.get('preview') or tool_call.get('snippet') or ''
         )
-        if existing_preview == candidate_preview:
-            return True
+        if existing_preview != candidate_preview:
+            continue
+        if candidate_stream is not None:
+            existing_stream = tool_call.get('_recovered_stream_id')
+            # A tool card explicitly tagged with a recovered_stream_id that
+            # differs from ours belongs to another retry's turn — don't let
+            # it pre-empt this retry.  Untagged tool cards (live or carried
+            # over from the core transcript) still match.
+            if existing_stream and str(existing_stream) != candidate_stream:
+                continue
+        return True
     return False
 
 
@@ -1038,7 +1071,9 @@ def _append_journaled_partial_output(
                 anchor_idx = ensure_assistant_anchor(created_at)
             name = str(payload.get('name') or 'tool')
             preview = str(payload.get('preview') or '')
-            if dedupe_existing and _journal_tool_already_present(session, name, preview):
+            if dedupe_existing and _journal_tool_already_present(
+                session, name, preview, stream_id=stream_id,
+            ):
                 current_assistant_idx = anchor_idx
                 continue
             recovered_tool_calls.append({

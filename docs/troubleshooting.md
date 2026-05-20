@@ -93,11 +93,13 @@ If after running steps 1-4 the import still fails *and* `pip install -e .` succe
 
 **Diagnostic.**
 
-1. Identify the affected session id and stream id from the marker. The marker JSON (under `~/.hermes/webui/sessions/session_<sid>.json`) shows them on `_journal_retry_stream_id` after the fix; pre-fix sessions only carry the legacy wording.
+The on-disk locations below assume the default `~/.hermes/webui` state directory. If you override it via `HERMES_WEBUI_STATE_DIR`, substitute that path for `~/.hermes/webui` in every step.
+
+1. Identify the affected session id and stream id from the marker. The marker JSON lives at `~/.hermes/webui/sessions/<sid>.json`; after the fix it shows them on the `_journal_retry_stream_id` key. Pre-fix sessions only carry the legacy wording, with no retry meta.
 2. Check whether the run-journal contains real events:
    ```bash
-   ls -la ~/.hermes/_run_journal/<sid>/<stream_id>.jsonl
-   head -2 ~/.hermes/_run_journal/<sid>/<stream_id>.jsonl
+   ls -la ~/.hermes/webui/sessions/_run_journal/<sid>/<stream_id>.jsonl
+   head -2 ~/.hermes/webui/sessions/_run_journal/<sid>/<stream_id>.jsonl
    ```
    If the file exists and contains `token` / `tool` events, the lazy-retry path will pick them up the next time the session is opened.
 
