@@ -5631,8 +5631,22 @@ def handle_post(handler, parsed) -> bool:
             s = _ensure_full_session_before_mutation(body["session_id"], s)
         except KeyError:
             return bad(handler, "Session not found", 404)
+        pin_requested = bool(body.get("pinned", True))
+        if pin_requested and not getattr(s, "pinned", False):
+            pinned_ids = {
+                getattr(existing, "session_id", None) for existing in all_sessions()
+                if getattr(existing, "pinned", False) and not getattr(existing, "archived", False)
+            }
+            with LOCK:
+                pinned_ids.update(
+                    sid for sid, existing in SESSIONS.items()
+                    if getattr(existing, "pinned", False) and not getattr(existing, "archived", False)
+                )
+            pinned_ids.discard(body["session_id"])
+            if len(pinned_ids) >= 3:
+                return bad(handler, "Up to 3 sessions can be pinned. Unpin one before pinning another.", 400)
         with _get_session_agent_lock(body["session_id"]):
-            s.pinned = bool(body.get("pinned", True))
+            s.pinned = pin_requested
             s.save()
         return j(handler, {"ok": True, "session": s.compact()})
 
