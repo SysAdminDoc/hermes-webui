@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sidecar repair / streaming recovery** — Lazily retry run-journal recovery when sidecar repair runs before the journaled tokens are visible on disk (mainly affects WSL2 / network FS setups where the run-journal `.jsonl` is written by the dead worker but the WebUI process reads it through a cache that has not yet seen the writes). The interrupted-turn marker now self-heals on the next session read: it carries a `_pending_journal_recovery` flag that re-runs `_append_journaled_partial_output` from `get_session()`, promotes the marker to the recovered-output wording on success, and demotes to neutral wording after 12 failed retries or 24h, so users no longer see a permanent "no agent output was recovered" banner when the journaled tokens are present on disk. New regression test `tests/test_session_lost_response_regression.py` and additional coverage in `tests/test_session_sidecar_repair.py`.
+
 
 ## [v0.51.99] — 2026-05-20 — Release BW (stage-392 — 5-PR batch — compact tool activity grouping + CLI sidebar scan cap + title-generation API key forwarding + post-compression replay dedup + clarify popup stability)
 
