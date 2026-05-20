@@ -1475,6 +1475,9 @@ function _sessionSnapshotById(sid){
   if(S.session&&S.session.session_id===sid) return S.session;
   return (_allSessions||[]).find(s=>s&&s.session_id===sid)||null;
 }
+function _pinnedSessionCount(){
+  return (_allSessions||[]).filter(s=>s&&s.pinned&&!s.archived).length;
+}
 function _worktreeSessionCount(ids){
   return (ids||[]).reduce((count,sid)=>{
     const session=_sessionSnapshotById(sid);
@@ -1785,12 +1788,17 @@ function _openSessionActionMenu(session, anchorEl){
       }
     ));
   }
+  const pinLimitReached=!session.pinned&&_pinnedSessionCount()>=3;
   menu.appendChild(_buildSessionAction(
     session.pinned?t('session_unpin'):t('session_pin'),
-    session.pinned?t('session_unpin_desc'):t('session_pin_desc'),
+    pinLimitReached?'Only 3 conversations can be pinned':(session.pinned?t('session_unpin_desc'):t('session_pin_desc')),
     session.pinned?ICONS.pin:ICONS.unpin,
     async()=>{
       closeSessionActionMenu();
+      if(pinLimitReached){
+        if(typeof showToast==='function') showToast('Only 3 conversations can be pinned. Unpin one before pinning another.',3000,'error');
+        return;
+      }
       const newPinned=!session.pinned;
       try{
         await api('/api/session/pin',{method:'POST',body:JSON.stringify({session_id:session.session_id,pinned:newPinned})});
@@ -1799,7 +1807,7 @@ function _openSessionActionMenu(session, anchorEl){
         renderSessionList();
       }catch(err){showToast(t('session_pin_failed')+err.message);}
     },
-    session.pinned?'is-active':''
+    (session.pinned?'is-active':'')+(pinLimitReached?' is-disabled':'')
   ));
   menu.appendChild(_buildSessionAction(
     t('session_move_project'),
@@ -2163,10 +2171,22 @@ function _closeSessionEventsSSE(){
 }
 
 function ensureSessionEventsSSE(){
+  if(typeof document !== 'undefined' && !document._hermesSessionEventsVisibilityHook){
+    document.addEventListener('visibilitychange', () => {
+      if(document.hidden){
+        _closeSessionEventsSSE();
+      }else{
+        ensureSessionEventsSSE();
+        void refreshSessionList('visible');
+      }
+    });
+    document._hermesSessionEventsVisibilityHook = true;
+  }
   if(typeof EventSource==='undefined') return;
   if(typeof document !== 'undefined' && document.hidden) return;
   if(_sessionEventsSSE) return;
   try{
+    // Same-origin relative URL preserves subpath mounts and normal WebUI cookies.
     _sessionEventsSSE = new EventSource('api/sessions/events');
     _sessionEventsSSE.onopen = () => {
       if(!_sessionEventsNeedsRefreshOnOpen) return;
@@ -2187,17 +2207,6 @@ function ensureSessionEventsSSE(){
     };
   }catch(e){
     _closeSessionEventsSSE();
-  }
-  if(typeof document !== 'undefined' && !document._hermesSessionEventsVisibilityHook){
-    document.addEventListener('visibilitychange', () => {
-      if(document.hidden){
-        _closeSessionEventsSSE();
-      }else{
-        ensureSessionEventsSSE();
-        void refreshSessionList('visible');
-      }
-    });
-    document._hermesSessionEventsVisibilityHook = true;
   }
 }
 
@@ -3470,6 +3479,16 @@ function renderSessionListFromCache(){
       actions.appendChild(menuBtn);
       el.appendChild(actions);
     }
+    el.oncontextmenu=(e)=>{
+      if(readOnly) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearTimeout(_tapTimer);
+      _tapTimer=null;
+      _lastTapTime=0;
+      _clearPointerDragState();
+      _openSessionActionMenu(s, actions||el);
+    };
 
     // Use pointerup + manual double-tap detection instead of onclick/ondblclick.
     // onclick/ondblclick are unreliable on touch devices (iPad Safari especially):

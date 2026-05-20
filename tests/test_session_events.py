@@ -16,7 +16,7 @@ def test_session_events_endpoint_and_bus_are_defined():
 
 def test_session_events_publish_for_minimal_sidebar_mutations():
     for reason in (
-        "chat_start",
+        "session_new",
         "session_delete",
         "session_duplicate",
         "session_import",
@@ -28,6 +28,7 @@ def test_session_events_publish_for_minimal_sidebar_mutations():
     ):
         assert f'publish_session_list_changed("{reason}")' in ROUTES
 
+    assert 'publish_session_list_changed("chat_start")' not in ROUTES
     assert 'publish_session_list_changed("cron_complete")' in ROUTES
     assert 'publish_session_list_changed("cron_complete")' in PROFILES
 

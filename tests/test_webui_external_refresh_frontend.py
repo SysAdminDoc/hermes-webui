@@ -42,6 +42,8 @@ def test_session_list_external_refresh_uses_sse_invalidation_not_polling():
     assert "if(pendingReason) _scheduleSessionEventsRefresh(pendingReason)" in SESSIONS_JS
     assert "ensureSessionEventsSSE();" in SESSIONS_JS
     assert "document._hermesSessionEventsVisibilityHook" in SESSIONS_JS
+    ensure_fn = SESSIONS_JS[SESSIONS_JS.find("function ensureSessionEventsSSE()") :]
+    assert ensure_fn.find("document._hermesSessionEventsVisibilityHook") < ensure_fn.find("document.hidden) return")
     assert "_sessionListExternalRefreshMs" not in SESSIONS_JS
 
 
