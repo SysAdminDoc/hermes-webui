@@ -243,8 +243,10 @@ def _parse_path_list(text: str, ctx: GitContext) -> set[str]:
     return paths
 
 
-def _collect_diff_paths(ctx: GitContext, cached: bool) -> set[str] | None:
-    args = ["diff", "--name-only", "-z", "--ignore-cr-at-eol"]
+def _collect_diff_paths(ctx: GitContext, cached: bool, *, ignore_cr_at_eol: bool = True) -> set[str] | None:
+    args = ["diff", "--name-only", "-z"]
+    if ignore_cr_at_eol:
+        args.append("--ignore-cr-at-eol")
     if cached:
         args.append("--cached")
     args.extend(["--", _workspace_pathspec(ctx)])
@@ -254,8 +256,15 @@ def _collect_diff_paths(ctx: GitContext, cached: bool) -> set[str] | None:
     return _parse_path_list(result.stdout, ctx)
 
 
-def _collect_numstat(ctx: GitContext, cached: bool) -> dict[str, tuple[int, int, bool]]:
-    args = ["diff", "--numstat", "--ignore-cr-at-eol"]
+def _collect_numstat(
+    ctx: GitContext,
+    cached: bool,
+    *,
+    ignore_cr_at_eol: bool = True,
+) -> dict[str, tuple[int, int, bool]]:
+    args = ["diff", "--numstat"]
+    if ignore_cr_at_eol:
+        args.append("--ignore-cr-at-eol")
     if cached:
         args.append("--cached")
     args.extend(["--", _workspace_pathspec(ctx)])
@@ -305,6 +314,8 @@ def git_status(workspace: str | Path) -> dict:
     )
     staged_stats = _collect_numstat(ctx, cached=True)
     unstaged_stats = _collect_numstat(ctx, cached=False)
+    staged_raw_stats = _collect_numstat(ctx, cached=True, ignore_cr_at_eol=False)
+    unstaged_raw_stats = _collect_numstat(ctx, cached=False, ignore_cr_at_eol=False)
     staged_diff_paths = _collect_diff_paths(ctx, cached=True)
     unstaged_diff_paths = _collect_diff_paths(ctx, cached=False)
 
@@ -404,14 +415,24 @@ def git_status(workspace: str | Path) -> dict:
                 old_workspace_path is not None and old_workspace_path in staged_diff_paths
             )
             if raw_staged and not staged:
-                filtered_noise["filemode_only"] += 1
+                if workspace_path in staged_raw_stats or (
+                    old_workspace_path is not None and old_workspace_path in staged_raw_stats
+                ):
+                    filtered_noise["crlf_only"] += 1
+                else:
+                    filtered_noise["filemode_only"] += 1
         if unstaged and unstaged_diff_paths is not None and not renamed:
             raw_unstaged = unstaged
             unstaged = workspace_path in unstaged_diff_paths or (
                 old_workspace_path is not None and old_workspace_path in unstaged_diff_paths
             )
             if raw_unstaged and not unstaged:
-                filtered_noise["filemode_only"] += 1
+                if workspace_path in unstaged_raw_stats or (
+                    old_workspace_path is not None and old_workspace_path in unstaged_raw_stats
+                ):
+                    filtered_noise["crlf_only"] += 1
+                else:
+                    filtered_noise["filemode_only"] += 1
         if ignored:
             files[workspace_path] = {
                 "path": workspace_path,
