@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 
+<<<<<<< HEAD
 ## [v0.51.94] — 2026-05-19 — Release BR (stage-387 — 10-PR full sweep batch — Slice 4b runner adapter facade + folder zip download + partial recovery marker dedupe + browser api() client-side timeout + auto-compression card rotation finish + composer draft rollback fix + metadata count reconciliation + active-session refresh on external sidecar updates + indexed context metadata + gateway-queues approval peek)
 
 ### Fixed
@@ -42,6 +43,8 @@
 ### Documentation
 
 - **PR #2575** by @Michaelyklam (refs #1925) — Advance the runtime-adapter RFC to the Slice 4 runner/sidecar planning gate after #2560 shipped the queue-staging clarification. The RFC now marks queue routing as staged by default, defines Slice 4a as a docs/test contract before any runner code lands, and pins default-off feature-flagging, restart/reattach success criteria, control parity, profile/workspace payload isolation, and explicit non-goals for legacy-backend removal or server-side queue scheduler work.
+=======
+>>>>>>> 2ecdd66d (feat: add Geist Contrast skin)
 
 ## [v0.51.92] — 2026-05-19 — Release BP (stage-385 — 7-PR full sweep batch — RFC Slice 3c clarification + workspace tree icon alignment + project move cache refresh + auto-compression handoff metadata + Grok OAuth provider catalog + anonymous custom endpoint picker fallback + PWA standalone reload + pull-to-refresh)
 
@@ -94,6 +97,10 @@
 
 - **PR #2511** by @franksong2702 (refs #2502 / #2503) — Update the `docs/ui-ux/` demo appearance controls to initialize as `class="dark" data-skin="slate"` instead of the deprecated `data-theme`-only buttons and legacy theme names. Brings the demo pages in line with the live Theme + Skin contract referenced from the new `docs/CONTRACTS.md` so contributors following the contract-index path don't land on stale demos.
 - **PR #2509** by @Michaelyklam (refs #1925) — Advance the runtime-adapter RFC after the Slice 3b approval/clarify seam shipped in v0.51.89. The RFC now marks Slice 3b as shipped and defines the next Slice 3c queue/continue + goal control gate: route those controls through `RuntimeAdapter.queue_message(...)` / `update_goal(...)` only after pinning stable response contracts, bounded unavailable-control behavior, replayable lifecycle/status evidence, ordering/idempotency expectations, and explicit non-goals for runner/sidecar ownership or a WebUI-owned queue/goal scheduler. Docs + adapter-seam regression test only — no runtime/control routing changes in this PR.
+### Added
+
+- **Geist Contrast skin** — Add a new Geist-inspired `geist-contrast` skin with neutral monochrome surfaces, restrained selected/sidebar states, and dark-mode `#FFF175` primary accents with black foreground on solid accent controls.
+
 ## [v0.51.89] — 2026-05-18 — Release BM (stage-382 — 6-PR full sweep batch — runtime adapter approval/clarify seam + SOUL.md memory panel + #1855 resolve_model_provider fast-path + PWA sidebar spinner fix + /model active-provider preference + contributor contract docs index)
 
 ### Changed
