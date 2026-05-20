@@ -15,6 +15,9 @@ The scenario this test pins down:
    assistant text/tools into the transcript in the correct chronological
    position.
 """
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
 import pytest
 
 import api.models as models
@@ -59,8 +62,10 @@ def _isolate_stream_state():
 @pytest.fixture(autouse=True)
 def _isolate_agent_locks():
     config.SESSION_AGENT_LOCKS.clear()
+    models._JOURNAL_RETRY_LOCKS.clear()
     yield
     config.SESSION_AGENT_LOCKS.clear()
+    models._JOURNAL_RETRY_LOCKS.clear()
 
 
 @pytest.fixture()
@@ -95,6 +100,32 @@ def _make_dead_stream_session(
     s.pending_started_at = 1779237637  # production-shaped value
     s.active_stream_id = stream_id
     return s
+
+
+def _make_pending_retry_session(session_id: str, *, stream_id: str):
+    s = Session(session_id=session_id, title="Pending retry", messages=[
+        {"role": "user", "content": "q", "timestamp": 1},
+        {
+            "role": "assistant",
+            "content": models._INTERRUPTED_PENDING_RETRY_WORDING,
+            "timestamp": 2,
+            "_error": True,
+            "type": "interrupted",
+            "_pending_journal_recovery": True,
+            "_journal_retry_stream_id": stream_id,
+            "_journal_retry_attempts": 0,
+            "_journal_retry_first_seen_ts": int(models.time.time()),
+        },
+    ])
+    s.save()
+    return s
+
+
+def _assert_retry_meta_removed(marker):
+    assert "_pending_journal_recovery" not in marker
+    assert "_journal_retry_stream_id" not in marker
+    assert "_journal_retry_attempts" not in marker
+    assert "_journal_retry_first_seen_ts" not in marker
 
 
 # ── The regression test ────────────────────────────────────────────────────
@@ -196,3 +227,36 @@ def test_lost_response_recovered_on_second_read(hermes_home):
     assert "_journal_retry_stream_id" not in promoted
     assert "_journal_retry_attempts" not in promoted
     assert "_journal_retry_first_seen_ts" not in promoted
+
+
+def test_concurrent_get_session_serializes_lazy_journal_retry(hermes_home, monkeypatch):
+    sid = "retry_lock_sid"
+    stream_id = "retry_lock_stream"
+    s = _make_pending_retry_session(sid, stream_id=stream_id)
+    models.SESSIONS[sid] = s
+
+    entered = threading.Event()
+    release = threading.Event()
+    counter_lock = threading.Lock()
+    calls = 0
+
+    def slow_retry(session):
+        nonlocal calls
+        with counter_lock:
+            calls += 1
+        entered.set()
+        assert release.wait(timeout=2), "test timed out waiting to release retry body"
+        return False
+
+    monkeypatch.setattr(models, "_retry_journal_recovery_in_place", slow_retry)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(models.get_session, sid)
+        assert entered.wait(timeout=2), "first caller did not enter retry helper"
+        second = executor.submit(models.get_session, sid)
+        assert second.result(timeout=2) is s
+        release.set()
+        assert first.result(timeout=2) is s
+
+    assert calls == 1
+

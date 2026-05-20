@@ -1144,6 +1144,13 @@ def _append_journaled_partial_output(
 #     so users do not see "reload to retry" prompts forever.
 _JOURNAL_RETRY_MAX_ATTEMPTS = 12
 _JOURNAL_RETRY_GIVEUP_SECONDS = 24 * 3600
+_JOURNAL_RETRY_LOCKS: dict[str, threading.Lock] = {}
+_JOURNAL_RETRY_LOCKS_GUARD = threading.Lock()
+
+
+def _journal_retry_lock_for_sid(sid: str) -> threading.Lock:
+    with _JOURNAL_RETRY_LOCKS_GUARD:
+        return _JOURNAL_RETRY_LOCKS.setdefault(str(sid), threading.Lock())
 
 
 def _build_recovery_marker_with_retry_hook(
@@ -1229,6 +1236,21 @@ def _reorder_journal_tail_above_marker(session, marker_idx: int) -> None:
                 and idx < old_journaled_idx_base + len(journaled):
             tool_call['assistant_msg_idx'] = idx + shift
     session.messages = new_messages
+
+
+def _try_retry_journal_recovery_in_place(session) -> bool:
+    sid = str(getattr(session, 'session_id', '') or '')
+    lock = _journal_retry_lock_for_sid(sid)
+    if not lock.acquire(blocking=False):
+        logger.debug("lazy journal-retry already running for session %s", sid)
+        return False
+    try:
+        return _retry_journal_recovery_in_place(session)
+    finally:
+        lock.release()
+        with _JOURNAL_RETRY_LOCKS_GUARD:
+            if _JOURNAL_RETRY_LOCKS.get(sid) is lock:
+                _JOURNAL_RETRY_LOCKS.pop(sid, None)
 
 
 def _retry_journal_recovery_in_place(session) -> bool:
@@ -1630,7 +1652,7 @@ def get_session(sid, metadata_only=False):
     if cached is not None:
         if not metadata_only and _session_has_pending_journal_retry(cached):
             try:
-                _retry_journal_recovery_in_place(cached)
+                _try_retry_journal_recovery_in_place(cached)
             except Exception:
                 logger.debug(
                     "lazy journal-retry failed on cache hit for session %s",
@@ -1658,7 +1680,7 @@ def get_session(sid, metadata_only=False):
                 # chance to self-heal on this read.
                 if not repaired and _session_has_pending_journal_retry(s):
                     try:
-                        _retry_journal_recovery_in_place(s)
+                        _try_retry_journal_recovery_in_place(s)
                     except Exception:
                         logger.debug(
                             "lazy journal-retry failed on cold load for session %s",
