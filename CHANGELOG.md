@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep capped CLI/agent sidebar scans ordered by latest message activity as well as session start time, so long-lived CLI sessions that were resumed recently stay visible in the sidebar window.
 
 ## [v0.51.100] — 2026-05-20 — Release BX (stage-393 — 3-PR deep-review batch — lazy journal recovery retry + faster profile-switch + cross-tab session list SSE sync)
 
