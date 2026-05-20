@@ -4490,14 +4490,13 @@ async function switchToWorkspace(path,name){
 let _profilesCache = null;
 let _profileSwitchGeneration = 0;
 
-function _profileSwitchPanelLoad(){
-  if (_currentPanel === 'skills') return loadSkills();
-  if (_currentPanel === 'memory') return loadMemory();
-  if (_currentPanel === 'tasks') return loadCrons();
-  if (_currentPanel === 'kanban') return loadKanban();
-  if (_currentPanel === 'profiles') return loadProfilesPanel();
-  if (_currentPanel === 'workspaces') return loadWorkspacesPanel();
-  return Promise.resolve();
+async function _profileSwitchPanelLoad(){
+  if (_currentPanel === 'skills') await loadSkills();
+  if (_currentPanel === 'memory') await loadMemory();
+  if (_currentPanel === 'tasks') await loadCrons();
+  if (_currentPanel === 'kanban') await loadKanban();
+  if (_currentPanel === 'profiles') await loadProfilesPanel();
+  if (_currentPanel === 'workspaces') await loadWorkspacesPanel();
 }
 
 function _refreshProfileSwitchBackground(gen){
