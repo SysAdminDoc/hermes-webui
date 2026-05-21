@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **PR #2687** by @Michaelyklam (closes #2679) — Add a Settings → Preferences toggle backed by `hide_empty_state_suggestions` to hide the three default new-chat suggestion buttons. The empty-state copy stays visible, but the suggestion grid can now be removed from fresh chats to avoid accidental mobile taps.
+
 
 ## [v0.51.104] — 2026-05-21 — Release CB (stage-397 — 9-PR batch — i18n zh-CN/zh-TW cron status + geist-contrast skin polish + tablet hardware Enter + stale Codex slash model state + SSE reconnect jitter + cron run inline expansion + inflight send race + new-chat model provider sync + virtualized sidebar scroll-clamp resync + transcript cache invalidation on same-count content)
 
