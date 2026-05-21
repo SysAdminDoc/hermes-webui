@@ -1515,16 +1515,6 @@ function _playSessionRowsReflowFromPositions(before, timeoutMs, prefersReducedMo
   });
 }
 
-function _playQueuedSessionReflowAnimation(){
-  const before=_pendingSessionReflowPositions;
-  _pendingSessionReflowPositions=null;
-  _playSessionRowsReflowFromPositions(before,SESSION_REFLOW_TIMEOUT_MS,_sessionPrefersReducedMotion);
-}
-
-function _discardQueuedSessionReflowAnimation(){
-  _pendingSessionReflowPositions=null;
-}
-
 function _sessionPrefersReducedMotion(){
   return Boolean(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
@@ -2026,15 +2016,6 @@ let _sessionListEnterAllAnimationPending = false;
 function animateNextSessionListRefresh(options={}){
   _sessionListRefreshAnimationPending = true;
   if(options&&options.enterAll) _sessionListEnterAllAnimationPending = true;
-}
-
-function _sessionListPrefersReducedMotion(){
-  try{return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
-  catch(_){return false;}
-}
-
-function _playSessionListFlipAnimation(before){
-  _playSessionRowsReflowFromPositions(before,SESSION_LIST_FLIP_TIMEOUT_MS,_sessionListPrefersReducedMotion);
 }
 
 function _isOptimisticFirstTurnSessionRow(s){
@@ -3035,6 +3016,8 @@ function renderSessionListFromCache(){
   const enterAllAnimatedRows=animateRefresh&&_sessionListEnterAllAnimationPending;
   _sessionListEnterAllAnimationPending=false;
   const flipBefore=animateRefresh?_captureSessionReflowPositions():null;
+  const committedSwipeDuration=_sessionPrefersReducedMotion()?0:SESSION_SWIPE_DURATION_MS;
+  const committedSwipeReflowDelay=Math.max(0,committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);
   const listScrollTopBeforeRender=list.scrollTop||0;
   list.innerHTML='';
   // Batch select bar (when in select mode)
@@ -3273,15 +3256,12 @@ function renderSessionListFromCache(){
     toggleBtn.onclick=(e)=>{e.stopPropagation();toggleSessionSelectMode();};
     list.appendChild(toggleBtn);
   }
-  if(animateRefresh){
-    // Refresh FLIP and queued archive/delete reflow both drive
-    // --session-reflow-offset. Refresh wins so one render has one transform
-    // writer.
-    _discardQueuedSessionReflowAnimation();
-    _playSessionListFlipAnimation(flipBefore);
-  }else{
-    _playQueuedSessionReflowAnimation();
-  }
+  // Refresh FLIP and queued archive/delete reflow both drive
+  // --session-reflow-offset. Refresh wins so one render has one transform writer.
+  const reflowBefore=animateRefresh?flipBefore:_pendingSessionReflowPositions;
+  const reflowTimeout=animateRefresh?SESSION_LIST_FLIP_TIMEOUT_MS:SESSION_REFLOW_TIMEOUT_MS;
+  _pendingSessionReflowPositions=null;
+  _playSessionRowsReflowFromPositions(reflowBefore,reflowTimeout,_sessionPrefersReducedMotion);
   // Note: declared after the groups loop but available via function hoisting.
   function _renderOneSession(s, isPinnedGroup=false){
     const el=document.createElement('div');
@@ -3675,8 +3655,6 @@ function renderSessionListFromCache(){
     const _archiveSwipeActionThreshold=128;
     const _deleteSwipeActionThreshold=128;
     const _swipeCancelRatio=0.75;
-    const _committedSwipeDuration=_sessionPrefersReducedMotion()?0:SESSION_SWIPE_DURATION_MS;
-    const _committedSwipeReflowDelay=Math.max(0,_committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);
     const _clearLongPressTimer=()=>{
       if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
       if(!_longPressMenuOpened) el.classList.remove('long-pressing');
@@ -3790,12 +3768,12 @@ function renderSessionListFromCache(){
       if(signedDx>0){
         if(s.archived){
           _settleSessionSwipePaint();
-          _archiveSession(s,false,()=>_waitForSessionMotion(_committedSwipeDuration)).then((restored)=>{
+          _archiveSession(s,false,()=>_waitForSessionMotion(committedSwipeDuration)).then((restored)=>{
             if(!restored) _settleSessionSwipePaint();
           });
         }else{
           _completeSessionSwipePaint(signedDx);
-          _archiveSession(s,true,()=>_waitForSessionMotion(_committedSwipeReflowDelay)).then((archived)=>{
+          _archiveSession(s,true,()=>_waitForSessionMotion(committedSwipeReflowDelay)).then((archived)=>{
             if(!archived) _settleSessionSwipePaint();
           });
         }
@@ -3803,7 +3781,7 @@ function renderSessionListFromCache(){
         el.classList.remove('dragging');
         deleteSession(s.session_id,async()=>{
           _completeSessionSwipePaint(signedDx);
-          await _waitForSessionMotion(_committedSwipeReflowDelay);
+          await _waitForSessionMotion(committedSwipeReflowDelay);
         }).then((deleted)=>{
           if(!deleted) _settleSessionSwipePaint();
         });

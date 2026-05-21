@@ -725,10 +725,10 @@
     font-weight:600;
     line-height:1;
   }
-  .session-item.dragging{transition:background .15s,color .15s,box-shadow .15s ease;}
+  .session-item.dragging{transition:background .15s,color .15s,box-shadow .15s ease;will-change:transform;}
   .session-item.session-reflowing{transition:background .15s,color .15s,transform .36s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}
   .session-item.swipe-committed,
-  .session-item.swipe-removing{transition:background .15s,color .15s,transform .42s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;}
+  .session-item.swipe-removing{transition:background .15s,color .15s,transform .42s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}
   .session-item.swipe-removing{
     overflow:hidden;
   }
@@ -822,7 +822,7 @@
   .session-action-opt.danger .ws-opt-icon,.session-action-opt.danger .ws-opt-name{color:var(--error);}
   @media (prefers-reduced-motion:reduce){
     .session-action-menu{animation:none;will-change:auto;}
-    .session-item,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}
+    .session-item,.session-item.dragging,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}
     .session-item.long-pressing{animation:none;}
     .session-item.session-list-flip-enter{animation:none;}
   }

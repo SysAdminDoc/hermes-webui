@@ -37,7 +37,7 @@ def test_session_menu_has_subtle_open_animation():
     assert "@keyframes session-menu-in" in STYLE_CSS
     assert "@media (prefers-reduced-motion:reduce)" in STYLE_CSS
     assert ".session-action-menu{animation:none;will-change:auto;}" in STYLE_CSS
-    assert ".session-item,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}" in STYLE_CSS
+    assert ".session-item,.session-item.dragging,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}" in STYLE_CSS
     assert ".session-item.long-pressing{animation:none;}" in STYLE_CSS
 
 
@@ -88,8 +88,8 @@ def test_session_swipes_route_archive_restore_and_delete():
     assert "_deleteSwipeActionThreshold=128" in SESSIONS_JS
     assert "const SESSION_SWIPE_DURATION_MS = 420;" in SESSIONS_JS
     assert "const SESSION_SWIPE_REFLOW_LEAD_MS = 180;" in SESSIONS_JS
-    assert "const _committedSwipeDuration=_sessionPrefersReducedMotion()?0:SESSION_SWIPE_DURATION_MS;" in SESSIONS_JS
-    assert "const _committedSwipeReflowDelay=Math.max(0,_committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);" in SESSIONS_JS
+    assert "const committedSwipeDuration=_sessionPrefersReducedMotion()?0:SESSION_SWIPE_DURATION_MS;" in SESSIONS_JS
+    assert "const committedSwipeReflowDelay=Math.max(0,committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);" in SESSIONS_JS
     swipe_block = _sessions_block("const _handleSessionSwipe=(signedDx,signedDy)=>{", "const _commitSessionSwipe=()=>{")
     assert "const actionThreshold=signedDx>0?_archiveSwipeActionThreshold:_deleteSwipeActionThreshold;" in SESSIONS_JS
     assert "if(Math.abs(signedDx)<actionThreshold) return false;" in SESSIONS_JS
@@ -105,8 +105,8 @@ def test_session_swipes_route_archive_restore_and_delete():
     delete_branch = swipe_block[delete_start:]
     assert "_settleSessionSwipePaint();" in restore_branch
     assert "_completeSessionSwipePaint(signedDx);" not in restore_branch
-    assert "_archiveSession(s,false,()=>_waitForSessionMotion(_committedSwipeDuration))" in restore_branch
-    assert archive_branch.find("_completeSessionSwipePaint(signedDx);") < archive_branch.find("_archiveSession(s,true,()=>_waitForSessionMotion(_committedSwipeReflowDelay))")
+    assert "_archiveSession(s,false,()=>_waitForSessionMotion(committedSwipeDuration))" in restore_branch
+    assert archive_branch.find("_completeSessionSwipePaint(signedDx);") < archive_branch.find("_archiveSession(s,true,()=>_waitForSessionMotion(committedSwipeReflowDelay))")
     assert delete_branch.find("deleteSession(s.session_id,async()=>{") < delete_branch.find("_completeSessionSwipePaint(signedDx);")
     assert "showToast('Imported sessions cannot be deleted here.',3000);" in SESSIONS_JS
     assert "let _gestureState='idle';" in SESSIONS_JS
@@ -144,7 +144,7 @@ def test_session_removal_reflows_surviving_rows_smoothly():
     assert "let _pendingSessionReflowPositions = null;" in SESSIONS_JS
     assert "const _optimisticallyRemovedSessionIds = new Set();" in SESSIONS_JS
     capture = _sessions_block("function _captureSessionReflowPositions(){", "function _waitForSessionMotion")
-    helper = _sessions_block("function _playSessionRowsReflowFromPositions", "function _playQueuedSessionReflowAnimation")
+    helper = _sessions_block("function _playSessionRowsReflowFromPositions", "function _sessionPrefersReducedMotion")
     assert "positions.set(row.dataset.sid,row.getBoundingClientRect().top);" in capture
     assert "const delta=oldTop-row.getBoundingClientRect().top;" in helper
     assert "const movingRows=[];" in helper
@@ -154,14 +154,14 @@ def test_session_removal_reflows_surviving_rows_smoothly():
     assert "row.classList.add('session-reflowing')" in helper
     assert "requestAnimationFrame(()=>requestAnimationFrame(()=>{" in helper
     assert SESSIONS_JS.count("_pendingSessionReflowPositions=reflowPositions;") >= 2
-    assert "_playSessionRowsReflowFromPositions(before,SESSION_REFLOW_TIMEOUT_MS,_sessionPrefersReducedMotion);" in SESSIONS_JS
-    assert "_playSessionRowsReflowFromPositions(before,SESSION_LIST_FLIP_TIMEOUT_MS,_sessionListPrefersReducedMotion);" in SESSIONS_JS
+    assert "const reflowBefore=animateRefresh?flipBefore:_pendingSessionReflowPositions;" in SESSIONS_JS
+    assert "const reflowTimeout=animateRefresh?SESSION_LIST_FLIP_TIMEOUT_MS:SESSION_REFLOW_TIMEOUT_MS;" in SESSIONS_JS
+    assert "_playSessionRowsReflowFromPositions(reflowBefore,reflowTimeout,_sessionPrefersReducedMotion);" in SESSIONS_JS
     assert "async function _archiveSession(session, archived=true, beforeListRender=null){" in SESSIONS_JS
     assert "const renderHold=beforeListRender?Promise.resolve().then(beforeListRender):null;" in SESSIONS_JS
     assert "if(renderHold) await renderHold;" in SESSIONS_JS
     assert "const serverSessions=_optimisticallyRemovedSessionIds.size" in SESSIONS_JS
     assert "? (sessData.sessions||[]).filter(s=>s&&!_optimisticallyRemovedSessionIds.has(s.session_id))" in SESSIONS_JS
-    assert "_playQueuedSessionReflowAnimation();" in SESSIONS_JS
     assert ".session-item.session-reflowing{transition:background .15s,color .15s,transform .36s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}" in STYLE_CSS
     delete_start = SESSIONS_JS.find("async function deleteSession(sid, beforeDelete=null){")
     delete_end = SESSIONS_JS.find("// ── Project helpers", delete_start)
