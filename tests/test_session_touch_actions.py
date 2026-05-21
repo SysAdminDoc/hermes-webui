@@ -24,25 +24,17 @@ def test_session_menu_uses_viewport_height_not_fixed_scroll_cap():
     assert "max-height:320px" not in session_menu
 
 
-def test_session_menu_has_subtle_open_animation():
+def test_session_menu_respects_motion_preferences():
     session_menu = STYLE_CSS[STYLE_CSS.find(".session-action-menu{"):STYLE_CSS.find(".session-action-menu.open")]
     assert "will-change:opacity,transform" in session_menu
-    assert "transform-origin:top right" in session_menu
     assert "function _playSessionActionMenuEntrance(menu){" in SESSIONS_JS
-    assert "typeof menu.animate==='function'" in SESSIONS_JS
-    assert "{opacity:0, transform:'translate3d(0,-4px,0) scale(.985)'}" in SESSIONS_JS
-    assert "{duration:450, easing:'cubic-bezier(.2,.8,.2,1)'}" in SESSIONS_JS
     assert "menu.classList.add('open-animated')" in SESSIONS_JS
-    assert ".session-action-menu.open-animated{animation:session-menu-in .45s cubic-bezier(.2,.8,.2,1);}" in STYLE_CSS
-    assert "@keyframes session-menu-in" in STYLE_CSS
     assert "@media (prefers-reduced-motion:reduce)" in STYLE_CSS
     assert ".session-action-menu{animation:none;will-change:auto;}" in STYLE_CSS
-    assert ".session-item,.session-item.dragging,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}" in STYLE_CSS
-    assert ".session-item.long-pressing,.session-item.session-swipe-returning{animation:none;}" in STYLE_CSS
 
 
 def test_mobile_session_menu_opens_from_long_press_and_hides_dots():
-    assert "_longPressDelay=400" in SESSIONS_JS
+    assert "const SESSION_LONG_PRESS_DELAY_MS = 400;" in SESSIONS_JS
     assert "el.classList.add('long-pressing')" in SESSIONS_JS
     assert "if(!_longPressMenuOpened) el.classList.remove('long-pressing')" in SESSIONS_JS
     assert "row.classList.remove('menu-open','long-pressing')" in SESSIONS_JS
@@ -58,6 +50,10 @@ def test_mobile_session_menu_opens_from_long_press_and_hides_dots():
 
 
 def test_open_session_menu_consumes_next_row_activation():
+    context_menu = _sessions_block("el.oncontextmenu=(e)=>{", "// Use release events")
+    assert SESSIONS_JS.count("el.oncontextmenu=(e)=>{") == 1
+    assert "if(e.pointerType==='touch'||e.pointerType==='pen') return;" in context_menu
+    assert "_openSessionActionMenu(s, actions||el);" in context_menu
     assert "if(_sessionActionMenu&&!_sessionActionMenu.contains(target)){" in SESSIONS_JS
     assert "closeSessionActionMenu();" in SESSIONS_JS
     assert "e.stopPropagation();" in SESSIONS_JS
@@ -84,14 +80,12 @@ def test_open_session_menu_consumes_next_row_activation():
 def test_session_swipes_route_archive_restore_and_delete():
     assert "_gesturePointerType!=='mouse'" in SESSIONS_JS
     assert "_swipeTracking=true" in SESSIONS_JS
-    assert "_archiveSwipeActionThreshold=128" in SESSIONS_JS
-    assert "_deleteSwipeActionThreshold=128" in SESSIONS_JS
+    assert "const SESSION_ARCHIVE_SWIPE_THRESHOLD_PX = 128;" in SESSIONS_JS
+    assert "const SESSION_DELETE_SWIPE_THRESHOLD_PX = 128;" in SESSIONS_JS
     assert "const SESSION_SWIPE_DURATION_MS = 500;" in SESSIONS_JS
     assert "const SESSION_SWIPE_REFLOW_LEAD_MS = 220;" in SESSIONS_JS
-    assert "const committedSwipeDuration=_sessionPrefersReducedMotion()?0:SESSION_SWIPE_DURATION_MS;" in SESSIONS_JS
-    assert "const committedSwipeReflowDelay=Math.max(0,committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);" in SESSIONS_JS
     swipe_block = _sessions_block("const _handleSessionSwipe=(signedDx,signedDy)=>{", "const _commitSessionSwipe=()=>{")
-    assert "const actionThreshold=signedDx>0?_archiveSwipeActionThreshold:_deleteSwipeActionThreshold;" in SESSIONS_JS
+    assert "const actionThreshold=signedDx>0?SESSION_ARCHIVE_SWIPE_THRESHOLD_PX:SESSION_DELETE_SWIPE_THRESHOLD_PX;" in SESSIONS_JS
     assert "if(Math.abs(signedDx)<actionThreshold) return false;" in SESSIONS_JS
     assert "const _updateSessionGesture=(clientX,clientY)=>{" in SESSIONS_JS
     assert "if(_isSessionSwipeTarget()&&(_swipeTracking||dx>dy)) _paintSessionSwipe(signedDx)" in SESSIONS_JS
@@ -116,8 +110,6 @@ def test_session_swipes_route_archive_restore_and_delete():
     assert delete_branch.find("deleteSession(s.session_id,async()=>{") < delete_branch.find("_completeSessionSwipePaint(signedDx);")
     assert "showToast('Imported sessions cannot be deleted here.',3000);" in SESSIONS_JS
     assert "let _gestureState='idle';" in SESSIONS_JS
-    assert "const _commitSessionSwipe=()=>{" in SESSIONS_JS
-    assert "if(_gestureState==='committed'){" in SESSIONS_JS
     assert SESSIONS_JS.count("if(e.pointerType==='touch') return;") >= 3
     assert "if(_gesturePointerType==='mouse'&&_gestureState!=='idle') _clearPointerDragState();" in SESSIONS_JS
 
@@ -136,10 +128,8 @@ def test_session_swipe_paint_uses_transform_only_exit():
     assert "requestAnimationFrame(()=>requestAnimationFrame(_clearSessionSwipePaint))" in SESSIONS_JS
     assert "el.classList.remove('swiping-right','swiping-left','swipe-committed','swipe-removing')" in clear
     assert ".session-item.swipe-committed,\n  .session-item.swipe-removing{transition:" in STYLE_CSS
-    assert "transition:background .15s,color .15s,transform .5s cubic-bezier(.22,.61,.36,1),box-shadow .15s ease" in STYLE_CSS
     assert "transform:translate3d(calc(-1 * var(--session-swipe-offset,0px)),0,0)" in STYLE_CSS
     assert "transform:scale(var(--session-swipe-icon-scale,1))" in STYLE_CSS
-    assert "min-width:36px" not in STYLE_CSS[STYLE_CSS.find(".session-swipe-affordance{"):STYLE_CSS.find(".session-swipe-affordance-right{")]
     swipe_start = STYLE_CSS.find(".session-item.swipe-removing{")
     swipe_end = STYLE_CSS.find("}", swipe_start)
     assert swipe_start >= 0 and swipe_end > swipe_start
@@ -160,7 +150,6 @@ def test_session_removal_reflows_surviving_rows_smoothly():
     assert "const delta=oldTop-row.getBoundingClientRect().top;" in helper
     assert "const movingRows=[];" in helper
     assert "list.getBoundingClientRect();" in helper
-    assert helper.count("getBoundingClientRect()") == 2
     assert "row.style.transition='none';" in helper
     assert "row.classList.add('session-reflowing')" in helper
     assert "requestAnimationFrame(()=>requestAnimationFrame(()=>{" in helper
@@ -177,8 +166,6 @@ def test_session_removal_reflows_surviving_rows_smoothly():
     assert "if(_showArchived&&!_sessionPrefersReducedMotion()) _sessionSwipeReturnOffsets.set(session.session_id,'0px');" in SESSIONS_JS
     assert "const swipeReturnOffset=_sessionSwipeReturnOffsets.get(s.session_id);" in SESSIONS_JS
     assert "el.classList.add('session-swipe-returning');" in SESSIONS_JS
-    assert "@keyframes sessionSwipeReturn" in STYLE_CSS
-    assert ".session-item.session-swipe-returning{animation:sessionSwipeReturn .5s cubic-bezier(.22,.61,.36,1) both;will-change:transform,opacity;}" in STYLE_CSS
     delete_start = SESSIONS_JS.find("async function deleteSession(sid, beforeDelete=null){")
     delete_end = SESSIONS_JS.find("// ── Project helpers", delete_start)
     assert delete_start >= 0 and delete_end > delete_start

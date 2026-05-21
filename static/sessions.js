@@ -111,6 +111,10 @@ const SESSION_SWIPE_DURATION_MS = 500;
 const SESSION_SWIPE_REFLOW_LEAD_MS = 220;
 const SESSION_REFLOW_TIMEOUT_MS = 420;
 const SESSION_LIST_FLIP_TIMEOUT_MS = 460;
+const SESSION_LONG_PRESS_DELAY_MS = 400;
+const SESSION_ARCHIVE_SWIPE_THRESHOLD_PX = 128;
+const SESSION_DELETE_SWIPE_THRESHOLD_PX = 128;
+const SESSION_SWIPE_CANCEL_RATIO = 0.75;
 
 function _formatSessionModelWithGateway(s){
   if(!s||!s.model)return'';
@@ -1517,7 +1521,25 @@ function _playSessionRowsReflowFromPositions(before, timeoutMs, prefersReducedMo
 }
 
 function _sessionPrefersReducedMotion(){
-  return Boolean(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  try{
+    return Boolean(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }catch(_){
+    return false;
+  }
+}
+
+function _makeSessionSwipeAffordance(side, icon, label){
+  const affordance=document.createElement('div');
+  affordance.className='session-swipe-affordance session-swipe-affordance-'+side;
+  affordance.setAttribute('aria-hidden','true');
+  const badge=document.createElement('span');
+  badge.className='session-swipe-badge';
+  badge.innerHTML=li(icon,18);
+  const text=document.createElement('span');
+  text.className='session-swipe-label';
+  text.textContent=label;
+  affordance.append(badge,text);
+  return affordance;
 }
 const SESSION_VIRTUAL_ROW_HEIGHT = 52;
 const SESSION_VIRTUAL_BUFFER_ROWS = 12;
@@ -3616,6 +3638,7 @@ function renderSessionListFromCache(){
     el.oncontextmenu=(e)=>{
       if(readOnly) return;
       e.preventDefault();
+      if(e.pointerType==='touch'||e.pointerType==='pen') return;
       e.stopPropagation();
       clearTimeout(_tapTimer);
       _tapTimer=null;
@@ -3624,22 +3647,9 @@ function renderSessionListFromCache(){
       _openSessionActionMenu(s, actions||el);
     };
 
-    const _makeSessionSwipeAffordance=(side,icon,label)=>{
-      const affordance=document.createElement('div');
-      affordance.className='session-swipe-affordance session-swipe-affordance-'+side;
-      affordance.setAttribute('aria-hidden','true');
-      const badge=document.createElement('span');
-      badge.className='session-swipe-badge';
-      badge.innerHTML=li(icon,18);
-      const text=document.createElement('span');
-      text.className='session-swipe-label';
-      text.textContent=label;
-      affordance.append(badge,text);
-      return affordance;
-    };
     if(!readOnly){
       el.append(
-        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?'Restore':t('session_batch_archive')),
+        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?t('session_restore'):t('session_batch_archive')),
         _makeSessionSwipeAffordance('left','trash-2',t('session_batch_delete')),
       );
     }
@@ -3663,10 +3673,6 @@ function renderSessionListFromCache(){
     let _pointerX=0;
     let _pointerY=0;
     let _gesturePointerType='';
-    const _longPressDelay=400;
-    const _archiveSwipeActionThreshold=128;
-    const _deleteSwipeActionThreshold=128;
-    const _swipeCancelRatio=0.75;
     const _clearLongPressTimer=()=>{
       if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
       if(!_longPressMenuOpened) el.classList.remove('long-pressing');
@@ -3695,7 +3701,7 @@ function renderSessionListFromCache(){
         _tapTimer=null;
         _lastTapTime=0;
         _openSessionActionMenu(s, el);
-      },_longPressDelay);
+      },SESSION_LONG_PRESS_DELAY_MS);
     };
     const _isSessionSwipeTarget=()=>{
       return _gesturePointerType!=='mouse'&&!readOnly&&!_renamingSid&&!_sessionSelectMode;
@@ -3769,9 +3775,9 @@ function renderSessionListFromCache(){
     };
     const _handleSessionSwipe=(signedDx,signedDy)=>{
       if(_gestureState==='committed'||!_isSessionSwipeTarget()) return false;
-      const actionThreshold=signedDx>0?_archiveSwipeActionThreshold:_deleteSwipeActionThreshold;
+      const actionThreshold=signedDx>0?SESSION_ARCHIVE_SWIPE_THRESHOLD_PX:SESSION_DELETE_SWIPE_THRESHOLD_PX;
       if(Math.abs(signedDx)<actionThreshold) return false;
-      if(Math.abs(signedDy)>Math.abs(signedDx)*_swipeCancelRatio) return false;
+      if(Math.abs(signedDy)>Math.abs(signedDx)*SESSION_SWIPE_CANCEL_RATIO) return false;
       _gestureState='committed';
       _clearLongPressTimer();
       clearTimeout(_tapTimer);
@@ -3917,11 +3923,6 @@ function renderSessionListFromCache(){
       // Guard: prevent renaming if session is currently being loaded
       if (_loadingSessionId && _loadingSessionId !== s.session_id) return;
       startRename();
-    };
-    el.oncontextmenu=(e)=>{
-      if(e.pointerType==='touch'||e.pointerType==='pen'){
-        e.preventDefault();
-      }
     };
     el.addEventListener('touchstart',(e)=>{
       if(_isSessionActionTarget(e.target)) return;

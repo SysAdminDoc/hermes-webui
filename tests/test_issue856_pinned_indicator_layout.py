@@ -120,7 +120,7 @@ def test_plain_mouse_hover_does_not_mark_session_row_dragging():
     """Pointermove fires during ordinary hover; drag styling must require an active press."""
     assert "let _gestureState='idle';" in SESSIONS_JS
     assert "_gestureState='pressing';" in SESSIONS_JS
-    assert "if(_gestureState==='idle') return;" in SESSIONS_JS
+    assert "if(_gestureState==='idle') return false;" in SESSIONS_JS
     assert "_gestureState='idle';" in SESSIONS_JS
     assert ".session-item.dragging:hover" in STYLE_CSS
 
