@@ -750,6 +750,10 @@
   .session-item.active{background:var(--accent-bg);color:var(--accent);}
   .session-item.active.swiping-right{background:color-mix(in srgb,var(--warning) 20%,var(--accent-bg));}
   .session-item.active.swiping-left{background:color-mix(in srgb,var(--error) 18%,var(--accent-bg));}
+  .session-item.archived .session-swipe-affordance-right{background:var(--success);}
+  .session-item.archived.swiping-right,
+  .session-item.archived.dragging.swiping-right{background:color-mix(in srgb,var(--success) 16%,var(--surface));box-shadow:0 0 0 1px color-mix(in srgb,var(--success) 48%,transparent);}
+  .session-item.active.archived.swiping-right{background:color-mix(in srgb,var(--success) 20%,var(--accent-bg));}
   .session-item.streaming .session-title{color:var(--accent);}
   .session-item.streaming .session-title-row{color:var(--text);}
   .session-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;overflow:hidden;}

@@ -3652,7 +3652,7 @@ function renderSessionListFromCache(){
     };
     if(!readOnly){
       el.append(
-        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?t('session_restore'):t('session_batch_archive')),
+        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?'Restore':t('session_batch_archive')),
         _makeSessionSwipeAffordance('left','trash-2',t('session_batch_delete')),
       );
     }

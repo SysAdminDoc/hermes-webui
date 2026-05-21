@@ -138,7 +138,7 @@ def test_session_swipes_show_visual_feedback_and_touch_load_clears():
     assert ".session-item.swiping-left" in STYLE_CSS
     assert "const _makeSessionSwipeAffordance=(side,icon,label)=>{" in SESSIONS_JS
     assert "affordance.setAttribute('aria-hidden','true');" in SESSIONS_JS
-    assert "_makeSessionSwipeAffordance('right',s.archived?'undo':'archive'" in SESSIONS_JS
+    assert "_makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?'Restore':t('session_batch_archive'))" in SESSIONS_JS
     assert "_makeSessionSwipeAffordance('left','trash-2'" in SESSIONS_JS
     assert ".session-swipe-affordance{" in STYLE_CSS
     assert "opacity:var(--session-swipe-progress,0)" in STYLE_CSS
@@ -146,6 +146,9 @@ def test_session_swipes_show_visual_feedback_and_touch_load_clears():
     assert ".session-item.swiping-right{background:color-mix(in srgb,var(--warning) 16%,var(--surface));box-shadow:0 0 0 1px color-mix(in srgb,var(--warning) 48%,transparent);}" in STYLE_CSS
     assert ".session-item.swiping-left{background:color-mix(in srgb,var(--error) 14%,var(--surface));box-shadow:0 0 0 1px color-mix(in srgb,var(--error) 48%,transparent);}" in STYLE_CSS
     assert "background:var(--warning)" in STYLE_CSS
+    assert ".session-item.archived .session-swipe-affordance-right{background:var(--success);}" in STYLE_CSS
+    assert ".session-item.archived.dragging.swiping-right" in STYLE_CSS
+    assert ".session-item.active.archived.swiping-right{background:color-mix(in srgb,var(--success) 20%,var(--accent-bg));}" in STYLE_CSS
     assert "background:var(--error)" in STYLE_CSS
     assert ".session-item.swiping-right .session-swipe-affordance-right" in STYLE_CSS
     assert ".session-item.swiping-left .session-swipe-affordance-left" in STYLE_CSS
