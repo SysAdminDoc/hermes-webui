@@ -654,7 +654,7 @@
      and attention indicator (26x26 at right:6px) still need 40px reserved
      when they're visible — covered by the hover / streaming / unread /
      menu-open / focus-within rule below. */
-  .session-item{padding:8px 8px;margin-bottom:2px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);transition:background .15s,color .15s,transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;display:flex;align-items:flex-start;gap:8px;min-width:0;position:relative;touch-action:pan-y;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transform:translateX(var(--session-swipe-offset,0)) translateY(var(--session-reflow-offset,0));}
+  .session-item{padding:8px 8px;margin-bottom:2px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);transition:background .15s,color .15s,transform .5s cubic-bezier(.22,.61,.36,1),box-shadow .15s ease;display:flex;align-items:flex-start;gap:8px;min-width:0;position:relative;touch-action:pan-y;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transform:translate3d(var(--session-swipe-offset,0),var(--session-reflow-offset,0),0);}
   .session-item.streaming,.session-item.unread,.session-item:focus-within,.session-item.menu-open{padding-right:40px;}
   @media (hover:hover){.session-item:hover{background:var(--hover-bg);color:var(--text);}}
   .session-item.loading{background:var(--hover-bg);color:var(--text);}
@@ -681,7 +681,7 @@
     box-sizing:border-box;
     opacity:0;
     overflow:hidden;
-    transform:translateX(calc(-1 * var(--session-swipe-offset,0px))) scale(calc(.82 + var(--session-swipe-progress,0) * .18));
+    transform:translate3d(calc(-1 * var(--session-swipe-offset,0px)),0,0) scale(calc(.82 + var(--session-swipe-progress,0) * .18));
     pointer-events:none;
     z-index:0;
   }
@@ -728,10 +728,11 @@
   .session-item.dragging{transition:background .15s,color .15s,box-shadow .15s ease;will-change:transform;}
   .session-item.session-reflowing{transition:background .15s,color .15s,transform .36s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}
   .session-item.swipe-committed,
-  .session-item.swipe-removing{transition:background .15s,color .15s,transform .42s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}
+  .session-item.swipe-removing{transition:background .15s,color .15s,transform .5s cubic-bezier(.22,.61,.36,1),box-shadow .15s ease;will-change:transform;}
   .session-item.swipe-removing{
     overflow:hidden;
   }
+  .session-item.session-swipe-returning{animation:sessionSwipeReturn .5s cubic-bezier(.22,.61,.36,1) both;will-change:transform,opacity;}
   .session-item.swipe-committed .session-swipe-affordance{transition:opacity .18s ease,transform .18s ease;}
   /* Suppress hover highlight during drag to avoid visual noise mid-scroll */
   .session-item.dragging:hover{background:transparent;color:var(--muted);}
@@ -823,13 +824,14 @@
   @media (prefers-reduced-motion:reduce){
     .session-action-menu{animation:none;will-change:auto;}
     .session-item,.session-item.dragging,.session-item.session-reflowing,.session-item.swipe-committed,.session-item.swipe-removing{transition:none;}
-    .session-item.long-pressing{animation:none;}
+    .session-item.long-pressing,.session-item.session-swipe-returning{animation:none;}
     .session-item.session-list-flip-enter{animation:none;}
   }
   /* Hide overlay during inline rename */
   .session-item:has(.session-title-input) .session-actions{display:none;}
   @keyframes session-menu-in{from{opacity:0;transform:translate3d(0,-4px,0) scale(.985);}to{opacity:1;transform:translate3d(0,0,0) scale(1);}}
   @keyframes session-long-press{from{filter:brightness(1);}to{filter:brightness(1.08);}}
+  @keyframes sessionSwipeReturn{0%{opacity:.62;transform:translate3d(var(--session-swipe-return-offset,32px),var(--session-reflow-offset,0),0) scale(.985);}100%{opacity:1;transform:translate3d(0,var(--session-reflow-offset,0),0) scale(1);}}
   @keyframes newflash{0%{background:var(--accent-bg-strong);color:var(--accent);}100%{background:transparent;color:var(--muted);}}
   @keyframes sessionListFlipIn{0%{opacity:0;transform:perspective(700px) rotateX(-8deg) translateY(10px) scale(.985);}100%{opacity:1;transform:perspective(700px) rotateX(0) translateY(0) scale(1);}}
   @keyframes spin{to{transform:rotate(360deg);}}

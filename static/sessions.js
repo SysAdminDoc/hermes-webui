@@ -107,8 +107,8 @@ let _sessionListLastScrollAt = 0;
 let _pendingSessionListPayload = null;
 let _pendingSessionListApplyTimer = 0;
 const SESSION_LIST_INTERACTION_IDLE_MS = 700;
-const SESSION_SWIPE_DURATION_MS = 420;
-const SESSION_SWIPE_REFLOW_LEAD_MS = 180;
+const SESSION_SWIPE_DURATION_MS = 500;
+const SESSION_SWIPE_REFLOW_LEAD_MS = 220;
 const SESSION_REFLOW_TIMEOUT_MS = 420;
 const SESSION_LIST_FLIP_TIMEOUT_MS = 460;
 
@@ -1459,6 +1459,7 @@ let _lineageReportCacheGeneration = 0;
 let _sessionVisibleSidebarIds = [];
 let _pendingSessionReflowPositions = null;
 const _optimisticallyRemovedSessionIds = new Set();
+const _sessionSwipeReturnOffsets = new Map();
 
 function _captureSessionReflowPositions(){
   const list=$('sessionList');
@@ -1834,6 +1835,7 @@ async function _archiveSession(session, archived=true, beforeListRender=null){
     session.archived=archived;
     if(S.session&&S.session.session_id===session.session_id) S.session.archived=archived;
     if(renderHold) await renderHold;
+    if(_showArchived&&!_sessionPrefersReducedMotion()) _sessionSwipeReturnOffsets.set(session.session_id,'0px');
     _pendingSessionReflowPositions=reflowPositions;
     await renderSessionList();
     showToast(session.archived?_sessionArchiveToast(response,session):t('session_restored'));
@@ -3272,6 +3274,16 @@ function renderSessionListFromCache(){
     const hasUnread=_hasUnreadForSession(s)&&!isActive;
     const readOnly=_isReadOnlySession(s);
     el.className='session-item'+(isActive?' active':'')+(isActive&&S.session&&S.session._flash?' new-flash':'')+(s.archived?' archived':'')+(isStreaming?' streaming':'')+(hasUnread?' unread':'');
+    const swipeReturnOffset=_sessionSwipeReturnOffsets.get(s.session_id);
+    if(swipeReturnOffset!==undefined){
+      _sessionSwipeReturnOffsets.delete(s.session_id);
+      el.style.setProperty('--session-swipe-return-offset',swipeReturnOffset);
+      el.classList.add('session-swipe-returning');
+      el.addEventListener('animationend',()=>{
+        el.classList.remove('session-swipe-returning');
+        el.style.removeProperty('--session-swipe-return-offset');
+      },{once:true});
+    }
     if(animateRefresh&&(enterAllAnimatedRows||!(flipBefore&&flipBefore.has(s.session_id)))){
       el.classList.add('session-list-flip-enter');
     }
@@ -3770,6 +3782,11 @@ function renderSessionListFromCache(){
           _settleSessionSwipePaint();
           _archiveSession(s,false,()=>_waitForSessionMotion(committedSwipeDuration)).then((restored)=>{
             if(!restored) _settleSessionSwipePaint();
+          });
+        }else if(_showArchived){
+          _settleSessionSwipePaint();
+          _archiveSession(s,true,()=>_waitForSessionMotion(committedSwipeDuration)).then((archived)=>{
+            if(!archived) _settleSessionSwipePaint();
           });
         }else{
           _completeSessionSwipePaint(signedDx);
