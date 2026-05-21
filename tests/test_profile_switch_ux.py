@@ -1,11 +1,10 @@
 """
-Tests for profile-switch UX improvements — spinner indicator + parallelized fetches.
+Tests for profile-switch UX improvements.
 
-Two changes:
-1. switchToProfile() shows a spinner on the profile chip during the async switch,
-   with an optimistic name update and error revert.
-2. loadWorkspaceList() refreshes in the background and the model catalog is
-   invalidated for lazy refresh instead of holding the visible switch animation open.
+Covered behavior:
+- switchToProfile() shows a spinner during the async switch and reverts on error.
+- Non-visible refresh work runs after the visible switch completes.
+- Session-list refreshes animate rows with row-level FLIP motion.
 """
 import re
 from pathlib import Path
@@ -165,22 +164,12 @@ class TestProfileSessionListFlip:
     JS = (REPO_ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
     CSS = (REPO_ROOT / "static" / "style.css").read_text(encoding="utf-8")
 
-    def test_profile_refresh_captures_row_positions(self):
-        assert "function _captureSessionListFlipPositions()" in self.JS
-        start = self.JS.index("function _captureSessionListFlipPositions()")
-        end = self.JS.index("function _sessionListPrefersReducedMotion()", start)
-        fn = self.JS[start:end]
-        assert "querySelectorAll('.session-item[data-sid]')" in fn
-        assert "positions.set(row.dataset.sid,row.getBoundingClientRect().top);" in fn
-
     def test_profile_refresh_reflows_existing_rows(self):
         assert "function _playSessionListFlipAnimation(before)" in self.JS
         start = self.JS.index("function _playSessionListFlipAnimation(before)")
         end = self.JS.index("function _isOptimisticFirstTurnSessionRow(s)", start)
         fn = self.JS[start:end]
-        assert "const delta=oldTop-row.getBoundingClientRect().top;" in fn
-        assert "row.style.setProperty('--session-reflow-offset',delta+'px');" in fn
-        assert "row.classList.add('session-reflowing');" in fn
+        assert "_playSessionRowsReflowFromPositions(before,SESSION_LIST_FLIP_TIMEOUT_MS,_sessionListPrefersReducedMotion);" in fn
 
     def test_profile_refresh_flips_new_rows(self):
         assert "session-list-flip-enter" in self.JS
@@ -188,7 +177,7 @@ class TestProfileSessionListFlip:
         assert "rotateX" in self.CSS
 
     def test_profile_refresh_captures_before_render_and_plays_after_rows_exist(self):
-        capture = self.JS.index("const flipBefore=animateRefresh?_captureSessionListFlipPositions():null;")
+        capture = self.JS.index("const flipBefore=animateRefresh?_captureSessionReflowPositions():null;")
         clear = self.JS.index("list.innerHTML='';", capture)
         row_render = self.JS.index("body.appendChild(_renderOneSession", clear)
         play = self.JS.index("_playSessionListFlipAnimation(flipBefore);", row_render)

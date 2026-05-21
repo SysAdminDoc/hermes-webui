@@ -107,6 +107,10 @@ let _sessionListLastScrollAt = 0;
 let _pendingSessionListPayload = null;
 let _pendingSessionListApplyTimer = 0;
 const SESSION_LIST_INTERACTION_IDLE_MS = 700;
+const SESSION_SWIPE_DURATION_MS = 420;
+const SESSION_SWIPE_REFLOW_LEAD_MS = 180;
+const SESSION_REFLOW_TIMEOUT_MS = 420;
+const SESSION_LIST_FLIP_TIMEOUT_MS = 460;
 
 function _formatSessionModelWithGateway(s){
   if(!s||!s.model)return'';
@@ -1454,6 +1458,7 @@ const _lineageReportInflight = new Map();
 let _lineageReportCacheGeneration = 0;
 let _sessionVisibleSidebarIds = [];
 let _pendingSessionReflowPositions = null;
+const _optimisticallyRemovedSessionIds = new Set();
 
 function _captureSessionReflowPositions(){
   const list=$('sessionList');
@@ -1465,23 +1470,31 @@ function _captureSessionReflowPositions(){
   return positions;
 }
 
-function _playQueuedSessionReflowAnimation(){
-  const before=_pendingSessionReflowPositions;
-  _pendingSessionReflowPositions=null;
+function _waitForSessionMotion(ms){
+  return new Promise(resolve=>setTimeout(resolve,ms));
+}
+
+function _playSessionRowsReflowFromPositions(before, timeoutMs, prefersReducedMotion){
   if(!before||!before.size) return;
-  const reduce=_sessionPrefersReducedMotion();
-  if(reduce) return;
+  if(prefersReducedMotion&&prefersReducedMotion()) return;
   const list=$('sessionList');
   if(!list) return;
+  const movingRows=[];
   list.querySelectorAll('.session-item[data-sid]').forEach(row=>{
     const oldTop=before.get(row.dataset.sid);
     if(oldTop===undefined) return;
     const delta=oldTop-row.getBoundingClientRect().top;
     if(Math.abs(delta)<1) return;
+    movingRows.push({row,delta});
+  });
+  if(!movingRows.length) return;
+  movingRows.forEach(({row,delta})=>{
+    row.style.transition='none';
     row.style.setProperty('--session-reflow-offset',delta+'px');
     row.classList.add('session-reflowing');
-    row.getBoundingClientRect();
-    row.style.setProperty('--session-reflow-offset','0px');
+  });
+  list.getBoundingClientRect();
+  movingRows.forEach(({row})=>{
     let reflowCleared=false;
     const clearReflow=()=>{
       if(reflowCleared) return;
@@ -1494,8 +1507,18 @@ function _playQueuedSessionReflowAnimation(){
       if(event.propertyName==='transform') clearReflow();
     };
     row.addEventListener('transitionend',onReflowEnd);
-    setTimeout(clearReflow,420);
+    row.style.removeProperty('transition');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(!reflowCleared) row.style.setProperty('--session-reflow-offset','0px');
+    }));
+    setTimeout(clearReflow,timeoutMs);
   });
+}
+
+function _playQueuedSessionReflowAnimation(){
+  const before=_pendingSessionReflowPositions;
+  _pendingSessionReflowPositions=null;
+  _playSessionRowsReflowFromPositions(before,SESSION_REFLOW_TIMEOUT_MS,_sessionPrefersReducedMotion);
 }
 
 function _discardQueuedSessionReflowAnimation(){
@@ -1812,18 +1835,20 @@ function _playSessionActionMenuEntrance(menu){
   menu.classList.add('open-animated');
 }
 
-async function _archiveSession(session, archived=true){
+async function _archiveSession(session, archived=true, beforeListRender=null){
   if(_isReadOnlySession(session)){ if(typeof showToast==='function') showToast('Read-only imported sessions cannot be modified.',3000); return false; }
   const reflowPositions=_captureSessionReflowPositions();
+  const renderHold=beforeListRender?Promise.resolve().then(beforeListRender):null;
   try{
     const response=await api('/api/session/archive',{method:'POST',body:JSON.stringify({session_id:session.session_id,archived})});
     session.archived=archived;
     if(S.session&&S.session.session_id===session.session_id) S.session.archived=archived;
+    if(renderHold) await renderHold;
     _pendingSessionReflowPositions=reflowPositions;
     await renderSessionList();
     showToast(session.archived?_sessionArchiveToast(response,session):t('session_restored'));
     return true;
-  }catch(err){_pendingSessionReflowPositions=null;showToast(t('session_archive_failed')+err.message);return false;}
+  }catch(err){if(renderHold) await renderHold.catch(()=>{});_pendingSessionReflowPositions=null;showToast(t('session_archive_failed')+err.message);return false;}
 }
 
 function _openSessionActionMenu(session, anchorEl){
@@ -2003,46 +2028,13 @@ function animateNextSessionListRefresh(options={}){
   if(options&&options.enterAll) _sessionListEnterAllAnimationPending = true;
 }
 
-function _captureSessionListFlipPositions(){
-  const list=$('sessionList');
-  if(!list) return null;
-  const positions=new Map();
-  list.querySelectorAll('.session-item[data-sid]').forEach(row=>{
-    positions.set(row.dataset.sid,row.getBoundingClientRect().top);
-  });
-  return positions;
-}
-
 function _sessionListPrefersReducedMotion(){
   try{return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
   catch(_){return false;}
 }
 
 function _playSessionListFlipAnimation(before){
-  if(!before||!before.size||_sessionListPrefersReducedMotion()) return;
-  const list=$('sessionList');
-  if(!list) return;
-  list.querySelectorAll('.session-item[data-sid]').forEach(row=>{
-    const oldTop=before.get(row.dataset.sid);
-    if(oldTop===undefined) return;
-    const delta=oldTop-row.getBoundingClientRect().top;
-    if(Math.abs(delta)<1) return;
-    row.style.setProperty('--session-reflow-offset',delta+'px');
-    row.classList.add('session-reflowing');
-    row.getBoundingClientRect();
-    row.style.setProperty('--session-reflow-offset','0px');
-    let cleared=false;
-    const clear=()=>{
-      if(cleared) return;
-      cleared=true;
-      row.classList.remove('session-reflowing');
-      row.style.removeProperty('--session-reflow-offset');
-      row.removeEventListener('transitionend',onEnd);
-    };
-    const onEnd=(event)=>{ if(event.propertyName==='transform') clear(); };
-    row.addEventListener('transitionend',onEnd);
-    setTimeout(clear,460);
-  });
+  _playSessionRowsReflowFromPositions(before,SESSION_LIST_FLIP_TIMEOUT_MS,_sessionListPrefersReducedMotion);
 }
 
 function _isOptimisticFirstTurnSessionRow(s){
@@ -2135,8 +2127,11 @@ function _applySessionListPayload(sessData, projData){
   if (typeof sessData.server_tz === 'string') {
     _serverTz = sessData.server_tz;
   }
-  _reconcileActiveSessionIdleStateFromList(sessData.sessions||[]);
-  _allSessions = _mergeOptimisticFirstTurnSessions(sessData.sessions||[]);
+  const serverSessions=_optimisticallyRemovedSessionIds.size
+    ? (sessData.sessions||[]).filter(s=>s&&!_optimisticallyRemovedSessionIds.has(s.session_id))
+    : (sessData.sessions||[]);
+  _reconcileActiveSessionIdleStateFromList(serverSessions);
+  _allSessions = _mergeOptimisticFirstTurnSessions(serverSessions);
   _clearLineageReportCache();
   _allProjects = projData.projects||[];
   _markPollingCompletionUnreadTransitions(_allSessions);
@@ -3039,7 +3034,7 @@ function renderSessionListFromCache(){
   _sessionListRefreshAnimationPending=false;
   const enterAllAnimatedRows=animateRefresh&&_sessionListEnterAllAnimationPending;
   _sessionListEnterAllAnimationPending=false;
-  const flipBefore=animateRefresh?_captureSessionListFlipPositions():null;
+  const flipBefore=animateRefresh?_captureSessionReflowPositions():null;
   const listScrollTopBeforeRender=list.scrollTop||0;
   list.innerHTML='';
   // Batch select bar (when in select mode)
@@ -3680,7 +3675,8 @@ function renderSessionListFromCache(){
     const _archiveSwipeActionThreshold=128;
     const _deleteSwipeActionThreshold=128;
     const _swipeCancelRatio=0.75;
-    const _committedSwipeDuration=_sessionPrefersReducedMotion()?0:420;
+    const _committedSwipeDuration=_sessionPrefersReducedMotion()?0:SESSION_SWIPE_DURATION_MS;
+    const _committedSwipeReflowDelay=Math.max(0,_committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);
     const _clearLongPressTimer=()=>{
       if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
       if(!_longPressMenuOpened) el.classList.remove('long-pressing');
@@ -3792,16 +3788,22 @@ function renderSessionListFromCache(){
       _tapTimer=null;
       _lastTapTime=0;
       if(signedDx>0){
-        _completeSessionSwipePaint(signedDx);
-        setTimeout(async()=>{
-          const archived=await _archiveSession(s,!s.archived);
-          if(!archived) _settleSessionSwipePaint();
-        },_committedSwipeDuration);
+        if(s.archived){
+          _settleSessionSwipePaint();
+          _archiveSession(s,false,()=>_waitForSessionMotion(_committedSwipeDuration)).then((restored)=>{
+            if(!restored) _settleSessionSwipePaint();
+          });
+        }else{
+          _completeSessionSwipePaint(signedDx);
+          _archiveSession(s,true,()=>_waitForSessionMotion(_committedSwipeReflowDelay)).then((archived)=>{
+            if(!archived) _settleSessionSwipePaint();
+          });
+        }
       }else if(_canSwipeDeleteSession()){
         el.classList.remove('dragging');
         deleteSession(s.session_id,async()=>{
           _completeSessionSwipePaint(signedDx);
-          await new Promise(resolve=>setTimeout(resolve,_committedSwipeDuration));
+          await _waitForSessionMotion(_committedSwipeReflowDelay);
         }).then((deleted)=>{
           if(!deleted) _settleSessionSwipePaint();
         });
@@ -4056,12 +4058,34 @@ async function deleteSession(sid, beforeDelete=null){
   });
   if(!ok)return false;
   const reflowPositions=_captureSessionReflowPositions();
-  if(beforeDelete) await beforeDelete();
-  let response=null;
-  try{
-    response=await api('/api/session/delete',{method:'POST',body:JSON.stringify({session_id:sid})});
+  const beforeDeleteHold=beforeDelete?Promise.resolve().then(beforeDelete):null;
+  const previousSessions=_allSessions;
+  let optimisticRendered=false;
+  const deleteRequest=api('/api/session/delete',{method:'POST',body:JSON.stringify({session_id:sid})}).then(response=>{
     _clearHandoffStorageForSession(sid);
-  }catch(e){_pendingSessionReflowPositions=null;setStatus(`Delete failed: ${e.message}`);return false;}
+    return {response};
+  }, error=>({error}));
+  if(beforeDeleteHold){
+    await beforeDeleteHold;
+    _optimisticallyRemovedSessionIds.add(sid);
+    _allSessions=(_allSessions||[]).filter(item=>item&&item.session_id!==sid);
+    _pendingSessionReflowPositions=reflowPositions;
+    renderSessionListFromCache();
+    optimisticRendered=true;
+  }
+  const deleteResult=await deleteRequest;
+  if(deleteResult&&deleteResult.error){
+    _pendingSessionReflowPositions=null;
+    if(optimisticRendered){
+      _optimisticallyRemovedSessionIds.delete(sid);
+      _allSessions=previousSessions;
+      renderSessionListFromCache();
+    }
+    const err=deleteResult.error;
+    setStatus(`Delete failed: ${err&&err.message?err.message:String(err)}`);
+    return false;
+  }
+  const response=deleteResult&&deleteResult.response;
   if(S.session&&S.session.session_id===sid){
     S.session=null;S.messages=[];S.entries=[];
     localStorage.removeItem('hermes-webui-session');
@@ -4080,8 +4104,11 @@ async function deleteSession(sid, beforeDelete=null){
     }
   }
   showToast(_sessionResponseRetainsWorktree(response,session)?t('session_deleted_worktree'):t('session_deleted'));
-  _pendingSessionReflowPositions=reflowPositions;
-  await renderSessionList();
+  if(optimisticRendered) void renderSessionList().finally(()=>_optimisticallyRemovedSessionIds.delete(sid));
+  else{
+    _pendingSessionReflowPositions=reflowPositions;
+    await renderSessionList();
+  }
   return true;
 }
 
