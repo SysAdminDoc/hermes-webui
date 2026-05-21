@@ -4324,6 +4324,7 @@ _SETTINGS_DEFAULTS = {
     "font_size": "default",  # small | default | large | xlarge
     "session_jump_buttons": False,  # show Start/End transcript jump pills
     "session_endless_scroll": False,  # auto-load older transcript pages while scrolling upward
+    "pinned_sessions_limit": 3,  # maximum active pinned sessions shown in the sidebar
     "hidden_tabs": [],  # sidebar tab panel names hidden by user (e.g. ["tasks","kanban"]); chat and settings are always visible
     "language": "en",  # UI locale code; must match a key in static/i18n.js LOCALES
     "bot_name": os.getenv(
@@ -4452,6 +4453,9 @@ _SETTINGS_ENUM_VALUES = {
     "auto_title_refresh_every": {"0", "5", "10", "20"},
     "busy_input_mode": {"queue", "interrupt", "steer"},
 }
+_SETTINGS_INT_RANGES = {
+    "pinned_sessions_limit": (1, 99),
+}
 _SETTINGS_BOOL_KEYS = {
     "onboarding_completed",
     "show_token_usage",
@@ -4512,6 +4516,15 @@ def save_settings(settings: dict) -> dict:
             # Validate enum-constrained keys
             if k in _SETTINGS_ENUM_VALUES and v not in _SETTINGS_ENUM_VALUES[k]:
                 continue
+            # Validate bounded integer settings.
+            if k in _SETTINGS_INT_RANGES:
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    continue
+                min_value, max_value = _SETTINGS_INT_RANGES[k]
+                if v < min_value or v > max_value:
+                    continue
             # Validate language codes (BCP-47-like: 'en', 'zh', 'fr', 'zh-CN')
             if k == "language" and (
                 not isinstance(v, str) or not _SETTINGS_LANG_RE.match(v)
