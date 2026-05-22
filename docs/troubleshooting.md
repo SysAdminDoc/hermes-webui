@@ -87,9 +87,9 @@ If after running steps 1-4 the import still fails *and* `pip install -e .` succe
 
 ## "Response interrupted." marker keeps saying "no agent output was recovered"
 
-**Symptom.** After the WebUI process restarts mid-turn (manual restart, OOM, crash, …), the affected chat shows an `**Response interrupted.**` marker with the wording *"The user message above was preserved, but no agent output was recovered."*, even though the run-journal for that turn is present on disk and contains the partial tokens the agent had already streamed.
+**Symptom.** After a live response stream stops before a turn completes (manual restart, OOM, crash, browser/SSE disconnect, lost worker bookkeeping, …), the affected chat shows an `**Response interrupted.**` marker with the wording *"The user message above was preserved, but no agent output was recovered."*, even though the run-journal for that turn is present on disk and contains the partial tokens the agent had already streamed.
 
-**Why.** Sidecar repair re-checks the run-journal at restart and uses the result as a one-shot signal. On WSL2 (9p / DrvFs) and on some network-backed setups, the run-journal `.jsonl` is written by the dead worker but the WebUI process reads it through a page-cache state that has not yet seen those writes — recovery returns "empty" and the marker is baked permanently. The fix introduces a *lazy* retry path: when sidecar repair cannot read visible output but knows the stream id, it stores a `_pending_journal_recovery` flag on the marker and re-attempts recovery from `get_session()` until the journal becomes readable (or the retry budget is exhausted).
+**Why.** Sidecar repair re-checks the run-journal after it detects a stale stream and uses the result as a one-shot signal. On WSL2 (9p / DrvFs) and on some network-backed setups, the run-journal `.jsonl` is written by the stopped worker but the WebUI process reads it through a page-cache state that has not yet seen those writes — recovery returns "empty" and the marker is baked permanently. The fix introduces a *lazy* retry path: when sidecar repair cannot read visible output but knows the stream id, it stores a `_pending_journal_recovery` flag on the marker and re-attempts recovery from `get_session()` until the journal becomes readable (or the retry budget is exhausted).
 
 **Diagnostic.**
 

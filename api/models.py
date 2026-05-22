@@ -764,18 +764,18 @@ def _get_profile_home(profile) -> Path:
 
 _INTERRUPTED_RECOVERED_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'The partial output above was recovered from the run journal, '
     'but the interrupted agent process could not continue.'
 )
 _INTERRUPTED_NO_OUTPUT_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'The user message above was preserved, but no agent output was recovered.'
 )
 _INTERRUPTED_PENDING_RETRY_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'Recovering the partial output from the run journal — '
     'reload this session to retry.'
 )
@@ -783,7 +783,7 @@ _INTERRUPTED_PENDING_RETRY_WORDING = (
 # or the marker has been pending longer than _JOURNAL_RETRY_GIVEUP_SECONDS).
 _INTERRUPTED_NEUTRAL_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'Partial output may have been lost.'
 )
 

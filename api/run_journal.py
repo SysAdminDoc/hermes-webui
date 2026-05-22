@@ -262,7 +262,7 @@ def stale_interrupted_event(session_id: str, run_id: str, *, after_seq: int | No
         return None
     payload = {
         "type": "interrupted",
-        "message": "WebUI restarted or lost the live worker before this run finished.",
+        "message": "The live worker stopped before this run finished.",
         "hint": "The transcript was restored to the last journaled event. Start a new turn if you still need the task to continue.",
         "session_id": session_id,
         "stream_id": run_id,

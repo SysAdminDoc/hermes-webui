@@ -2,8 +2,8 @@
 
 The scenario this test pins down:
 
-1. A WebUI process restarts mid-stream. On the first sidecar repair attempt
-   the run-journal for the dead stream is NOT visible yet (page-cache loss,
+1. A WebUI live response stream stops mid-turn. On the first sidecar repair
+   attempt the run-journal for the dead stream is NOT visible yet (page-cache loss,
    un-fsynced writes, slow network FS, etc.) so
    `_append_journaled_partial_output` returns False.
 2. Pre-fix the repair path baked a permanent "no agent output was recovered"
@@ -249,6 +249,27 @@ def test_state_db_middle_segment_replay_does_not_append_after_sidecar_tail():
     assert [m["content"] for m in merged] == [m["content"] for m in sidecar_messages]
     assert merged[-1]["role"] == "assistant"
     assert merged[-1]["content"] == "opened browser preview"
+
+
+def test_interrupted_recovery_markers_do_not_claim_restart_as_fact():
+    """A stale live worker is not always a WebUI process restart.
+
+    Broken SSE connections, browser disconnects, lost worker bookkeeping, and
+    real restarts all enter the same recovery marker path. User-visible wording
+    must describe the generic interruption instead of asserting a process
+    restart that systemd evidence may later disprove.
+    """
+    marker_texts = [
+        models._INTERRUPTED_RECOVERED_WORDING,
+        models._INTERRUPTED_NO_OUTPUT_WORDING,
+        models._INTERRUPTED_PENDING_RETRY_WORDING,
+        models._INTERRUPTED_NEUTRAL_WORDING,
+    ]
+
+    for text in marker_texts:
+        assert "Response interrupted" in text
+        assert "process restarted" not in text
+        assert "before this turn finished" in text
 
 
 def test_lost_response_recovered_on_second_read(hermes_home):
