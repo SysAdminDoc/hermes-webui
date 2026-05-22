@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the sidebar conversation actions menu open while session-list refreshes, stream updates, or panel-resync repairs arrive, so the three-dot menu beside chat titles remains usable while the user is interacting with it.
 
 ## [v0.51.107] — 2026-05-21 — Release CE (stage-400 — 8-PR batch — pinned-sessions-limit getter rename + uploaded-file user-turn dedupe + active-run repair guard + incremental KaTeX streaming + profile default model on fresh boot + French locale completion + update-check error surfacing + release-update apply path)
 
@@ -16,6 +19,7 @@
 - **PR #2722** by @victorwhale — Complete French (`fr`) locale coverage: +93 missing translation keys covering Settings, profile-ops, gateway tile, skills modal, session controls, and i18n test surfaces. Coverage 88.8% → 96.7%.
 - **PR #2717** by @ai-ag2026 — Surface update-check fetch errors in the UI instead of failing silently. The background `api/updates/check` request previously swallowed network failures, so an offline / blocked-CDN scenario showed no indication that the version banner couldn't render. Now the failure is logged and exposed to the System panel's update-status card.
 - **PR #2719** by @ai-ag2026 — Apply release-update target correctly when the user clicks "Check for updates" after a prior dismissal: clears the `sessionStorage` check-once stamp and forces banner re-evaluation. The prior path silently no-op'd because the once-per-tab guard fired before the explicit user click could re-trigger the fetch.
+
 
 ## [v0.51.106] — 2026-05-21 — Release CD (stage-399 — 3-PR batch — restamped state.db replay dedupe + context_messages dedupe so agent doesn't see duplicates + empty _partial bloat fix)
 
