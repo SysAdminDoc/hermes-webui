@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.112] — 2026-05-22 — Release CJ (stage-405 — 1-PR — session model authoritative across restore)
+
+### Fixed
+
+- **PR #2737** by @ai-ag2026 — Keep the session model authoritative when a restored session is reactivated. Previously, stale browser-cached picker state could override an active conversation's model in four scenarios: (1) on initial boot when `localStorage` had a different model preference than the active session, (2) on hard refresh when `S._bootReady` revealed the composer chip before the live catalog hydrated, (3) when the session's model wasn't in the current provider catalog (the static/default fallback silently rewrote `S.session.model`), (4) when starting a new session whose model wasn't in the static HTML dropdown. The fix: `loadSession()` now requests `resolve_model=1` so backend normalization happens synchronously with metadata; boot model hydration prefers the active session over `localStorage`; hard refresh re-runs the model dropdown hydration before `_bootReady`; a new `_ensureModelOptionInDropdown()` helper injects a `data-custom='1'` option for models not in the catalog instead of silently rewriting `S.session.model` to the default. 100 LOC of new pytest regression coverage pinning each behavior.
+
 ## [v0.51.111] — 2026-05-22 — Release CI (stage-404 — 1-PR — keep state.db replays out of sidecar tail)
 
 ### Fixed

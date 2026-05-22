@@ -490,8 +490,17 @@ async function newSession(flash, options={}){
       const sessionProvider=S.session.model_provider||null;
       const currentProvider=currentModelState.model_provider||null;
       if(S.session.model!==modelSel.value || sessionProvider !== currentProvider){
-        _applyModelToDropdown(S.session.model,modelSel,sessionProvider);
-        if(typeof syncModelChip==='function') syncModelChip();
+        let sessionModelApplied=_applyModelToDropdown(S.session.model,modelSel,sessionProvider);
+        if(!sessionModelApplied){
+          const opt=document.createElement('option');
+          opt.value=S.session.model;
+          opt.textContent=typeof getModelLabel==='function'?getModelLabel(S.session.model):S.session.model;
+          opt.dataset.custom='1';
+          opt.dataset.provider=sessionProvider||'';
+          modelSel.appendChild(opt);
+          sessionModelApplied=_applyModelToDropdown(S.session.model,modelSel,sessionProvider);
+        }
+        if(sessionModelApplied&&typeof syncModelChip==='function') syncModelChip();
       }
     }
     // Reset per-session visual state: a fresh chat is idle even if another
@@ -567,10 +576,14 @@ async function loadSession(sid){
     if (_msgInner && currentSid !== sid) _msgInner.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;padding:40px;text-align:center;">Loading conversation...</div>';
   }
   // Phase 1: Load metadata only (~1KB) for fast session switching.
+  // Resolve model immediately: old sessions can persist stale provider-shaped
+  // IDs (e.g. openai/gpt-5.4-mini) and assigning those to S.session creates a
+  // short race where the composer can display/send the wrong model before the
+  // deferred resolver catches up.
   // Guard against network/server failures to prevent a permanently stuck loading state.
   let data;
   try {
-    data = await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=0&resolve_model=0`);
+    data = await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=0&resolve_model=1`);
   } catch(e) {
     const _msgInner = $('msgInner');
     if(_msgInner){
