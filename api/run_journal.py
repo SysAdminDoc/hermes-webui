@@ -278,7 +278,7 @@ def stale_interrupted_event(session_id: str, run_id: str, *, after_seq: int | No
         "type": "apperror",
         "created_at": time.time(),
         "terminal": True,
-        "terminal_state": "stale-from-restart",
+        "terminal_state": "lost-worker-bookkeeping",
         "payload": payload,
         "synthetic": True,
     }

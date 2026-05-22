@@ -5,7 +5,7 @@
 
 ### Fixed
 
-- Clarify `Response interrupted` recovery markers so they report that the live response stream stopped instead of asserting that the WebUI process restarted. The same stale-recovery path also covers browser/SSE disconnects and lost worker bookkeeping, so the marker now matches systemd evidence instead of implying a restart that did not happen.
+- Clarify `Response interrupted` recovery markers so they report that the live response stream stopped instead of asserting that the WebUI process restarted. The recovery path now records distinct interruption causes for real process restarts, stream/run split-brain, and lost worker bookkeeping; browser-side SSE transport failures show a separate `Connection interrupted` message, and client-side `BrokenPipeError` disconnects no longer get logged as server 500s.
 
 ## [v0.51.131] — 2026-05-24 — Release DC (stage-batch13 — 6-PR notes-drawer + context-parity + PWA-swipe + locale polish)
 

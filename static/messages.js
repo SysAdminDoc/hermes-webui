@@ -2245,12 +2245,12 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     if(S.session&&S.session.session_id===activeSid){
       S.activeStreamId=null;
       clearLiveToolCards();if(!assistantText)removeThinking();
-      S.messages.push({role:'assistant',content:'**Error:** Connection lost'});renderMessages({preserveScroll:true});
+      S.messages.push({role:'assistant',content:'**Connection interrupted:** The browser lost the live SSE connection before the response finished. If the worker completed, reopening this session should restore the settled transcript.'});renderMessages({preserveScroll:true});
       _markSessionViewed(activeSid, S.messages.length);
     }else{
       if(typeof trackBackgroundError==='function'){
         const _errTitle=(typeof _allSessions!=='undefined'&&_allSessions.find(s=>s.session_id===activeSid)||{}).title||null;
-        trackBackgroundError(activeSid,_errTitle,'Connection lost');
+        trackBackgroundError(activeSid,_errTitle,'Connection interrupted');
       }
     }
     _setActivePaneIdleIfOwner();

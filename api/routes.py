@@ -1126,7 +1126,7 @@ def _run_journal_status_payload(summary: dict, *, active: bool = False) -> dict:
     terminal = bool(summary.get("terminal"))
     terminal_state = summary.get("terminal_state")
     if not active and not terminal:
-        terminal_state = "stale-from-restart"
+        terminal_state = "lost-worker-bookkeeping"
     return {
         "session_id": summary.get("session_id"),
         "run_id": summary.get("run_id"),
