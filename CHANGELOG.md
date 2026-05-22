@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Composer model picker now opens immediately from the existing option list while the dynamic `/api/models` catalog hydrates in the background, and a just-selected session model survives a hard refresh even if the refresh interrupts the async session update. Previously a slow model-catalog request could make the model button appear unresponsive, and a quick reload after selecting a model could restore the old session model.
+
 ## [v0.51.112] — 2026-05-22 — Release CJ (stage-405 — 1-PR — session model authoritative across restore)
 
 ### Fixed
