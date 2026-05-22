@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Sanitize git fetch diagnostics before returning update-check errors to the browser, preserving useful failure context while redacting credentialed remote URLs, GitHub token shapes, and secret-looking query parameters.
+
 
 ## [v0.51.107] — 2026-05-21 — Release CE (stage-400 — 8-PR batch — pinned-sessions-limit getter rename + uploaded-file user-turn dedupe + active-run repair guard + incremental KaTeX streaming + profile default model on fresh boot + French locale completion + update-check error surfacing + release-update apply path)
 
