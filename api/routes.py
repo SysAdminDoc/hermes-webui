@@ -7295,6 +7295,15 @@ def _handle_folder_download(handler, parsed):
         _content_disposition_value("attachment", zip_name),
     )
     handler.send_header("Cache-Control", "no-store")
+    # Under HTTP/1.1 (Handler.protocol_version, see server.py post-#2836)
+    # a response with no Content-Length and no Transfer-Encoding requires
+    # Connection: close so the client knows the body ends at FIN. The ZIP
+    # is built on-the-fly so we cannot send Content-Length up front; mirror
+    # the SSE-endpoint pattern #2836 uses. Without this header the client
+    # hangs waiting for the next pipelined response after the central
+    # directory bytes finish. Caught by Opus pre-release advisor on
+    # stage-batch11.
+    handler.send_header("Connection", "close")
     handler.end_headers()
 
     written = 0
