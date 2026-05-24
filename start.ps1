@@ -137,7 +137,26 @@ if (Test-Path $agentVenvPython) {
 
 # === Resolve bind + state defaults =====================================
 $BindHostFinal = if ($BindHost) { $BindHost } elseif ($env:HERMES_WEBUI_HOST) { $env:HERMES_WEBUI_HOST } else { '127.0.0.1' }
-$PortFinal = if ($Port) { $Port } elseif ($env:HERMES_WEBUI_PORT) { [int]$env:HERMES_WEBUI_PORT } else { 8787 }
+$PortFinal = if ($Port) {
+    $Port
+} elseif ($env:HERMES_WEBUI_PORT) {
+    # TryParse + range guard on the env var. A plain [int] cast on the
+    # env var throws InvalidCastException with no actionable context when
+    # the env var is set to a non-integer (typo, accidental shell
+    # expansion, etc.) — surface a targeted error message instead.
+    $parsedPort = 0
+    if (-not [int]::TryParse($env:HERMES_WEBUI_PORT, [ref]$parsedPort)) {
+        Write-Error "HERMES_WEBUI_PORT='$($env:HERMES_WEBUI_PORT)' is not a valid integer port. Unset the variable to use the default (8787), or set it to a number 1-65535."
+        exit 1
+    }
+    if ($parsedPort -lt 1 -or $parsedPort -gt 65535) {
+        Write-Error "HERMES_WEBUI_PORT=$parsedPort is out of TCP-port range. Must be 1-65535."
+        exit 1
+    }
+    $parsedPort
+} else {
+    8787
+}
 $env:HERMES_WEBUI_HOST = $BindHostFinal
 $env:HERMES_WEBUI_PORT = "$PortFinal"
 if (-not $env:HERMES_WEBUI_STATE_DIR) {
@@ -165,10 +184,23 @@ if (-not (Test-Path $serverPath)) {
     exit 1
 }
 
+# Capture exit code, let finally{} run Pop-Location, exit AFTER the try.
+# Plain `exit $LASTEXITCODE` inside the try block can prevent the finally
+# from running in some termination paths (especially when dot-sourced or
+# in interactive sessions), leaving the caller's working directory stuck
+# at $RepoRoot.
+$script:serverExitCode = 0
 Push-Location $RepoRoot
 try {
-    & $Python $serverPath @args
-    exit $LASTEXITCODE
+    # @args was non-functional here — PowerShell does NOT populate $args when the
+    # script declares [CmdletBinding()] with an explicit param() block (Copilot's
+    # finding on PR #2807). Dropped rather than added a ValueFromRemainingArguments
+    # parameter, because the existing tracked use case is the launcher running
+    # server.py with the env-var-driven config — no pass-through args are needed.
+    # If pass-through becomes a requirement later, add a [Parameter(ValueFromRemainingArguments=$true)] [string[]]$ServerArgs and splat that.
+    & $Python $serverPath
+    $script:serverExitCode = $LASTEXITCODE
 } finally {
     Pop-Location
 }
+exit $script:serverExitCode
