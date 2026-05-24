@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- New WebUI sessions no longer persist `display.personality` into per-session `Session.personality`; only explicit personality changes remain durable, preventing stale global display defaults from overriding profile-scoped session behavior. Closes #2845.
+
 ## [v0.51.128] — 2026-05-24 — Release CZ (stage-batch10 — 2-PR perf + correctness batch)
 
 ### Fixed
