@@ -9,6 +9,14 @@
 
 - Add a default-off, read-only Third-party notes drawer to the Memory panel that lists configured note/knowledge MCP sources such as Joplin, Obsidian, Notion, and llm-wiki when explicitly enabled with `webui_external_notes_sources` or `HERMES_WEBUI_EXTERNAL_NOTES_SOURCES=1`, while leaving automatic session recall unchanged.
 
+- Add non-sensitive SSE stream runtime diagnostics to deep health checks, including active stream count, subscriber totals, and offline buffered-event counts for stuck or slow WebUI chat investigations.
+
+- Add WebUI session prefill parity for bounded JSON files: browser-originated chat turns can load configured prefill context from `prefill_messages_file`, pass it to Hermes Agent as ephemeral model context, and surface a compact context status event in the chat UI without exposing prefill message bodies. WebUI intentionally does not execute `prefill_messages_script`; executable recall should use the existing MCP/tool surface instead of a per-turn subprocess.
+
+### Changed
+
+- Add browser-surface session context to WebUI agent turns so the agent can distinguish a WebUI chat from messaging-platform transcripts while keeping the metadata ephemeral and out of saved history. WebUI progress guidance now explicitly preserves the normal Hermes messaging style instead of encouraging extra browser-only status chatter.
+
 ### Fixed
 
 - New WebUI sessions no longer persist `display.personality` into per-session `Session.personality`; only explicit personality changes remain durable, preventing stale global display defaults from overriding profile-scoped session behavior. Closes #2845.
