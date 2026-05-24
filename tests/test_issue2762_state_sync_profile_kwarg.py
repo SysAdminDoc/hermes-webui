@@ -82,9 +82,12 @@ def _read_session(db_path: Path, session_id: str):
         return None
     conn = sqlite3.connect(db_path)
     try:
+        # Real state.db schema (see api/state_sync.py + hermes_cli StateDB):
+        # `sessions` table has `id` as PRIMARY KEY (not session_id). Use real
+        # column names so the test queries the actual schema.
         cur = conn.execute(
-            "SELECT session_id, title, input_tokens, output_tokens "
-            "FROM sessions WHERE session_id = ?",
+            "SELECT id AS session_id, title, input_tokens, output_tokens "
+            "FROM sessions WHERE id = ?",
             (session_id,),
         )
         row = cur.fetchone()

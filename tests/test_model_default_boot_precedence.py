@@ -180,7 +180,15 @@ def test_boot_settings_applies_default_without_deleting_browser_model_state():
 
 def test_boot_model_dropdown_explicitly_requests_profile_default_precedence():
     assert "populateModelDropdown({preferProfileDefaultOnFreshBoot:true})" in BOOT_JS
-    assert "const allowBootSavedModelOverride=!window._defaultModel" in BOOT_JS
+    # #2726 invariant: boot path must keep profile/server default ahead of stale
+    # browser-persisted state when a default exists. Post-#2716 cherry-pick onto
+    # post-stage-batch11 master uses `stateToApply` pattern rather than the
+    # original `allowBootSavedModelOverride` variable name. Semantics preserved —
+    # check for the actual gate predicate that's equivalent.
+    assert (
+        "const allowBootSavedModelOverride=!window._defaultModel" in BOOT_JS
+        or "!window._defaultModel?savedState:null" in BOOT_JS
+    ), "boot.js missing the !window._defaultModel gate for saved-state override"
 
 
 def test_populate_model_dropdown_reconciles_selection_after_rebuild():
