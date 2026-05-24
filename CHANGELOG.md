@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Optional passkey/WebAuthn sign-in for password-protected WebUI instances. Authenticated users can register/remove passkeys from Settings -> System, and `/login` shows a passwordless sign-in button only after a passkey exists. Password auth remains the default-off bootstrap and recovery path.
+
 ### Fixed
 
 - Clarify `Response interrupted` recovery markers so they report that the live response stream stopped instead of asserting that the WebUI process restarted. The recovery path now records distinct interruption causes for real process restarts, stream/run split-brain, and lost worker bookkeeping; browser-side SSE transport failures show a separate `Connection interrupted` message, client-side `BrokenPipeError` disconnects no longer get logged as server 500s, and chat/gateway SSE errors emit rate-limited, body-capped, sanitized client diagnostics to `/api/client-events/log` for future root-cause checks. The stream-status `terminal_state` value for lost-worker bookkeeping changes from `stale-from-restart` to `lost-worker-bookkeeping`, matching the new non-restart wording.
@@ -144,7 +148,6 @@
 - Full pytest: 6,424 passed / 6 skipped / 3 xpassed / 8 subtests passed.
 - UX evidence for #2812 captured at 1280/1440/1920/mobile (iPhone 14 emulation); Telegram-approved.
 - File a follow-up issue for pdeathsig-on-supervisor-thread hardening (#2854 deferred Option B) and French-locale `open_in_vscode` parity gap (predates this batch, Opus advisor flagged).
-
 
 ## [v0.51.126] — 2026-05-24 — Release CX (stage-batch8 — 2-PR low-risk batch — kanban markdown + live activity timeline)
 
