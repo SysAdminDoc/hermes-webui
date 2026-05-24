@@ -13,6 +13,8 @@
 
 - Clarify zh-CN (Simplified Chinese) session-time relative labels to include explicit "ago" context (`${n}分钟前`, `${n}小时前`, `${n}天前`) and the more natural last-week phrasing (`上周`) instead of the previous bare-unit shorthand. Also corrects a small indentation glitch in the zh-TW (Traditional Chinese) locale.
 
+- The WebUI launcher (`ctl.sh` + `bootstrap.py`) now preserves environment variables that have already been resolved by the shell (for example `HERMES_WEBUI_PORT`, `HERMES_WEBUI_STATE_DIR`, `HERMES_WEBUI_HOST`) instead of letting a repo-level `.env` clobber them mid-launch. The `.env` keeps working as a default-only source for unset variables.
+
 ## [v0.51.130] — 2026-05-24 — Release DB (stage-batch12 — 3-PR profile-isolation + boot-precedence + workspace Artifacts tab)
 
 ### Fixed
