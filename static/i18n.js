@@ -9416,7 +9416,7 @@ const LOCALES = {
     session_time_bucket_today: '\u4eca\u5929',
     session_time_bucket_yesterday: '\u6628\u5929',
     session_time_days_ago: (d) => `${d}\u5929`,
-      session_time_hours_ago: (h) => `${h}\u5c0f\u6642`,
+    session_time_hours_ago: (h) => `${h}\u5c0f\u6642`,
     session_time_last_week: '1\u9031',
     session_time_minutes_ago: (m) => `${m}\u5206`,
     session_time_unknown: '\u672a\u77e5',

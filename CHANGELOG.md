@@ -11,6 +11,8 @@
 
 - New WebUI sessions no longer persist `display.personality` into per-session `Session.personality`; only explicit personality changes remain durable, preventing stale global display defaults from overriding profile-scoped session behavior. Closes #2845.
 
+- Clarify zh-CN (Simplified Chinese) session-time relative labels to include explicit "ago" context (`${n}分钟前`, `${n}小时前`, `${n}天前`) and the more natural last-week phrasing (`上周`) instead of the previous bare-unit shorthand. Also corrects a small indentation glitch in the zh-TW (Traditional Chinese) locale.
+
 ## [v0.51.130] — 2026-05-24 — Release DB (stage-batch12 — 3-PR profile-isolation + boot-precedence + workspace Artifacts tab)
 
 ### Fixed
