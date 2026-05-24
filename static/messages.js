@@ -2152,6 +2152,9 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
   async function _restoreSettledSession(){
     try{
       const data=await api(`/api/session?session_id=${encodeURIComponent(activeSid)}`);
+      // Opus #2852 race-fix: if a late `done` event ran the finalize path while
+      // we were awaiting the network roundtrip, bail out — done already settled.
+      if(_streamFinalized) return true;
       const session=data&&data.session;
       if(!session) return false;
       if(session.active_stream_id||session.pending_user_message) return false;

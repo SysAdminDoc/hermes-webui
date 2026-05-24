@@ -438,6 +438,8 @@ def test_select_apply_compare_ref_uses_tag_when_head_is_on_tag(tmp_path):
     def fake_git(args, cwd, timeout=10):
         if args == ['tag', '--list', 'v*', '--sort=-v:refname']:
             return 'v2026.5.16\nv2026.5.10', True
+        if args == ['describe', '--tags', '--abbrev=0']:
+            return 'v2026.5.16', True
         if args == ['describe', '--tags', '--always']:
             return 'v2026.5.16', True
         raise AssertionError(f'unexpected git args: {args!r}')
@@ -460,6 +462,9 @@ def test_select_apply_compare_ref_falls_through_when_head_is_past_tag(tmp_path):
 
     def fake_git(args, cwd, timeout=10):
         if args == ['tag', '--list', 'v*', '--sort=-v:refname']:
+            return 'v2026.5.16', True
+        if args == ['describe', '--tags', '--abbrev=0']:
+            # HEAD's nearest tag is v2026.5.16; HEAD is 608 commits past it.
             return 'v2026.5.16', True
         if args == ['describe', '--tags', '--always']:
             return 'v2026.5.16-608-g1d22b9c2d', True
@@ -545,5 +550,46 @@ def test_check_and_apply_paths_agree_when_head_is_past_tag(tmp_path):
     assert apply_ref == 'origin/main', (
         '_select_apply_compare_ref must mirror the check-side fall-through '
         'when HEAD is past the latest tag (#2846)'
+    )
+
+
+def test_select_apply_compare_ref_case_d_older_tag_with_commits_and_newer_tag_exists(tmp_path):
+    """Case D — HEAD on older tag + commits + newer tag exists → advance to newer tag.
+
+    Pre-Opus-#2855-fix: the check side correctly reported "behind by N" and
+    suggested `latest_tag`, but the apply side's predicate consulted
+    `_head_is_past_latest_tag(path, latest_tag)` which returned True (because
+    `git describe --tags --always` returns `v.older-N-g...` ≠ `latest_tag`).
+    So the apply side fell through to `origin/<branch>` and the pull landed
+    PAST the advertised tag — silent drift between check ("advance to
+    v2026.5.16") and apply ("pulled to whatever origin/main is now").
+
+    Fix: the apply-side predicate now uses `current_tag` (HEAD's nearest tag)
+    AND requires `behind == 0`, exactly mirroring the check-side rule.
+    """
+    (tmp_path / '.git').mkdir()
+
+    def fake_git(args, cwd, timeout=10):
+        if args == ['tag', '--list', 'v*', '--sort=-v:refname']:
+            return 'v2026.5.16\nv2026.5.10', True
+        if args == ['describe', '--tags', '--abbrev=0']:
+            # HEAD's nearest reachable tag (older one)
+            return 'v2026.5.10', True
+        if args == ['describe', '--tags', '--always']:
+            # HEAD has 3 commits past v2026.5.10
+            return 'v2026.5.10-3-gabcdef12', True
+        if args == ['rev-parse', '--abbrev-ref', '@{upstream}']:
+            return 'origin/main', True
+        return '', True
+
+    with patch.object(updates, '_run_git', side_effect=fake_git):
+        apply_ref = updates._select_apply_compare_ref(tmp_path)
+
+    # User is genuinely behind v2026.5.16 (the newer published tag) — apply
+    # MUST advance to the tag, NOT fall through to origin/<branch>.
+    assert apply_ref == 'v2026.5.16', (
+        'case D: HEAD on older tag with commits + newer tag exists. Apply '
+        'should advance to the newer tag, not silently fall through to '
+        'origin/<branch>. Regression for Opus-flagged drift in #2855.'
     )
 

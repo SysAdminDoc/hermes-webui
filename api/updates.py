@@ -384,8 +384,19 @@ def _select_apply_compare_ref(path):
     tags = _release_tags(path)
     if tags:
         latest_tag = tags[0]
-        # Mirror the predicate _check_repo_release uses to fall through.
-        if not _head_is_past_latest_tag(path, latest_tag):
+        current_tag = _current_release_tag(path)
+        behind = _release_gap(tags, current_tag, latest_tag)
+        # Mirror the check side exactly: only fall through when behind == 0
+        # AND HEAD has moved past its nearest tag (case A: bench between
+        # tagged releases). Otherwise the tag is correct — including the
+        # case where HEAD is on an older release tag with commits on top
+        # AND a newer tag exists (case D), where `behind > 0` means the
+        # user is genuinely behind the latest release and should advance
+        # to it. Pre-#2855 the apply path only consulted `latest_tag`
+        # without the `behind`/`current_tag` predicate, so case D fell
+        # through to `origin/<branch>` and the pull landed past the
+        # advertised tag. See #2846 + Opus pre-release review for #2855.
+        if not (behind == 0 and _head_is_past_latest_tag(path, current_tag)):
             return latest_tag
 
     upstream, ok = _run_git(['rev-parse', '--abbrev-ref', '@{upstream}'], path)
