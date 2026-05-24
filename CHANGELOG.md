@@ -3,6 +3,18 @@
 
 ## [Unreleased]
 
+## [v0.51.119] — 2026-05-24 — Release CQ (stage-batch1 — 3-PR low-risk batch — tool cards / 404 recovery / Hepburn skin)
+
+### Fixed
+
+- **PR #2801** by @ai-ag2026 — Preserve settled tool cards across stream completion. The streaming `done` handler now derives anchored settled tool cards from message-level tool metadata (`message.tool_calls`, `message._partial_tool_calls`, or `content[].type === 'tool_use'`) when present, instead of unconditionally falling back to session-level `d.session.tool_calls`. The fallback could overwrite the per-message anchors after pagination/windowing because session-level coordinates may not line up with the active message array, causing tool cards to disappear on the final `done` render. Fixes #2613, complements #2777 (which covers pending-segment flushes at tool/interim boundaries). Adds `tests/test_streaming_markdown.py::test_done_handler_prefers_message_tool_metadata_for_settled_render` to lock the precedence.
+
+- **PR #2808** by @chouzz — Recover deterministically from boot-time `/session/{id}` 404s (Option A for #2798). When `loadSession()` hits a 404 during boot-time restore (`!currentSid`), `static/sessions.js` now always clears `localStorage['hermes-webui-session']`, strips the stale URL with `history.replaceState(null, '', '/')`, and rethrows so boot falls through to empty-state recovery. The previous condition required the stale id to match `localStorage`, so a stale `/session/{id}` URL with empty `localStorage` (post state-reset) could leave the UI stuck on "Session not available in web UI." Fixes #2798.
+
+### Added
+
+- **PR #2799** by @gavinssr — Add Hepburn skin (magenta-rose palette derived from the Hepburn TUI theme). Full light + dark palette under `:root[data-skin="hepburn"]` / `:root.dark[data-skin="hepburn"]`, registered in `static/boot.js` `_SKINS` and whitelisted in `static/index.html`'s inline skin gate. As part of this PR `loadSettingsPanel()` in `static/panels.js` now prefers `localStorage.getItem('hermes-skin')` over `settings.skin` when populating the skin picker (DOM truth → settings fallback), so the picker matches what the user actually sees after the inline gate has already resolved legacy aliases.
+
 ## [v0.51.118] — 2026-05-22 — Release CP (stage-pr2773 — 1-PR hotfix — v0.51.117 brick fix: chat input restored)
 
 ### Fixed
