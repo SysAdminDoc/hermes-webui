@@ -735,7 +735,7 @@
     justify-content:center;
     gap:3px;
     width:var(--session-swipe-reveal,0px);
-    padding:0 8px;
+    padding:0;
     box-sizing:border-box;
     opacity:0;
     overflow:hidden;
@@ -746,16 +746,18 @@
   .session-swipe-affordance-right{
     left:0;
     color:#fff;
-    background:var(--warning);
-    border-radius:8px 6px 6px 8px;
+    background:transparent;
+    border-radius:0;
     transform-origin:left center;
+    --session-swipe-action-color:var(--warning);
   }
   .session-swipe-affordance-left{
     right:0;
     color:#fff;
-    background:var(--error);
-    border-radius:6px 8px 8px 6px;
+    background:transparent;
+    border-radius:0;
     transform-origin:right center;
+    --session-swipe-action-color:var(--error);
   }
   .session-item.swiping-right .session-swipe-affordance-right,
   .session-item.swiping-left .session-swipe-affordance-left{
@@ -763,13 +765,15 @@
   }
   .session-text,.session-state-indicator,.session-actions{z-index:1;}
   .session-swipe-badge{
-    width:28px;
-    height:28px;
-    border-radius:0;
+    width:calc(34px + var(--session-swipe-badge-stretch,0px));
+    height:34px;
+    border-radius:999px;
+    background:var(--session-swipe-action-color);
     display:flex;
     align-items:center;
     justify-content:center;
     color:#fff;
+    flex:0 0 auto;
     transform:scale(var(--session-swipe-icon-scale,1));
     transform-origin:center;
   }
@@ -804,7 +808,7 @@
   .session-item.active{background:var(--accent-bg);color:var(--accent);}
   .session-item.active.swiping-right{background:color-mix(in srgb,var(--warning) 20%,var(--accent-bg));}
   .session-item.active.swiping-left{background:color-mix(in srgb,var(--error) 18%,var(--accent-bg));}
-  .session-item.archived .session-swipe-affordance-right{background:var(--success);}
+  .session-item.archived .session-swipe-affordance-right{--session-swipe-action-color:var(--success);}
   .session-item.archived.swiping-right,
   .session-item.archived.dragging.swiping-right{background:color-mix(in srgb,var(--success) 16%,var(--surface));box-shadow:0 0 0 1px color-mix(in srgb,var(--success) 48%,transparent);}
   .session-item.active.archived.swiping-right{background:color-mix(in srgb,var(--success) 20%,var(--accent-bg));}

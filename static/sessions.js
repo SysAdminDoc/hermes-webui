@@ -1908,12 +1908,15 @@ async function _archiveSession(session, archived=true, beforeListRender=null){
   try{
     const response=await api('/api/session/archive',{method:'POST',body:JSON.stringify({session_id:session.session_id,archived})});
     session.archived=archived;
+    const cached=(_allSessions||[]).find(s=>s&&s.session_id===session.session_id);
+    if(cached) cached.archived=archived;
     if(S.session&&S.session.session_id===session.session_id) S.session.archived=archived;
+    showToast(session.archived?_sessionArchiveToast(response,session):t('session_restored'));
     if(renderHold) await renderHold;
     if(_showArchived&&!_sessionPrefersReducedMotion()) _sessionSwipeReturnOffsets.set(session.session_id,'0px');
     _pendingSessionReflowPositions=reflowPositions;
-    await renderSessionList();
-    showToast(session.archived?_sessionArchiveToast(response,session):t('session_restored'));
+    renderSessionListFromCache();
+    void renderSessionList();
     return true;
   }catch(err){if(renderHold) await renderHold.catch(()=>{});_pendingSessionReflowPositions=null;showToast(t('session_archive_failed')+err.message);return false;}
 }
@@ -3767,7 +3770,7 @@ function renderSessionListFromCache(){
 
     if(!readOnly){
       el.append(
-        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?t('session_restore'):t('session_batch_archive')),
+        _makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?'Restore':t('session_batch_archive')),
         _makeSessionSwipeAffordance('left','trash-2',t('session_batch_delete')),
       );
     }
@@ -3860,10 +3863,12 @@ function renderSessionListFromCache(){
       const offset=Math.sign(rawOffset)*(Math.abs(revealedOffset)+Math.sqrt(overshoot)*5);
       const progress=Math.min(1,Math.abs(revealedOffset)/72);
       const reveal=Math.abs(offset);
-      const iconScale=1+Math.min(.45,Math.max(0,Math.abs(rawOffset)-52)/130);
+      const iconScale=Math.min(1,Math.max(.01,progress*1.12));
+      const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15);
       el.style.setProperty('--session-swipe-offset',offset+'px');
       el.style.setProperty('--session-swipe-reveal',reveal+'px');
       el.style.setProperty('--session-swipe-icon-scale',iconScale);
+      el.style.setProperty('--session-swipe-badge-stretch',badgeStretch+'px');
       el.style.setProperty('--session-swipe-progress',Math.pow(progress,1.5));
       el.classList.toggle('swiping-right',offset>0);
       el.classList.toggle('swiping-left',offset<0);
@@ -3872,6 +3877,7 @@ function renderSessionListFromCache(){
       el.style.removeProperty('--session-swipe-offset');
       el.style.removeProperty('--session-swipe-reveal');
       el.style.removeProperty('--session-swipe-icon-scale');
+      el.style.removeProperty('--session-swipe-badge-stretch');
       el.style.removeProperty('--session-swipe-progress');
       el.style.removeProperty('height');
       el.style.removeProperty('min-height');

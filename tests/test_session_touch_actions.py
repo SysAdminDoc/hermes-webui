@@ -121,12 +121,16 @@ def test_session_swipe_paint_uses_transform_only_exit():
     assert "--session-swipe-offset" in paint
     assert "--session-swipe-reveal" in paint
     assert "--session-swipe-progress" in paint
+    assert "--session-swipe-badge-stretch" in paint
     assert "const reveal=Math.abs(offset);" in paint
+    assert "const iconScale=Math.min(1,Math.max(.01,progress*1.12));" in paint
+    assert "const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15);" in paint
     assert "window.innerWidth+'px'" in complete
     assert "el.style.height=rect.height+'px'" in complete
     assert "requestAnimationFrame(()=>el.classList.add('swipe-removing'))" in complete
     assert "requestAnimationFrame(()=>requestAnimationFrame(_clearSessionSwipePaint))" in SESSIONS_JS
     assert "el.classList.remove('swiping-right','swiping-left','swipe-committed','swipe-removing')" in clear
+    assert "el.style.removeProperty('--session-swipe-badge-stretch');" in clear
     assert ".session-item.swipe-committed,\n  .session-item.swipe-removing{transition:" in STYLE_CSS
     assert "transform:translate3d(calc(-1 * var(--session-swipe-offset,0px)),0,0)" in STYLE_CSS
     assert "transform:scale(var(--session-swipe-icon-scale,1))" in STYLE_CSS
@@ -138,6 +142,29 @@ def test_session_swipe_paint_uses_transform_only_exit():
     assert "padding-top:0" not in swipe_removing
     assert "margin-bottom:0" not in swipe_removing
     assert "transform:translate3d(var(--session-swipe-offset,0),var(--session-reflow-offset,0),0)" in STYLE_CSS
+
+
+def test_session_swipe_actions_use_circular_icon_badges():
+    right_start = STYLE_CSS.find(".session-swipe-affordance-right{")
+    left_start = STYLE_CSS.find(".session-swipe-affordance-left{")
+    badge_start = STYLE_CSS.find(".session-swipe-badge{")
+    right = STYLE_CSS[right_start:left_start]
+    left = STYLE_CSS[left_start:STYLE_CSS.find(".session-item.swiping-right", left_start)]
+    badge = STYLE_CSS[badge_start:STYLE_CSS.find(".session-swipe-badge svg", badge_start)]
+    assert "background:transparent" in right
+    assert "background:transparent" in left
+    assert "--session-swipe-action-color:var(--warning)" in right
+    assert "--session-swipe-action-color:var(--error)" in left
+    assert "width:calc(34px + var(--session-swipe-badge-stretch,0px))" in badge
+    assert "height:34px" in badge
+    assert "border-radius:999px" in badge
+    assert "background:var(--session-swipe-action-color)" in badge
+    assert ".session-item.archived .session-swipe-affordance-right{--session-swipe-action-color:var(--success);}" in STYLE_CSS
+    assert "_makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?'Restore':t('session_batch_archive'))" in SESSIONS_JS
+    label = STYLE_CSS[STYLE_CSS.find(".session-swipe-label{"):STYLE_CSS.find(".session-item.dragging")]
+    assert "session-swipe-label" in SESSIONS_JS
+    assert "max-width:58px" in label
+    assert "font-size:10px" in label
 
 
 def test_session_removal_reflows_surviving_rows_smoothly():
@@ -159,6 +186,16 @@ def test_session_removal_reflows_surviving_rows_smoothly():
     assert "_playSessionRowsReflowFromPositions(reflowBefore,reflowTimeout,_sessionPrefersReducedMotion);" in SESSIONS_JS
     assert "async function _archiveSession(session, archived=true, beforeListRender=null){" in SESSIONS_JS
     assert "const renderHold=beforeListRender?Promise.resolve().then(beforeListRender):null;" in SESSIONS_JS
+    assert "const cached=(_allSessions||[]).find(s=>s&&s.session_id===session.session_id);" in SESSIONS_JS
+    assert "if(cached) cached.archived=archived;" in SESSIONS_JS
+    archive_start = SESSIONS_JS.find("async function _archiveSession(session, archived=true, beforeListRender=null){")
+    archive_end = SESSIONS_JS.find("function _openSessionActionMenu", archive_start)
+    archive_body = SESSIONS_JS[archive_start:archive_end]
+    toast_idx = archive_body.find("showToast(session.archived?_sessionArchiveToast(response,session):t('session_restored'));")
+    hold_idx = archive_body.find("if(renderHold) await renderHold;")
+    cache_render_idx = archive_body.find("renderSessionListFromCache();")
+    reconcile_idx = archive_body.find("void renderSessionList();")
+    assert 0 <= toast_idx < hold_idx < cache_render_idx < reconcile_idx
     assert "if(renderHold) await renderHold;" in SESSIONS_JS
     assert "const serverSessions=_optimisticallyRemovedSessionIds.size" in SESSIONS_JS
     assert "? (sessData.sessions||[]).filter(s=>s&&!_optimisticallyRemovedSessionIds.has(s.session_id))" in SESSIONS_JS
