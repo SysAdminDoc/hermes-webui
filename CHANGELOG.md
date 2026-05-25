@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Session sidebar Archive/Delete menu actions now repaint from local sidebar state immediately after the server confirms the mutation, instead of waiting for the full `/api/sessions` refresh before the row disappears.
+
 ## [v0.51.134] — 2026-05-25 — Release DF (stage-batch16 — single-PR Windows path defaults)
 
 ### Fixed
