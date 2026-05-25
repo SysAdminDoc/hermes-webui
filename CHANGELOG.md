@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- When the session index is missing, WebUI now starts a background rebuild while preserving the first sidebar full-scan result, so the index is primed for later requests without temporarily hiding existing sessions.
+
 ## [v0.51.135] — 2026-05-25 — Release DG (stage-batch17 — 9-PR small-fix batch)
 
 ### Added
