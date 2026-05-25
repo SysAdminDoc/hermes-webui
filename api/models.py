@@ -239,6 +239,14 @@ def _write_session_index(updates=None):
         _write_session_index(updates=None)
 
 
+def prune_session_from_index(session_id: str) -> None:
+    """Remove one session row from the persisted sidebar index if present."""
+    sid = str(session_id or "")
+    if not sid or not SESSION_INDEX_FILE.exists():
+        return
+    _write_session_index(updates=[])
+
+
 def _active_stream_ids():
     with STREAMS_LOCK:
         active_ids = set(STREAMS.keys())
