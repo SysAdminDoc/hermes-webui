@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -109,19 +110,30 @@ def _write_session_index(updates=None):
         # Lazy full-rebuild path — used when index doesn't exist yet.
         if updates is None or not SESSION_INDEX_FILE.exists():
             _cleanup_stale_tmp_files()  # best-effort sweep on startup / first call
-            entries = []
+            entry_map: dict[str, dict] = {}
             for p in SESSION_DIR.glob('*.json'):
                 if p.name.startswith('_'):
                     continue
                 try:
                     s = Session.load(p.stem)
                     if s:
-                        entries.append(s.compact())
+                        c = s.compact()
+                        sid = c.get('session_id')
+                        if sid:
+                            # Dedup by session_id: prefer entry with more messages
+                            # (handles old-format session_xxx.json files alongside
+                            #  WebUI-format xxx.json with the same session_id)
+                            existing = entry_map.get(sid)
+                            if existing is None or (
+                                c.get('message_count', 0) > existing.get('message_count', 0)
+                            ):
+                                entry_map[sid] = c
                 except Exception:
                     logger.debug("Failed to load session from %s", p)
+            entries = list(entry_map.values())
 
             with LOCK:
-                existing_ids = {e.get('session_id') for e in entries}
+                existing_ids = set(entry_map.keys())
                 for s in SESSIONS.values():
                     if s.session_id not in existing_ids:
                         entries.append(s.compact())
@@ -201,7 +213,16 @@ def _write_session_index(updates=None):
 
 def _active_stream_ids():
     with STREAMS_LOCK:
-        return set(STREAMS.keys())
+        active_ids = set(STREAMS.keys())
+    # STREAMS tracks the browser/SSE observation path. A worker can still be
+    # running after the SSE stream entry disappears (for example while a request
+    # is blocked in the provider, unwinding after cancel, or otherwise detached
+    # from the client). Treat ACTIVE_RUNS as authoritative for worker liveness so
+    # stale-pending repair does not append a misleading restart/interrupted
+    # marker while the agent turn is still in flight.
+    with _cfg.ACTIVE_RUNS_LOCK:
+        active_ids.update(_cfg.ACTIVE_RUNS.keys())
+    return active_ids
 
 
 def _append_recovered_turn_to_context(session, recovered: dict) -> None:
@@ -743,18 +764,18 @@ def _get_profile_home(profile) -> Path:
 
 _INTERRUPTED_RECOVERED_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'The partial output above was recovered from the run journal, '
     'but the interrupted agent process could not continue.'
 )
 _INTERRUPTED_NO_OUTPUT_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'The user message above was preserved, but no agent output was recovered.'
 )
 _INTERRUPTED_PENDING_RETRY_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'Recovering the partial output from the run journal — '
     'reload this session to retry.'
 )
@@ -762,15 +783,91 @@ _INTERRUPTED_PENDING_RETRY_WORDING = (
 # or the marker has been pending longer than _JOURNAL_RETRY_GIVEUP_SECONDS).
 _INTERRUPTED_NEUTRAL_WORDING = (
     '**Response interrupted.**\n\n'
-    'The WebUI process restarted before this turn finished. '
+    'The live response stream stopped before this turn finished. '
     'Partial output may have been lost.'
 )
+
+_INTERRUPTION_CAUSE_DETAILS = {
+    'process_restart': (
+        'Evidence: the WebUI process started after this turn began, so this '
+        'looks like a real process crash or restart.'
+    ),
+    'stream_run_split_brain': (
+        'Evidence: the browser response stream was gone but the worker registry '
+        'still listed the run. This is a stream/run bookkeeping split-brain.'
+    ),
+    'lost_worker_bookkeeping': (
+        'Evidence: the stream was gone and worker bookkeeping no longer had an '
+        'active run for it. This usually means the worker state was lost or '
+        'cleaned up without a terminal event.'
+    ),
+    'unknown': (
+        'Evidence: the stream stopped, but the WebUI could not classify the '
+        'interruption more precisely.'
+    ),
+}
+
+
+def _classify_interruption_cause(
+    *, stream_id: str | None = None, pending_started_at=None,
+) -> str:
+    """Classify the stale live-response state without overstating certainty."""
+    try:
+        started = float(pending_started_at) if pending_started_at else None
+    except (TypeError, ValueError):
+        started = None
+
+    if started is not None:
+        try:
+            if float(getattr(_cfg, 'SERVER_START_TIME', 0.0) or 0.0) > started:
+                return 'process_restart'
+        except (TypeError, ValueError):
+            pass
+
+    if stream_id:
+        try:
+            with _cfg.ACTIVE_RUNS_LOCK:
+                if str(stream_id) in _cfg.ACTIVE_RUNS:
+                    return 'stream_run_split_brain'
+        except Exception:
+            pass
+        return 'lost_worker_bookkeeping'
+
+    return 'unknown'
+
+
+def _interrupted_content_for(
+    *, recovered_output: bool, pending_retry: bool, interruption_cause: str,
+) -> str:
+    if recovered_output:
+        outcome = (
+            'The partial output above was recovered from the run journal, '
+            'but the interrupted agent process could not continue.'
+        )
+    elif pending_retry:
+        outcome = (
+            'Recovering the partial output from the run journal — '
+            'reload this session to retry.'
+        )
+    else:
+        outcome = 'The user message above was preserved, but no agent output was recovered.'
+    cause_detail = _INTERRUPTION_CAUSE_DETAILS.get(
+        interruption_cause,
+        _INTERRUPTION_CAUSE_DETAILS['unknown'],
+    )
+    return (
+        '**Response interrupted.**\n\n'
+        'The live response stream stopped before this turn finished. '
+        f'{cause_detail} {outcome}'
+    )
 
 
 def _interrupted_recovery_marker(
     *,
     recovered_output: bool = False,
     pending_retry: bool = False,
+    stream_id: str | None = None,
+    pending_started_at=None,
 ) -> dict:
     """Build the standard interrupted-turn marker.
 
@@ -788,18 +885,22 @@ def _interrupted_recovery_marker(
     set so the caller cannot accidentally re-arm retry on a successful
     repair.
     """
-    if recovered_output:
-        content = _INTERRUPTED_RECOVERED_WORDING
-    elif pending_retry:
-        content = _INTERRUPTED_PENDING_RETRY_WORDING
-    else:
-        content = _INTERRUPTED_NO_OUTPUT_WORDING
+    interruption_cause = _classify_interruption_cause(
+        stream_id=stream_id,
+        pending_started_at=pending_started_at,
+    )
+    content = _interrupted_content_for(
+        recovered_output=recovered_output,
+        pending_retry=pending_retry,
+        interruption_cause=interruption_cause,
+    )
     marker = {
         'role': 'assistant',
         'content': content,
         'timestamp': int(time.time()),
         '_error': True,
         'type': 'interrupted',
+        'interruption_cause': interruption_cause,
     }
     if pending_retry and not recovered_output:
         marker['_pending_journal_recovery'] = True
@@ -1197,15 +1298,26 @@ def _journal_retry_lock_for_sid(sid: str) -> threading.Lock:
 
 
 def _build_recovery_marker_with_retry_hook(
-    *, recovered_output: bool, stream_id: str | None,
+    *, recovered_output: bool, stream_id: str | None, pending_started_at=None,
 ) -> dict:
     """Build an interrupted-turn marker, arming the lazy-retry hook when
     visible output was not recovered yet but a stream id is available."""
     if recovered_output:
-        return _interrupted_recovery_marker(recovered_output=True)
+        return _interrupted_recovery_marker(
+            recovered_output=True,
+            stream_id=stream_id,
+            pending_started_at=pending_started_at,
+        )
     if not stream_id:
-        return _interrupted_recovery_marker(recovered_output=False)
-    marker = _interrupted_recovery_marker(pending_retry=True)
+        return _interrupted_recovery_marker(
+            recovered_output=False,
+            pending_started_at=pending_started_at,
+        )
+    marker = _interrupted_recovery_marker(
+        pending_retry=True,
+        stream_id=stream_id,
+        pending_started_at=pending_started_at,
+    )
     marker['_journal_retry_stream_id'] = str(stream_id)
     marker['_journal_retry_attempts'] = 0
     marker['_journal_retry_first_seen_ts'] = int(time.time())
@@ -1490,13 +1602,16 @@ def _apply_core_sync_or_error_marker(
             stream_id_for_recheck or session.active_stream_id,
         )
         _stream_id = stream_id_for_recheck or session.active_stream_id
+        _pending_started_at = session.pending_started_at
         session.active_stream_id = None
         session.pending_user_message = None
         session.pending_attachments = []
         session.pending_started_at = None
         session.messages.append(
             _build_recovery_marker_with_retry_hook(
-                recovered_output=recovered_output, stream_id=_stream_id,
+                recovered_output=recovered_output,
+                stream_id=_stream_id,
+                pending_started_at=_pending_started_at,
             )
         )
         session.save(touch_updated_at=touch_updated_at)
@@ -1541,13 +1656,18 @@ def _apply_core_sync_or_error_marker(
                 _stream_id,
                 dedupe_existing=True,
             )
+            _pending_started_at = session.pending_started_at
             session.active_stream_id = None
             session.pending_user_message = None
             session.pending_attachments = []
             session.pending_started_at = None
             if recovered_output:
                 session.messages.append(
-                    _interrupted_recovery_marker(recovered_output=True)
+                    _interrupted_recovery_marker(
+                        recovered_output=True,
+                        stream_id=_stream_id,
+                        pending_started_at=_pending_started_at,
+                    )
                 )
             # NOTE: when the core transcript was synced in but the run journal
             # is not yet visible, intentionally do NOT append a lazy-retry
@@ -1583,13 +1703,16 @@ def _apply_core_sync_or_error_marker(
         stream_id_for_recheck or session.active_stream_id,
     )
     _stream_id = stream_id_for_recheck or session.active_stream_id
+    _pending_started_at = session.pending_started_at
     session.active_stream_id = None
     session.pending_user_message = None
     session.pending_attachments = []
     session.pending_started_at = None
     session.messages.append(
         _build_recovery_marker_with_retry_hook(
-            recovered_output=recovered_output, stream_id=_stream_id,
+            recovered_output=recovered_output,
+            stream_id=_stream_id,
+            pending_started_at=_pending_started_at,
         )
     )
     session.save(touch_updated_at=touch_updated_at)
@@ -1702,6 +1825,89 @@ def _repair_stale_pending(session) -> bool:
         return False
 
 
+def _last_non_tool_role(messages) -> str:
+    if not isinstance(messages, list):
+        return ''
+    for message in reversed(messages):
+        role = _message_role(message)
+        if role and role != 'tool':
+            return role
+    return ''
+
+
+def _last_non_tool_message(messages):
+    if not isinstance(messages, list):
+        return None
+    for message in reversed(messages):
+        role = _message_role(message)
+        if role and role != 'tool':
+            return message
+    return None
+
+
+def _message_content_text(message) -> str:
+    if not isinstance(message, dict):
+        return ''
+    content = message.get('content')
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get('text'), str):
+                parts.append(item['text'])
+        return ''.join(parts)
+    return ''
+
+
+def _inactive_cache_tail_needs_disk_check(cached) -> bool:
+    if cached is None:
+        return False
+    if getattr(cached, 'active_stream_id', None) or getattr(cached, 'pending_user_message', None):
+        return False
+    return _last_non_tool_role(getattr(cached, 'messages', None) or []) == 'user'
+
+
+def _cache_has_stale_unsaved_user_tail(cached, disk_session) -> bool:
+    """Return True when an inactive cached session has an unsaved user tail.
+
+    A completed turn is saved to the sidecar before the browser reloads it.  In
+    rare compaction/reconnect paths the in-process cache can retain a recovered
+    or optimistic user row after the saved assistant tail even though the row was
+    never persisted.  If /api/session serves that cache entry, the visible
+    transcript appears to end on the old prompt and the saved assistant answer
+    looks missing until a fork/reload resets the cache.
+    """
+    if cached is None or disk_session is None:
+        return False
+    if getattr(cached, 'active_stream_id', None) or getattr(cached, 'pending_user_message', None):
+        return False
+    cached_messages = getattr(cached, 'messages', None) or []
+    disk_messages = getattr(disk_session, 'messages', None) or []
+    if len(cached_messages) <= len(disk_messages):
+        return False
+    if _last_non_tool_role(cached_messages) != 'user':
+        return False
+    if _last_non_tool_role(disk_messages) != 'assistant':
+        return False
+
+    cached_tail = _last_non_tool_message(cached_messages)
+    previous_disk_user = None
+    for message in reversed(disk_messages):
+        if _message_role(message) == 'user':
+            previous_disk_user = message
+            break
+    if previous_disk_user is None:
+        return False
+
+    # Only drop tails that look like a duplicated optimistic/recovered user row.
+    # A genuinely new concurrent user edit must stay in memory so stale-session
+    # guards can report and preserve it.
+    return _message_content_text(cached_tail) == _message_content_text(previous_disk_user)
+
+
 def get_session(sid, metadata_only=False):
     """Load a session, optionally with metadata only (skipping the messages array).
 
@@ -1715,6 +1921,19 @@ def get_session(sid, metadata_only=False):
         if cached is not None:
             SESSIONS.move_to_end(sid)  # LRU: mark as recently used
     if cached is not None:
+        if not metadata_only and _inactive_cache_tail_needs_disk_check(cached):
+            try:
+                disk_session = Session.load(sid)
+                if _cache_has_stale_unsaved_user_tail(cached, disk_session):
+                    with LOCK:
+                        SESSIONS[sid] = disk_session
+                        SESSIONS.move_to_end(sid)
+                    cached = disk_session
+            except Exception:
+                logger.debug(
+                    "stale cached user-tail check failed for session %s",
+                    sid, exc_info=True,
+                )
         if not metadata_only and _session_has_pending_journal_retry(cached):
             try:
                 _try_retry_journal_recovery_in_place(cached)
@@ -1827,6 +2046,7 @@ def new_session(workspace=None, model=None, profile=None, model_provider=None, p
         effective_model, effective_model_provider = _profile_default_model_state(profile)
         if model_provider:
             effective_model_provider = model_provider
+
     wt = worktree_info if isinstance(worktree_info, dict) else None
     workspace_path = (wt.get('path') if wt and wt.get('path') else workspace) if wt else workspace
     s = Session(
@@ -1835,6 +2055,7 @@ def new_session(workspace=None, model=None, profile=None, model_provider=None, p
         model_provider=effective_model_provider,
         profile=profile,
         project_id=project_id,
+        personality=None,
         worktree_path=wt.get('path') if wt else None,
         worktree_branch=wt.get('branch') if wt else None,
         worktree_repo_root=wt.get('repo_root') if wt else None,
@@ -2022,9 +2243,27 @@ def all_sessions(diag=None):
             _diag_stage(diag, "all_sessions.prune_index")
             with LOCK:
                 in_memory_ids = set(SESSIONS.keys())
+            try:
+                persisted_ids = {
+                    p.stem
+                    for p in SESSION_DIR.glob('*.json')
+                    if not p.name.startswith('_')
+                }
+            except Exception:
+                persisted_ids = None
             index = [
                 s for s in index
-                if _index_entry_exists(s.get('session_id'), in_memory_ids=in_memory_ids)
+                if (
+                    str(s.get('session_id') or '') in in_memory_ids
+                    or (
+                        persisted_ids is not None
+                        and str(s.get('session_id') or '') in persisted_ids
+                    )
+                    or (
+                        persisted_ids is None
+                        and _index_entry_exists(s.get('session_id'), in_memory_ids=in_memory_ids)
+                    )
+                )
             ]
             backfilled = []
             for i, s in enumerate(index):
@@ -2780,21 +3019,28 @@ def _json_loads_if_string(value):
         return value
 
 
-def get_state_db_session_messages(sid, *, stitch_continuations: bool = False) -> list:
-    """Read messages for a Hermes session from the active profile's state.db.
+def get_state_db_session_messages(sid, *, stitch_continuations: bool = False, profile=None) -> list:
+    """Read messages for a Hermes session from state.db.
 
-    This generic reader intentionally works for any session source, including
-    WebUI-origin sessions that were later updated through another Hermes surface
-    such as the Gateway API Server.  When ``stitch_continuations`` is true it
-    preserves the historical CLI/external-agent behavior of walking compatible
-    compression/close parent segments before reading messages.
+    When *profile* is supplied, reads from that profile's state.db; otherwise
+    falls back to the active profile's state.db.  This generic reader works for
+    any session source, including WebUI-origin sessions that were later updated
+    through another Hermes surface such as the Gateway API Server.  When
+    ``stitch_continuations`` is true it preserves the historical CLI/external-agent
+    behavior of walking compatible compression/close parent segments before reading
+    messages.
     """
     try:
         import sqlite3
     except ImportError:
         return []
 
-    db_path = _active_state_db_path()
+    if isinstance(profile, str) and profile:
+        db_path = _get_profile_home(profile) / 'state.db'
+        if not db_path.exists():
+            db_path = _active_state_db_path()
+    else:
+        db_path = _active_state_db_path()
     if not db_path.exists():
         return []
 
@@ -2817,7 +3063,8 @@ def get_state_db_session_messages(sid, *, stitch_continuations: bool = False) ->
                 'reasoning_content',
                 'codex_message_items',
             ]
-            selected = ['role', 'content', 'timestamp'] + [c for c in optional if c in available]
+            id_col = ['id'] if 'id' in available else []
+            selected = id_col + ['role', 'content', 'timestamp'] + [c for c in optional if c in available]
 
             session_chain = [str(sid)]
             if stitch_continuations:
@@ -2893,55 +3140,6 @@ def get_state_db_session_messages(sid, *, stitch_continuations: bool = False) ->
     return msgs
 
 
-def get_state_db_session_summary(sid) -> dict:
-    """Return cheap message count/max timestamp for one state.db session.
-
-    This is intentionally narrower than ``get_state_db_session_messages`` for
-    metadata-only WebUI polling: callers only need a staleness signal, not a
-    fully materialized transcript with tool/reasoning metadata.
-    """
-    import os
-    try:
-        import sqlite3
-    except ImportError:
-        return {}
-
-    db_path = _active_state_db_path()
-    if not sid or not db_path.exists():
-        return {}
-
-    try:
-        with closing(sqlite3.connect(str(db_path))) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute("PRAGMA table_info(messages)")
-            available = {str(row['name']) for row in cur.fetchall()}
-            if not {'session_id', 'timestamp'}.issubset(available):
-                return {}
-            cur.execute(
-                """
-                SELECT COUNT(*) AS message_count, MAX(timestamp) AS last_message_at
-                FROM messages
-                WHERE session_id = ?
-                """,
-                (str(sid),),
-            )
-            row = cur.fetchone()
-            if not row:
-                return {}
-            count = int(row['message_count'] or 0)
-            last_message_at = row['last_message_at']
-            result = {'message_count': count}
-            if last_message_at not in (None, ''):
-                try:
-                    result['last_message_at'] = float(last_message_at)
-                except (TypeError, ValueError):
-                    pass
-            return result
-    except Exception:
-        return {}
-
-
 def _normalized_message_timestamp_for_key(value):
     if value is None or value == "":
         return ""
@@ -2983,6 +3181,110 @@ def _session_message_merge_key(msg: dict):
     )
 
 
+def _normalized_session_message_content(msg: dict) -> str:
+    if not isinstance(msg, dict):
+        return repr(msg)
+    return " ".join(str(msg.get("content") or "").split())
+
+
+def _loose_session_message_content(value: str) -> str:
+    return " ".join(re.findall(r"\w+", str(value or "").casefold()))
+
+
+def _session_message_content_key(msg: dict):
+    if not isinstance(msg, dict):
+        return ("non_dict", repr(msg))
+    return (
+        str(msg.get("role") or ""),
+        _normalized_session_message_content(msg),
+        str(msg.get("tool_call_id") or ""),
+        str(msg.get("tool_name") or msg.get("name") or ""),
+    )
+
+
+def _session_message_visible_key(msg: dict):
+    if not isinstance(msg, dict):
+        return ("non_dict", repr(msg))
+    return (
+        str(msg.get("role") or ""),
+        _normalized_session_message_content(msg),
+    )
+
+
+def _matching_visible_duplicate(visible_key: tuple, visible_keys: set[tuple]):
+    if visible_key in visible_keys:
+        return visible_key
+    role, content = visible_key
+    if not content:
+        return None
+    for existing_role, existing_content in visible_keys:
+        if role != existing_role or not existing_content:
+            continue
+        if content in existing_content or existing_content in content:
+            return (existing_role, existing_content)
+        loose_content = _loose_session_message_content(content)
+        loose_existing = _loose_session_message_content(existing_content)
+        if loose_content and loose_existing and (
+            loose_content in loose_existing or loose_existing in loose_content
+        ):
+            return (existing_role, existing_content)
+    return None
+
+
+def _has_visible_duplicate(visible_key: tuple, visible_keys: set[tuple]) -> bool:
+    return _matching_visible_duplicate(visible_key, visible_keys) is not None
+
+
+def state_db_delta_after_context(sidecar_context: list, state_messages: list) -> list:
+    """Return only state.db rows that are newer than model-facing context.
+
+    `context_messages` is the authoritative model-facing prefix. state.db may
+    contain a mirrored copy of that prefix with fresh timestamps, especially for
+    LCM/continuation sessions. Appending the whole state transcript to a clean
+    sidecar context replays old context into the next runtime prompt.
+    """
+    sidecar_context = list(sidecar_context or [])
+    state_messages = list(state_messages or [])
+    if not sidecar_context or not state_messages:
+        return state_messages
+
+    sidecar_keys = [_session_message_content_key(m) for m in sidecar_context]
+    state_keys = [_session_message_content_key(m) for m in state_messages]
+    max_offset = min(len(sidecar_keys), len(state_keys))
+    best_len = 0
+    for offset in range(max_offset):
+        length = 0
+        while (
+            offset + length < len(sidecar_keys)
+            and length < len(state_keys)
+            and sidecar_keys[offset + length] == state_keys[length]
+        ):
+            length += 1
+        if length > best_len:
+            best_len = length
+
+    # Require at least two mirrored rows. A single repeated short user message
+    # is not enough evidence that state.db starts with a mirrored context
+    # segment, but small recovered contexts often contain only a compact summary
+    # and one follow-up row; those should still use the delta path.
+    if best_len < 2:
+        return state_messages
+
+    # Drop only rows that can be aligned with the remaining sidecar context in
+    # order. This still tolerates stale state-only rows between mirrored context
+    # rows, but once the sidecar context is exhausted every later state row is a
+    # real delta, even if it repeats a short earlier message.
+    sidecar_index = best_len
+    state_index = best_len
+    while sidecar_index < len(sidecar_keys) and state_index < len(state_keys):
+        if state_keys[state_index] == sidecar_keys[sidecar_index]:
+            sidecar_index += 1
+        state_index += 1
+    if sidecar_index == len(sidecar_keys):
+        return state_messages[state_index:]
+    return state_messages[best_len:]
+
+
 def merge_session_messages_append_only(sidecar_messages: list, state_messages: list) -> list:
     """Merge sidecar/context and state.db messages without deleting local rows."""
     sidecar_messages = list(sidecar_messages or [])
@@ -2994,6 +3296,11 @@ def merge_session_messages_append_only(sidecar_messages: list, state_messages: l
 
     merged_messages = []
     seen_message_keys = set()
+    seen_content_keys = set()
+    seen_visible_keys = set()
+    sidecar_visible_sequence = []
+    sidecar_visible_keys = set()
+    sidecar_visible_counts = {}
     max_sidecar_timestamp = None
     for msg in sidecar_messages:
         timestamp = _message_timestamp_as_float(msg)
@@ -3001,10 +3308,34 @@ def merge_session_messages_append_only(sidecar_messages: list, state_messages: l
             max_sidecar_timestamp = timestamp if max_sidecar_timestamp is None else max(max_sidecar_timestamp, timestamp)
         key = _session_message_merge_key(msg)
         seen_message_keys.add(key)
+        seen_content_keys.add(_session_message_content_key(msg))
+        visible_key = _session_message_visible_key(msg)
+        seen_visible_keys.add(visible_key)
+        sidecar_visible_keys.add(visible_key)
+        sidecar_visible_counts[visible_key] = sidecar_visible_counts.get(visible_key, 0) + 1
+        sidecar_visible_sequence.append(visible_key)
         merged_messages.append(msg)
+    state_replay_idx = 0
+    skipped_state_visible_counts = {}
     for msg in state_messages:
         timestamp = _message_timestamp_as_float(msg)
         key = _session_message_merge_key(msg)
+        visible_key = _session_message_visible_key(msg)
+        replays_sidecar_prefix = False
+        if state_replay_idx < len(sidecar_visible_sequence):
+            expected_visible_key = sidecar_visible_sequence[state_replay_idx]
+            if visible_key == expected_visible_key or _has_visible_duplicate(
+                visible_key, {expected_visible_key}
+            ):
+                replays_sidecar_prefix = True
+                state_replay_idx += 1
+        if replays_sidecar_prefix:
+            matched_visible_key = _matching_visible_duplicate(visible_key, sidecar_visible_keys)
+            if matched_visible_key is not None:
+                skipped_state_visible_counts[matched_visible_key] = (
+                    skipped_state_visible_counts.get(matched_visible_key, 0) + 1
+                )
+            continue
         if max_sidecar_timestamp is not None and timestamp is not None and timestamp <= max_sidecar_timestamp:
             if key in seen_message_keys:
                 continue
@@ -3012,12 +3343,23 @@ def merge_session_messages_append_only(sidecar_messages: list, state_messages: l
                 continue
         if key in seen_message_keys:
             continue
+        matched_visible_key = _matching_visible_duplicate(visible_key, sidecar_visible_keys)
+        if matched_visible_key is not None:
+            skipped_count = skipped_state_visible_counts.get(matched_visible_key, 0)
+            sidecar_count = sidecar_visible_counts.get(matched_visible_key, 0)
+            if skipped_count < sidecar_count:
+                skipped_state_visible_counts[matched_visible_key] = skipped_count + 1
+                continue
         # State rows at or before the newest sidecar timestamp are normally
         # assumed to have already been observed by the sidecar. The <= gate
         # preserves sidecar-only ordering/metadata for equal timestamps and
         # prevents duplicate legacy rows when timestamp precision differs
-        # between stores. Explicit message ids are authoritative, though: two
-        # equal-timestamp messages with different ids are distinct retries.
+        # between stores. State rows whose visible content already exists in
+        # the sidecar are also skipped even if state.db restamped them later
+        # during compaction/recovery; otherwise old prompts can be appended
+        # after the assistant tail and make /api/session look like the answer
+        # vanished. Explicit message ids are authoritative for distinct rows
+        # only when their visible content is not already present.
         if (
             key[0] != "message_id"
             and max_sidecar_timestamp is not None
@@ -3027,6 +3369,8 @@ def merge_session_messages_append_only(sidecar_messages: list, state_messages: l
             continue
         if key[0] == "message_id":
             seen_message_keys.add(key)
+        seen_content_keys.add(_session_message_content_key(msg))
+        seen_visible_keys.add(visible_key)
         merged_messages.append(msg)
     return merged_messages
 
@@ -3046,6 +3390,8 @@ def reconciled_state_db_messages_for_session(
         local_messages = getattr(session, 'messages', None) or []
     if state_messages is None:
         state_messages = get_state_db_session_messages(getattr(session, 'session_id', None))
+    if prefer_context and local_messages:
+        state_messages = state_db_delta_after_context(local_messages, state_messages)
     return merge_session_messages_append_only(local_messages, state_messages)
 
 
@@ -3095,7 +3441,7 @@ def count_conversation_rounds(sid: str, since: float | None = None) -> int:
         return 0
 
     try:
-        with sqlite3.connect(str(db_path)) as conn:
+        with closing(sqlite3.connect(str(db_path))) as conn:
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             cur.execute(

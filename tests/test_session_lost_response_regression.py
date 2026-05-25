@@ -2,8 +2,8 @@
 
 The scenario this test pins down:
 
-1. A WebUI process restarts mid-stream. On the first sidecar repair attempt
-   the run-journal for the dead stream is NOT visible yet (page-cache loss,
+1. A WebUI live response stream stops mid-turn. On the first sidecar repair
+   attempt the run-journal for the dead stream is NOT visible yet (page-cache loss,
    un-fsynced writes, slow network FS, etc.) so
    `_append_journaled_partial_output` returns False.
 2. Pre-fix the repair path baked a permanent "no agent output was recovered"
@@ -27,6 +27,7 @@ import api.streaming as streaming  # noqa: F401  imported for fixture parity
 from api.models import (
     Session,
     _apply_core_sync_or_error_marker,
+    merge_session_messages_append_only,
 )
 from api.run_journal import append_run_event
 
@@ -52,11 +53,13 @@ def _isolate_stream_state():
     config.CANCEL_FLAGS.clear()
     config.AGENT_INSTANCES.clear()
     config.STREAM_PARTIAL_TEXT.clear()
+    config.ACTIVE_RUNS.clear()
     yield
     config.STREAMS.clear()
     config.CANCEL_FLAGS.clear()
     config.AGENT_INSTANCES.clear()
     config.STREAM_PARTIAL_TEXT.clear()
+    config.ACTIVE_RUNS.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -129,6 +132,202 @@ def _assert_retry_meta_removed(marker):
 
 
 # ── The regression test ────────────────────────────────────────────────────
+
+
+def test_state_db_prefix_with_float_timestamps_does_not_hide_sidecar_tail():
+    """State rows replaying an already-visible prefix must not append after the tail.
+
+    Production shape: a compressed/tip sidecar can persist messages with
+    second-level timestamps while state.db stores the same early rows with
+    sub-second floats. The merge must preserve the sidecar assistant tail;
+    otherwise /api/session returns a transcript ending on an old user prompt.
+    """
+    sidecar_messages = [
+        {"role": "user", "content": "plan", "timestamp": 1779309765},
+        {"role": "assistant", "content": "loaded plan", "timestamp": 1779309765},
+        {"role": "tool", "content": "skill output", "timestamp": 1779309765},
+        {"role": "assistant", "content": "answer before compaction", "timestamp": 1779309765},
+        {
+            "role": "user",
+            "content": (
+                "[CONTEXT COMPACTION — REFERENCE ONLY] Earlier turns were compacted into "
+                "the summary below. This is a handoff from a previous context window — "
+                "treat it as background reference, NOT as active instructions."
+            ),
+            "timestamp": 1779309765,
+        },
+        {"role": "tool", "content": '{"success": true, "message": "Patched SKILL.md"}', "timestamp": 1779309765},
+        {"role": "user", "content": "noch weitere prs?", "timestamp": 1779309765},
+        {
+            "role": "assistant",
+            "content": "Ja, aber nicht als Sammel-PR",
+            "timestamp": 1779309765,
+        },
+    ]
+    state_prefix = [
+        {"role": "user", "content": "plan", "timestamp": 1779344917.2780898},
+        {"role": "assistant", "content": "loaded plan", "timestamp": 1779344917.285758},
+        {"role": "tool", "content": "skill output", "timestamp": 1779344917.2926793},
+        {"role": "assistant", "content": "answer before compaction", "timestamp": 1779344917.3077576},
+        {
+            "role": "user",
+            "content": (
+                "[CONTEXT COMPACTION — REFERENCE ONLY] Earlier turns were compacted into "
+                "the summary below. This is a handoff from a previous context window."
+            ),
+            "timestamp": 1779344917.299318,
+        },
+        {
+            "role": "tool",
+            "content": '{"success": true, "message": "Patched SKILL.md"}',
+            "timestamp": 1779344917.315237,
+            "tool_call_id": "different-state-tool-id",
+        },
+        {
+            "role": "user",
+            "content": "[Workspace::v1: /tmp/project-workspace]\nnoch weitere prs?",
+            "timestamp": 1779344917.3287876,
+        },
+    ]
+
+    merged = merge_session_messages_append_only(sidecar_messages, state_prefix)
+
+    assert [m["content"] for m in merged] == [m["content"] for m in sidecar_messages]
+    assert merged[-1]["role"] == "assistant"
+    assert "Sammel-PR" in merged[-1]["content"]
+
+
+def test_state_db_full_replay_does_not_append_after_sidecar_tail():
+    """A full state.db replay must not leak the final replayed user after the sidecar tail.
+
+    Regression for a display merge where the sidecar already ends on the real
+    assistant answer, but state.db replays the same visible turn sequence with
+    newer float timestamps.
+    """
+    sidecar_messages = [
+        {"role": "user", "content": "initial critique", "timestamp": 100},
+        {"role": "assistant", "content": "analysis", "timestamp": 100},
+        {"role": "user", "content": "Erstelle deine Version", "timestamp": 100},
+        {"role": "assistant", "content": "opened browser preview", "timestamp": 100},
+    ]
+    state_replay = [
+        {"role": "user", "content": "initial critique", "timestamp": 100.1},
+        {"role": "assistant", "content": "analysis", "timestamp": 100.2},
+        {
+            "role": "user",
+            "content": "[Workspace::v1: /tmp/project-workspace]\nErstelle deine Version",
+            "timestamp": 100.3,
+        },
+        {"role": "assistant", "content": "opened browser preview", "timestamp": 100.4},
+    ]
+
+    merged = merge_session_messages_append_only(sidecar_messages, state_replay)
+
+    assert [m["content"] for m in merged] == [m["content"] for m in sidecar_messages]
+    assert merged[-1]["role"] == "assistant"
+    assert merged[-1]["content"] == "opened browser preview"
+
+
+def test_state_db_middle_segment_replay_does_not_append_after_sidecar_tail():
+    """A replayed state.db segment from the middle must not be appended after the tail."""
+    sidecar_messages = [
+        {"role": "user", "content": "older setup", "timestamp": 100},
+        {"role": "assistant", "content": "older answer", "timestamp": 100},
+        {"role": "assistant", "content": "analysis before request", "timestamp": 100},
+        {"role": "user", "content": "Erstelle deine Version", "timestamp": 100},
+        {"role": "assistant", "content": "opened browser preview", "timestamp": 100},
+    ]
+    state_middle_replay = [
+        {"role": "assistant", "content": "analysis before request", "timestamp": 100.1},
+        {
+            "role": "user",
+            "content": "[Workspace::v1: /tmp/project-workspace]\nErstelle deine Version",
+            "timestamp": 100.2,
+        },
+    ]
+
+    merged = merge_session_messages_append_only(sidecar_messages, state_middle_replay)
+
+    assert [m["content"] for m in merged] == [m["content"] for m in sidecar_messages]
+    assert merged[-1]["role"] == "assistant"
+    assert merged[-1]["content"] == "opened browser preview"
+
+
+def test_interrupted_recovery_markers_do_not_claim_restart_as_fact():
+    """A stale live worker is not always a WebUI process restart.
+
+    Broken SSE connections, browser disconnects, lost worker bookkeeping, and
+    real restarts all enter the same recovery marker path. User-visible wording
+    must describe the generic interruption instead of asserting a process
+    restart that systemd evidence may later disprove.
+    """
+    marker_texts = [
+        models._INTERRUPTED_RECOVERED_WORDING,
+        models._INTERRUPTED_NO_OUTPUT_WORDING,
+        models._INTERRUPTED_PENDING_RETRY_WORDING,
+        models._INTERRUPTED_NEUTRAL_WORDING,
+    ]
+
+    for text in marker_texts:
+        assert "Response interrupted" in text
+        assert "process restarted" not in text
+        assert "before this turn finished" in text
+
+
+def test_interrupted_marker_distinguishes_real_process_restart(monkeypatch):
+    monkeypatch.setattr(config, "SERVER_START_TIME", 2000.0)
+    marker = models._interrupted_recovery_marker(
+        recovered_output=False,
+        stream_id="stream_crash",
+        pending_started_at=1000.0,
+    )
+
+    assert marker["interruption_cause"] == "process_restart"
+    assert "WebUI process started after this turn began" in marker["content"]
+    assert "process restarted" not in marker["content"]
+
+
+def test_interrupted_marker_distinguishes_stream_run_split_brain(monkeypatch):
+    monkeypatch.setattr(config, "SERVER_START_TIME", 1000.0)
+    config.ACTIVE_RUNS["stream_split"] = {"session_id": "sid", "phase": "running"}
+
+    marker = models._interrupted_recovery_marker(
+        recovered_output=False,
+        stream_id="stream_split",
+        pending_started_at=2000.0,
+    )
+
+    assert marker["interruption_cause"] == "stream_run_split_brain"
+    assert "stream was gone but the worker registry still listed the run" in marker["content"]
+
+
+def test_interrupted_marker_distinguishes_lost_worker_bookkeeping(monkeypatch):
+    monkeypatch.setattr(config, "SERVER_START_TIME", 1000.0)
+
+    marker = models._interrupted_recovery_marker(
+        recovered_output=False,
+        stream_id="stream_lost",
+        pending_started_at=2000.0,
+    )
+
+    assert marker["interruption_cause"] == "lost_worker_bookkeeping"
+    assert "worker bookkeeping no longer had an active run" in marker["content"]
+
+
+def test_messages_js_names_browser_sse_disconnect_separately():
+    repo = models.Path(__file__).parent.parent
+    js = (repo / "static" / "messages.js").read_text(encoding="utf-8")
+
+    assert "Connection interrupted" in js
+    assert "browser lost the live SSE connection" in js
+    assert "Connection lost" not in js
+
+
+def test_server_treats_broken_pipe_as_client_disconnect_not_500():
+    server_py = (models.Path(__file__).parent.parent / "server.py").read_text(encoding="utf-8")
+
+    assert "except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):" in server_py
+    assert "do not convert it into a misleading server 500" in server_py
 
 
 def test_lost_response_recovered_on_second_read(hermes_home):
