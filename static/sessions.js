@@ -2817,6 +2817,13 @@ function _collapseSessionLineageForSidebar(sessions){
       if(bSeg||aSeg){
         if(bSeg!==aSeg) return bSeg-aSeg;
       }
+      // Preserved pre-compression parents can share the same backend segment
+      // count as the continuation. Prefer the non-snapshot tip before falling
+      // back to timestamps, otherwise a recently-polled parent reopens the
+      // older transcript and makes the active continuation look lost.
+      const bSnapshot=!!(b&&b.pre_compression_snapshot);
+      const aSnapshot=!!(a&&a.pre_compression_snapshot);
+      if(bSnapshot!==aSnapshot) return aSnapshot-bSnapshot;
       return _sessionTimestampMs(b)-_sessionTimestampMs(a);
     });
     const chosen=sorted[0];
