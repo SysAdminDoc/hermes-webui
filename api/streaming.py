@@ -2557,6 +2557,18 @@ def _drop_checkpointed_current_user_from_context(messages, msg_text):
     return history
 
 
+def _save_streaming_checkpoint(session):
+    """Persist a streaming checkpoint under the session's profile context."""
+    from api import profiles as profiles_api
+
+    with profiles_api.profile_env_for_background_worker(
+        session,
+        "streaming checkpoint",
+        logger_override=logger,
+    ):
+        session.save(skip_index=True)
+
+
 def _normalize_fresh_chat_text(text):
     text = _strip_workspace_prefix(str(text or ''), include_legacy=True)
     text = re.sub(r"\s+", " ", text).strip().lower()
@@ -4573,7 +4585,7 @@ def _run_agent_streaming(
                         cur = _checkpoint_activity[0]
                         if cur > last_saved_activity:
                             with _agent_lock:
-                                s.save(skip_index=True)
+                                _save_streaming_checkpoint(s)
                             last_saved_activity = cur
                     except Exception as e:
                         logger.debug("Periodic checkpoint save failed: %s", e)
