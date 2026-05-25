@@ -3,6 +3,21 @@
 
 ## [Unreleased]
 
+## [v0.51.137] — 2026-05-25 — Release DI (stage-batch19 — 6-PR medium-risk batch)
+
+### Added
+
+- Operators can now set `HERMES_WEBUI_CSP_CONNECT_EXTRA` to append validated extra origins to the report-only CSP `connect-src` directive for reverse-proxy or tunnel deployments.
+
+### Fixed
+
+- Trim session-level tool call payloads to the returned message window for paginated `/api/session` loads, so long tool-heavy sessions do not send historical tool call summaries during ordinary session switching.
+- Sidebar compression lineage collapse now prefers the current continuation tip over a preserved parent snapshot when both rows share the same backend segment count. This keeps reloads after context compression from reopening the older parent transcript and making the active conversation appear to disappear.
+- Reloading a stale `/session/<parent>` compression URL now resolves to the visible continuation tip from the sidebar payload instead of reopening the archived parent snapshot.
+- Undo, retry, and explicit session truncation now persist a sidecar truncation watermark, preventing older `state.db` rows from reappearing after the WebUI transcript was intentionally shortened.
+- Chat uploads with the same filename in one session now keep distinct attachment files instead of overwriting the earlier upload.
+- Compression reference card no longer disappears behind the "Load earlier messages" cutoff after subsequent turns. The post-compression anchor is now calculated from the position of the last `[CONTEXT COMPACTION]` marker in the transcript instead of pointing at the visible tail, so the anchor stays at the compression boundary regardless of how many turns have been added since.
+
 ## [v0.51.136] — 2026-05-25 — Release DH (stage-batch18 — 5-PR streaming + session index batch)
 
 ### Fixed
