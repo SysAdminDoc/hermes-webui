@@ -14,6 +14,7 @@
 - Reloading a stale `/session/<parent>` compression URL now resolves to the visible continuation tip from the sidebar payload instead of reopening the archived parent snapshot.
 - Undo, retry, and explicit session truncation now persist a sidecar truncation watermark, preventing older `state.db` rows from reappearing after the WebUI transcript was intentionally shortened.
 - Chat uploads with the same filename in one session now keep distinct attachment files instead of overwriting the earlier upload.
+- Compression reference card no longer disappears behind the "Load earlier messages" cutoff after subsequent turns. The post-compression anchor is now calculated from the position of the last `[CONTEXT COMPACTION]` marker in the transcript instead of pointing at the visible tail, so the anchor stays at the compression boundary regardless of how many turns have been added since.
 
 ## [v0.51.136] — 2026-05-25 — Release DH (stage-batch18 — 5-PR streaming + session index batch)
 
