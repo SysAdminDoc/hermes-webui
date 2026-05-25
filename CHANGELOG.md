@@ -13,6 +13,8 @@
 - Gateway status now treats existing messaging-session metadata as configured when `gateway.status` is unavailable, avoiding a misleading "Gateway not configured" warning for multi-container deployments with active gateway sessions.
 - Session sidebar Archive/Delete menu actions now repaint from local sidebar state immediately after the server confirms the mutation, instead of waiting for the full `/api/sessions` refresh before the row disappears.
 - Clarification dialogs now reserve transcript space while open or collapsed, so the question prompt no longer covers the assistant text needed to answer it.
+- Chat uploads now send the absolute server-side path for image attachments in the agent text context, restoring immediate tool access (e.g. `vision_analyze`) to files uploaded in the current turn.
+- Pending uploaded-file user turns no longer double-render when both the optimistic bubble and the server's pending-message hydration produce the same `[Attached files: ...]` suffix.
 
 ## [v0.51.134] — 2026-05-25 — Release DF (stage-batch16 — single-PR Windows path defaults)
 
