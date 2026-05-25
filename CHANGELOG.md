@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Clarification dialogs now reserve transcript space while open or collapsed, so the question prompt no longer covers the assistant text needed to answer it.
+
 ## [v0.51.134] — 2026-05-25 — Release DF (stage-batch16 — single-PR Windows path defaults)
 
 ### Fixed
