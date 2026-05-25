@@ -2677,12 +2677,63 @@ function _syncClarifyCollapseButton(card) {
   collapse.title = label;
 }
 
+let _clarifyResizeListenerReady = false;
+
+function _clarifyMessagesNearBottom(messages) {
+  if (!messages) return false;
+  return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 150;
+}
+
+function _syncClarifyTranscriptSpace(card, opts) {
+  opts = opts || {};
+  const messages = $("messages");
+  if (!messages) return;
+  const wasNearBottom = _clarifyMessagesNearBottom(messages);
+  if (!card || !card.classList.contains("visible")) {
+    messages.classList.remove("clarify-open");
+    messages.classList.remove("clarify-collapsed");
+    messages.style.removeProperty("--clarify-card-height");
+    messages.style.removeProperty("--clarify-dock-height");
+    if (wasNearBottom && typeof scrollToBottom === "function" && typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(scrollToBottom);
+    }
+    return;
+  }
+  const collapsed = card.classList.contains("collapsed");
+  messages.classList.add("clarify-open");
+  messages.classList.toggle("clarify-collapsed", collapsed);
+  const measure = () => {
+    if (!card.classList.contains("visible")) return;
+    const target = collapsed ? card : (card.querySelector(".clarify-inner") || card);
+    const h = target && target.getBoundingClientRect().height;
+    if (h > 0) {
+      messages.style.setProperty(collapsed ? "--clarify-dock-height" : "--clarify-card-height", Math.ceil(h + 24) + "px");
+    }
+    if (wasNearBottom && typeof scrollToBottom === "function") scrollToBottom();
+  };
+  if (opts.immediate) measure();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(measure);
+  setTimeout(measure, 420);
+}
+
+function _ensureClarifyResizeListener() {
+  if (_clarifyResizeListenerReady || typeof window === "undefined") return;
+  _clarifyResizeListenerReady = true;
+  window.addEventListener("resize", () => {
+    const card = $("clarifyCard");
+    if (card && card.classList.contains("visible")) {
+      _syncClarifyTranscriptSpace(card, {immediate: true});
+    }
+  }, {passive: true});
+}
+
 function toggleClarifyCardCollapsed(forceCollapsed) {
   const card = $("clarifyCard");
   if (!card) return;
   const collapsed = typeof forceCollapsed === "boolean" ? forceCollapsed : !card.classList.contains("collapsed");
   card.classList.toggle("collapsed", collapsed);
   _syncClarifyCollapseButton(card);
+  _syncClarifyTranscriptSpace(card, {immediate: true});
 }
 
 function _clearClarifyHideTimer() {
@@ -2797,6 +2848,7 @@ function hideClarifyCard(force=false, reason="dismissed") {
   _clarifySessionId = null;
   _resetClarifyCardState();
   card.classList.remove("visible");
+  _syncClarifyTranscriptSpace(null);
   if (typeof unlockComposerForClarify === "function") unlockComposerForClarify();
   $("clarifyQuestion").textContent = "";
   $("clarifyChoices").innerHTML = "";
@@ -2911,8 +2963,10 @@ function showClarifyCard(pending) {
     lockComposerForClarify(question ? `Clarification needed: ${question}` : "Clarification needed");
   }
   _clarifySetControlsDisabled(false, false);
+  _ensureClarifyResizeListener();
   card.classList.add("visible");
   _syncClarifyCollapseButton(card);
+  _syncClarifyTranscriptSpace(card, {immediate: true});
   if (typeof applyLocaleToDOM === "function") applyLocaleToDOM();
   // Move focus to clarify input synchronously (not in setTimeout) and
   // only if the user wasn't mid-type in the composer textarea.
