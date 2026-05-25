@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.136] — 2026-05-25 — Release DH (stage-batch18 — 5-PR streaming + session index batch)
+
 ### Fixed
 
 - When the session index is missing, WebUI now starts a background rebuild while preserving the first sidebar full-scan result, so the index is primed for later requests without temporarily hiding existing sessions.
