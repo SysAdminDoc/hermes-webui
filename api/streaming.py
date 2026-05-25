@@ -287,6 +287,9 @@ def _resolve_prefill_path(raw: str) -> Path:
     return path
 
 
+_PREFILL_SCRIPT_OUTPUT_LIMIT = 262_144
+
+
 def _prefill_not_configured() -> dict:
     return {"status": "not_configured", "source": "none", "label": "", "messages": [], "message_count": 0}
 
@@ -364,6 +367,15 @@ def _load_prefill_messages_script(config_data: dict) -> dict:
     if proc.returncode != 0:
         err = _redact_prefill_status_text(proc.stderr or proc.stdout or f"prefill script exited {proc.returncode}")
         return {"status": "error", "source": "script", "label": label, "messages": [], "message_count": 0, "error": err}
+    if len(proc.stdout.encode("utf-8")) > _PREFILL_SCRIPT_OUTPUT_LIMIT:
+        return {
+            "status": "error",
+            "source": "script",
+            "label": label,
+            "messages": [],
+            "message_count": 0,
+            "error": f"prefill script output exceeded {_PREFILL_SCRIPT_OUTPUT_LIMIT} bytes",
+        }
     messages = _messages_from_prefill_script_output(proc.stdout)
     return {"status": "loaded", "source": "script", "label": label, "messages": messages, "message_count": len(messages)}
 

@@ -113,6 +113,39 @@ def test_webui_prefill_script_takes_precedence_over_static_file(tmp_path):
     assert result["messages"] == [{"role": "system", "content": "dynamic"}]
 
 
+def test_webui_prefill_script_timeout_returns_redacted_error(tmp_path):
+    from api.streaming import _load_webui_prefill_context
+
+    script = tmp_path / "slow_recall.py"
+    script.write_text("import time\ntime.sleep(1)\nprint('too late')\n", encoding="utf-8")
+
+    result = _load_webui_prefill_context({
+        "webui_prefill_messages_script": [sys.executable, str(script)],
+        "webui_prefill_messages_script_timeout": 0.1,
+    })
+
+    assert result["status"] == "error"
+    assert result["source"] == "script"
+    assert result["messages"] == []
+    assert result["message_count"] == 0
+    assert result["error"] == "prefill script timed out"
+
+
+def test_webui_prefill_script_rejects_oversized_stdout(tmp_path):
+    from api.streaming import _load_webui_prefill_context
+
+    script = tmp_path / "large_recall.py"
+    script.write_text("print('x' * 262145)\n", encoding="utf-8")
+
+    result = _load_webui_prefill_context({"webui_prefill_messages_script": [sys.executable, str(script)]})
+
+    assert result["status"] == "error"
+    assert result["source"] == "script"
+    assert result["messages"] == []
+    assert result["message_count"] == 0
+    assert "output exceeded" in result["error"]
+
+
 def test_public_prefill_status_strips_message_bodies():
     from api.streaming import _public_prefill_context_status
 
