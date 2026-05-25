@@ -641,15 +641,10 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     // A same-stream transport can be reused unless the browser has already
     // marked it closed; closed streams must still fall through to reopen.
     (typeof EventSource==='undefined'||existingLive.source.readyState!==EventSource.CLOSED)
-          ){
-            window._compressionUi={...window._compressionUi, sessionId:d.session.session_id};
-          }
-          // Compression is complete — clear the transient UI state so
-          // renderMessages() uses the session's anchor metadata (reference card)
-          // instead of the live compression card, allowing compaction marker
-          // messages to be properly handled.
-          window._compressionUi = null;
-          // Find the last assistant message
+  ){
+    return;
+  }
+  closeOtherLiveStreams(activeSid);
   closeLiveStream(activeSid);
 
   let assistantText='';
@@ -1772,11 +1767,6 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
           ){
             window._compressionUi={...window._compressionUi, sessionId:d.session.session_id};
           }
-          // Compression is complete — clear the transient UI state so
-          // renderMessages() uses the session's anchor metadata (reference card)
-          // instead of the live compression card, allowing compaction marker
-          // messages to be properly handled.
-          window._compressionUi = null;
           // Find the last assistant message once for both reasoning persistence and timestamp
           const lastAsst=[...S.messages].reverse().find(m=>m.role==='assistant');
           // Persist reasoning trace so thinking card survives page reload
@@ -1857,13 +1847,6 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
           if(_markerOnlyAssistantError&&typeof showToast==='function') showToast('No response received after context compression. Please retry.',5000,'error');
           if(isSessionViewed) _markSessionViewed(completedSid, completedSession.message_count ?? S.messages.length);
           syncTopbar();renderMessages({preserveScroll:true});
-          // Clear stale auto-compression UI state once the turn is fully
-          // committed, so subsequent renderMessages() calls do not project
-          // a ghost compression card or skip compaction marker messages.
-          if(window._compressionUi&&window._compressionUi.automatic){
-            window._compressionUi=null;
-            if(typeof _setCompressionSessionLock==='function') _setCompressionSessionLock(null);
-          }
           if(shouldFollowOnDone&&typeof scrollToBottom==='function') scrollToBottom();
           loadDir('.');
           // TTS auto-read: speak the last assistant response if enabled (#499)
@@ -1949,14 +1932,13 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     source.addEventListener('compressing',e=>{
       // Context auto-compression is starting. Surface the same calm running
       // compression card as manual /compress while the summarizer LLM call runs.
-      if(!S.session) return;
-      const currentSid=S.session.session_id;
+      if(!S.session||S.session.session_id!==activeSid) return;
       let d={};
       try{ d=JSON.parse(e.data||'{}')||{}; }catch(_){ d={}; }
-      if(d.session_id&&d.session_id!==currentSid) return;
+      if(d.session_id&&d.session_id!==activeSid) return;
       if(typeof setCompressionUi==='function'){
         const state={
-          sessionId:currentSid,
+          sessionId:activeSid,
           phase:'running',
           automatic:true,
           message:d.message||'Auto-compressing context...',
