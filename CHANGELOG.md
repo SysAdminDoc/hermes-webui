@@ -6,6 +6,7 @@
 ### Fixed
 
 - Sidebar compression lineage collapse now prefers the current continuation tip over a preserved parent snapshot when both rows share the same backend segment count. This keeps reloads after context compression from reopening the older parent transcript and making the active conversation appear to disappear.
+- Reloading a stale `/session/<parent>` compression URL now resolves to the visible continuation tip from the sidebar payload instead of reopening the archived parent snapshot.
 
 ## [v0.51.134] — 2026-05-25 — Release DF (stage-batch16 — single-PR Windows path defaults)
 
