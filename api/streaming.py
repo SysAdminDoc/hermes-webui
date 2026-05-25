@@ -2557,6 +2557,18 @@ def _drop_checkpointed_current_user_from_context(messages, msg_text):
     return history
 
 
+def _save_streaming_checkpoint(session):
+    """Persist a streaming checkpoint under the session's profile context."""
+    from api import profiles as profiles_api
+
+    with profiles_api.profile_env_for_background_worker(
+        session,
+        "streaming checkpoint",
+        logger_override=logger,
+    ):
+        session.save(skip_index=True)
+
+
 def _normalize_fresh_chat_text(text):
     text = _strip_workspace_prefix(str(text or ''), include_legacy=True)
     text = re.sub(r"\s+", " ", text).strip().lower()
@@ -2851,6 +2863,7 @@ _TOOL_RESULT_SNIPPET_MAX = 4000
 
 
 _LIVE_TOOL_PROMPT_DELTA_MAX = 12_000
+_LIVE_TOOL_PROMPT_TURN_MAX = 24_000
 
 
 def _bounded_live_tool_prompt_delta(messages, *, cap: int = _LIVE_TOOL_PROMPT_DELTA_MAX) -> int:
@@ -2878,19 +2891,32 @@ def live_usage_prompt_estimate_after_tool_delta(
     exact_prompt_tokens: int = 0,
     messages=None,
     cap: int = _LIVE_TOOL_PROMPT_DELTA_MAX,
+    turn_tool_prompt_tokens: int = 0,
+    turn_cap: int = _LIVE_TOOL_PROMPT_TURN_MAX,
 ) -> dict:
     """Compute the live `last_prompt_tokens` estimate after a tool update.
 
     Exact compressor/provider prompt accounting wins. When no newer exact prompt
-    is available, add only a bounded live tool delta to the persisted base.
+    is available, add only bounded live tool deltas to the persisted base.
     """
     base = int(base_prompt_tokens or 0)
     exact = int(exact_prompt_tokens or 0)
     if exact and exact != base:
-        return {'last_prompt_tokens': exact, 'estimated': False}
+        return {
+            'last_prompt_tokens': exact,
+            'estimated': False,
+            'turn_tool_prompt_tokens': 0,
+        }
+    prior_turn_delta = max(0, int(turn_tool_prompt_tokens or 0))
+    turn_ceiling = max(0, int(turn_cap or 0))
+    next_turn_delta = min(
+        prior_turn_delta + _bounded_live_tool_prompt_delta(messages, cap=cap),
+        turn_ceiling,
+    )
     return {
-        'last_prompt_tokens': base + _bounded_live_tool_prompt_delta(messages, cap=cap),
+        'last_prompt_tokens': base + next_turn_delta,
         'estimated': True,
+        'turn_tool_prompt_tokens': next_turn_delta,
     }
 
 
@@ -3396,6 +3422,7 @@ def _run_agent_streaming(
     agent = None
     _live_prompt_estimate_tokens = [0]
     _live_prompt_exact_tokens = [0]
+    _live_prompt_estimate_tool_delta_tokens = [0]
     _live_prompt_estimate_seen_ids = set()
 
     def _seed_live_prompt_estimate() -> int:
@@ -3425,10 +3452,15 @@ def _run_agent_streaming(
         """Increment a rough next-prompt estimate from live tool activity."""
         if not messages:
             return _live_prompt_estimate_tokens[0]
-        _delta = _bounded_live_tool_prompt_delta(messages)
-        if _delta > 0:
-            _seed_live_prompt_estimate()
-            _live_prompt_estimate_tokens[0] += _delta
+        _seed_live_prompt_estimate()
+        _usage = live_usage_prompt_estimate_after_tool_delta(
+            base_prompt_tokens=_live_prompt_exact_tokens[0],
+            exact_prompt_tokens=_live_prompt_exact_tokens[0],
+            messages=messages,
+            turn_tool_prompt_tokens=_live_prompt_estimate_tool_delta_tokens[0],
+        )
+        _live_prompt_estimate_tokens[0] = _usage['last_prompt_tokens']
+        _live_prompt_estimate_tool_delta_tokens[0] = _usage['turn_tool_prompt_tokens']
         return _live_prompt_estimate_tokens[0]
 
     def _live_usage_snapshot():
@@ -3490,6 +3522,7 @@ def _run_agent_streaming(
         if _real_prompt_tokens and _real_prompt_tokens != _live_prompt_exact_tokens[0]:
             _live_prompt_exact_tokens[0] = _real_prompt_tokens
             _live_prompt_estimate_tokens[0] = _real_prompt_tokens
+            _live_prompt_estimate_tool_delta_tokens[0] = 0
         elif _live_prompt_estimate_tokens[0] > _real_prompt_tokens:
             _usage['last_prompt_tokens'] = _live_prompt_estimate_tokens[0]
 
@@ -3804,6 +3837,18 @@ def _run_agent_streaming(
                 stats.setdefault('estimated', False)
                 put('metering', stats)
 
+            def _compact_for_echo_compare(value: str) -> str:
+                return re.sub(r'\s+', ' ', str(value or '')).strip()
+
+            def _is_visible_output_echo(text: str) -> bool:
+                candidate = _compact_for_echo_compare(text)
+                if not candidate:
+                    return False
+                visible_tail = _compact_for_echo_compare(
+                    STREAM_PARTIAL_TEXT.get(stream_id, '')[-max(len(str(text)) * 2, 512):]
+                )
+                return bool(visible_tail and visible_tail.endswith(candidate))
+
             def on_token(text):
                 nonlocal _token_sent
                 if text is None:
@@ -3824,11 +3869,18 @@ def _run_agent_streaming(
                 nonlocal _reasoning_text
                 if text is None:
                     return
-                _reasoning_text += str(text)
+                reasoning_delta = str(text)
+                # Some runtimes mirror user-visible progress text through the
+                # reasoning channel after it already streamed as normal assistant
+                # output. Treat that as an echo, otherwise the UI renders the
+                # same sentence again inside a Thinking card.
+                if _is_visible_output_echo(reasoning_delta):
+                    return
+                _reasoning_text += reasoning_delta
                 # Mirror to shared dict so cancel_stream() can persist it (#1361 §A)
                 if stream_id in STREAM_REASONING_TEXT:
-                    STREAM_REASONING_TEXT[stream_id] += str(text)
-                put('reasoning', {'text': str(text)})
+                    STREAM_REASONING_TEXT[stream_id] += reasoning_delta
+                put('reasoning', {'text': reasoning_delta})
                 # Track reasoning deltas in the meter so live TPS reflects all AI output.
                 _metering_reasoning_deltas[0] += 1
                 meter().record_reasoning(stream_id, _metering_reasoning_deltas[0])
@@ -3840,9 +3892,10 @@ def _run_agent_streaming(
                 visible = str(text).strip()
                 if not visible:
                     return
+                already_streamed = bool(cb_kwargs.get('already_streamed', False)) or _is_visible_output_echo(visible)
                 put('interim_assistant', {
                     'text': visible,
-                    'already_streamed': bool(cb_kwargs.get('already_streamed', False)),
+                    'already_streamed': already_streamed,
                 })
 
             # Pre-initialise the activity counter here so on_tool (which
@@ -3912,11 +3965,17 @@ def _run_agent_streaming(
                 if event_type in ('reasoning.available', '_thinking'):
                     reason_text = preview if event_type == 'reasoning.available' else name
                     if reason_text:
-                        _reasoning_text += str(reason_text)
+                        reason_delta = str(reason_text)
+                        # Older tool-progress paths can mirror the same visible
+                        # progress text already emitted through stream_delta_callback.
+                        # Suppress those echoes like the dedicated reasoning callback.
+                        if _is_visible_output_echo(reason_delta):
+                            return
+                        _reasoning_text += reason_delta
                         # Mirror to shared dict so cancel_stream() can persist it (#1361 §A)
                         if stream_id in STREAM_REASONING_TEXT:
-                            STREAM_REASONING_TEXT[stream_id] += str(reason_text)
-                        put('reasoning', {'text': str(reason_text)})
+                            STREAM_REASONING_TEXT[stream_id] += reason_delta
+                        put('reasoning', {'text': reason_delta})
                         _metering_reasoning_deltas[0] += 1
                         meter().record_reasoning(stream_id, _metering_reasoning_deltas[0])
                         _emit_metering()
@@ -4552,7 +4611,7 @@ def _run_agent_streaming(
                         cur = _checkpoint_activity[0]
                         if cur > last_saved_activity:
                             with _agent_lock:
-                                s.save(skip_index=True)
+                                _save_streaming_checkpoint(s)
                             last_saved_activity = cur
                     except Exception as e:
                         logger.debug("Periodic checkpoint save failed: %s", e)
