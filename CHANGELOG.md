@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Streaming checkpoint saves now run under the session's profile environment, so periodic background checkpoints no longer risk falling back to the process-global profile when a WebUI tab is using a non-default profile.
+
 ## [v0.51.134] — 2026-05-25 — Release DF (stage-batch16 — single-PR Windows path defaults)
 
 ### Fixed
