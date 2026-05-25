@@ -2851,6 +2851,7 @@ _TOOL_RESULT_SNIPPET_MAX = 4000
 
 
 _LIVE_TOOL_PROMPT_DELTA_MAX = 12_000
+_LIVE_TOOL_PROMPT_TURN_MAX = 24_000
 
 
 def _bounded_live_tool_prompt_delta(messages, *, cap: int = _LIVE_TOOL_PROMPT_DELTA_MAX) -> int:
@@ -2878,19 +2879,32 @@ def live_usage_prompt_estimate_after_tool_delta(
     exact_prompt_tokens: int = 0,
     messages=None,
     cap: int = _LIVE_TOOL_PROMPT_DELTA_MAX,
+    turn_tool_prompt_tokens: int = 0,
+    turn_cap: int = _LIVE_TOOL_PROMPT_TURN_MAX,
 ) -> dict:
     """Compute the live `last_prompt_tokens` estimate after a tool update.
 
     Exact compressor/provider prompt accounting wins. When no newer exact prompt
-    is available, add only a bounded live tool delta to the persisted base.
+    is available, add only bounded live tool deltas to the persisted base.
     """
     base = int(base_prompt_tokens or 0)
     exact = int(exact_prompt_tokens or 0)
     if exact and exact != base:
-        return {'last_prompt_tokens': exact, 'estimated': False}
+        return {
+            'last_prompt_tokens': exact,
+            'estimated': False,
+            'turn_tool_prompt_tokens': 0,
+        }
+    prior_turn_delta = max(0, int(turn_tool_prompt_tokens or 0))
+    turn_ceiling = max(0, int(turn_cap or 0))
+    next_turn_delta = min(
+        prior_turn_delta + _bounded_live_tool_prompt_delta(messages, cap=cap),
+        turn_ceiling,
+    )
     return {
-        'last_prompt_tokens': base + _bounded_live_tool_prompt_delta(messages, cap=cap),
+        'last_prompt_tokens': base + next_turn_delta,
         'estimated': True,
+        'turn_tool_prompt_tokens': next_turn_delta,
     }
 
 
@@ -3396,6 +3410,7 @@ def _run_agent_streaming(
     agent = None
     _live_prompt_estimate_tokens = [0]
     _live_prompt_exact_tokens = [0]
+    _live_prompt_estimate_tool_delta_tokens = [0]
     _live_prompt_estimate_seen_ids = set()
 
     def _seed_live_prompt_estimate() -> int:
@@ -3425,10 +3440,15 @@ def _run_agent_streaming(
         """Increment a rough next-prompt estimate from live tool activity."""
         if not messages:
             return _live_prompt_estimate_tokens[0]
-        _delta = _bounded_live_tool_prompt_delta(messages)
-        if _delta > 0:
-            _seed_live_prompt_estimate()
-            _live_prompt_estimate_tokens[0] += _delta
+        _seed_live_prompt_estimate()
+        _usage = live_usage_prompt_estimate_after_tool_delta(
+            base_prompt_tokens=_live_prompt_exact_tokens[0],
+            exact_prompt_tokens=_live_prompt_exact_tokens[0],
+            messages=messages,
+            turn_tool_prompt_tokens=_live_prompt_estimate_tool_delta_tokens[0],
+        )
+        _live_prompt_estimate_tokens[0] = _usage['last_prompt_tokens']
+        _live_prompt_estimate_tool_delta_tokens[0] = _usage['turn_tool_prompt_tokens']
         return _live_prompt_estimate_tokens[0]
 
     def _live_usage_snapshot():
@@ -3490,6 +3510,7 @@ def _run_agent_streaming(
         if _real_prompt_tokens and _real_prompt_tokens != _live_prompt_exact_tokens[0]:
             _live_prompt_exact_tokens[0] = _real_prompt_tokens
             _live_prompt_estimate_tokens[0] = _real_prompt_tokens
+            _live_prompt_estimate_tool_delta_tokens[0] = 0
         elif _live_prompt_estimate_tokens[0] > _real_prompt_tokens:
             _usage['last_prompt_tokens'] = _live_prompt_estimate_tokens[0]
 
