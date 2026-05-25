@@ -51,7 +51,7 @@ them manually from the Tasks panel. In Docker, scheduled jobs require the Hermes
 to tick while you are away. If System Settings shows `Gateway not configured`,
 use `docker-compose.two-container.yml`,
 `docker-compose.three-container.yml`, or run `hermes gateway` separately before
-relying on offline scheduled runs.
+relying on offline scheduled runs. See [Scheduled jobs require a gateway daemon](#scheduled-jobs-require-a-gateway-daemon) below for the full background and verification steps.
 
 For troubleshooting, reinstall, or onboarding reproduction trials, do not mount
 your real `~/.hermes` unless you intentionally want to test real state. Use an
@@ -59,6 +59,29 @@ isolated Hermes home and follow
 [`docs/onboarding-agent-checklist.md`](onboarding-agent-checklist.md) instead.
 
 ## What goes wrong (and how to fix it)
+
+### Scheduled jobs require a gateway daemon
+
+**Symptom**: Cron jobs created in the Tasks panel never fire. System Settings shows the orange "Gateway not configured" pill, and the Tasks panel shows the same banner above the job list.
+
+**Cause**: Scheduled cron ticks are not driven by the WebUI itself. The gateway daemon ticks the scheduler every 60 seconds; without one running, scheduled jobs sit idle. "Run now" / "Trigger" buttons still work because the WebUI handles those in-process.
+
+**Fix**: Run a gateway container alongside the WebUI. The two-container compose file is the recommended path:
+
+```bash
+cp .env.docker.example .env
+docker compose -f docker-compose.two-container.yml up -d
+```
+
+The three-container layout adds the dashboard but is otherwise the same shape. If you must stay single-container, you can run `hermes gateway` inside the container as a long-lived background process, but the compose split is sturdier.
+
+**Verify**: Once the gateway is up, the System Settings pill should turn green and the Tasks banner disappear. From inside the gateway container:
+
+```bash
+docker exec -it <gateway-container> hermes gateway status
+```
+
+Refs #2785.
 
 ### 1. "Permission denied" at startup
 
