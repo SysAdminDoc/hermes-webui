@@ -13,6 +13,7 @@
 - Sidebar compression lineage collapse now prefers the current continuation tip over a preserved parent snapshot when both rows share the same backend segment count. This keeps reloads after context compression from reopening the older parent transcript and making the active conversation appear to disappear.
 - Reloading a stale `/session/<parent>` compression URL now resolves to the visible continuation tip from the sidebar payload instead of reopening the archived parent snapshot.
 - Undo, retry, and explicit session truncation now persist a sidecar truncation watermark, preventing older `state.db` rows from reappearing after the WebUI transcript was intentionally shortened.
+- Chat uploads with the same filename in one session now keep distinct attachment files instead of overwriting the earlier upload.
 
 ## [v0.51.136] — 2026-05-25 — Release DH (stage-batch18 — 5-PR streaming + session index batch)
 
