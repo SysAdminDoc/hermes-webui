@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Chat markdown links using `workspace://path/to/file` now open the target in the workspace preview pane instead of navigating away from the WebUI.
+
 ## [v0.51.137] — 2026-05-25 — Release DI (stage-batch19 — 6-PR medium-risk batch)
 
 ### Added
