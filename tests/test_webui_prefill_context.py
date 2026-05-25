@@ -57,7 +57,8 @@ def test_webui_prefill_script_loads_json_messages(tmp_path):
     script = tmp_path / "recall.py"
     script.write_text(
         "import json\n"
-        "print(json.dumps([{'role': 'system', 'content': 'Joplin recall'}, {'role': 'tool', 'content': 'drop me'}]))\n",
+        "content = 'Joplin has durable context; use notes/search tools for details.'\n"
+        "print(json.dumps([{'role': 'system', 'content': content}, {'role': 'tool', 'content': 'drop me'}]))\n",
         encoding="utf-8",
     )
 
@@ -66,7 +67,7 @@ def test_webui_prefill_script_loads_json_messages(tmp_path):
     assert result["status"] == "loaded"
     assert result["source"] == "script"
     assert result["label"] == Path(sys.executable).name
-    assert result["messages"] == [{"role": "system", "content": "Joplin recall"}]
+    assert result["messages"] == [{"role": "system", "content": "Joplin has durable context; use notes/search tools for details."}]
 
 
 def test_webui_prefill_script_wraps_plain_text_for_any_notes_source(tmp_path):

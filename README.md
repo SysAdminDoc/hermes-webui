@@ -124,10 +124,15 @@ For self-hosted VM or homelab installs, `ctl.sh` wraps the common daemon lifecyc
 ### Optional session recall prefill
 
 WebUI can attach ephemeral prefill messages to new browser-originated
-agent turns. This is useful when a deployment already has a local recall script
-for Joplin, Obsidian, Notion, llm-wiki, or another third-party notes source and
-wants the browser chat to receive the same high-level context as other Hermes
-surfaces.
+agent turns. This is useful when a deployment already has a local recall or
+router script for Joplin, Obsidian, Notion, llm-wiki, or another third-party
+notes source and wants browser chat to know where durable context lives.
+
+Prefer a compact router-style prefill (for example, "Joplin has the durable
+project context; use the available notes/search tools before answering
+detail-dependent questions") instead of dumping the full note corpus into every
+new browser session. The prefill should point the agent toward retrieval; the
+notes/search tools should provide the specific facts on demand.
 
 Static JSON remains supported through `prefill_messages_file` or
 `HERMES_PREFILL_MESSAGES_FILE`. For dynamic recall, opt in explicitly with a
