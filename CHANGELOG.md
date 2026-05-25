@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- WebUI can now opt into a `webui_prefill_messages_script` / `HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT` hook for dynamic browser-turn prefill context from local notes or recall systems. The script output is normalized to ephemeral prefill messages and browser status still hides message bodies while redacting script errors.
+
 ## [v0.51.131] — 2026-05-24 — Release DC (stage-batch13 — 6-PR notes-drawer + context-parity + PWA-swipe + locale polish)
 
 ### Added

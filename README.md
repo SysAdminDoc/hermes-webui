@@ -121,6 +121,38 @@ For self-hosted VM or homelab installs, `ctl.sh` wraps the common daemon lifecyc
 
 `ctl.sh start` runs the bootstrap in foreground/no-browser mode behind the daemon wrapper, writes logs to `~/.hermes/webui.log`, and respects `.env` plus inline overrides such as `HERMES_WEBUI_HOST=0.0.0.0 ./ctl.sh start`.
 
+### Optional session recall prefill
+
+WebUI can attach ephemeral prefill messages to new browser-originated
+agent turns. This is useful when a deployment already has a local recall script
+for Joplin, Obsidian, Notion, llm-wiki, or another third-party notes source and
+wants the browser chat to receive the same high-level context as other Hermes
+surfaces.
+
+Static JSON remains supported through `prefill_messages_file` or
+`HERMES_PREFILL_MESSAGES_FILE`. For dynamic recall, opt in explicitly with a
+WebUI-specific script hook:
+
+```yaml
+webui_prefill_messages_script:
+  - python3
+  - /path/to/notes_recall.py
+webui_prefill_messages_script_timeout: 5
+```
+
+or:
+
+```bash
+HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT="python3 /path/to/notes_recall.py" \
+HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT_TIMEOUT=5 \
+./ctl.sh restart
+```
+
+The script may print either an OpenAI-style JSON message list, a JSON object with
+a `messages` list, or plain text; plain text is wrapped as one `system` prefill
+message. The browser only receives a compact status event (`source`, `label`,
+message count, and redacted errors), never the prefill message bodies.
+
 The bootstrap will:
 
 1. Detect Hermes Agent and, if missing, attempt the official installer (`curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash`).
