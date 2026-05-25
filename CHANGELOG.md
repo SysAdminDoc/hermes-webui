@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Added
+- Added a proposed canonical session resolution RFC covering URL routes, query parameters, localStorage, sidebar rows, and compression-lineage IDs so future session-routing fixes have one review contract.
+
 ## [v0.51.134] — 2026-05-25 — Release DF (stage-batch16 — single-PR Windows path defaults)
 
 ### Fixed
