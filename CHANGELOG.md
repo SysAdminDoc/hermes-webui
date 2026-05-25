@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Trim session-level tool call payloads to the returned message window for paginated `/api/session` loads, so long tool-heavy sessions do not send historical tool call summaries during ordinary session switching.
+
 ## [v0.51.136] — 2026-05-25 — Release DH (stage-batch18 — 5-PR streaming + session index batch)
 
 ### Fixed
