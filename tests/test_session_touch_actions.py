@@ -185,6 +185,7 @@ def test_session_swipe_actions_use_circular_icon_badges():
     assert "min-width:58px" in label
     assert "width:100%" in label
     assert "text-align:center" in label
+    assert "color:var(--muted)" in label
     assert "font-size:10px" in label
     assert "transform:scale(var(--session-swipe-label-scale,1))" in label
     assert "transform-origin:top center" in label
