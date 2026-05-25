@@ -6,6 +6,7 @@
 ### Fixed
 
 - Auxiliary model settings now reject unknown task slots instead of allowing arbitrary keys under `config.yaml`'s `auxiliary` block. Valid slots and the `__reset__` sentinel continue to work.
+- Update Now no longer reports success or enters the restart wait flow when no WebUI or Agent update target is selected.
 
 ## [v0.51.132] — 2026-05-24 — Release DD (stage-batch14 — 4-PR replayed-context + interrupted-response + shutdown affordance + passkey opt-in)
 
