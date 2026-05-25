@@ -1577,13 +1577,16 @@ function _makeSessionSwipeAffordance(side, icon, label){
   const affordance=document.createElement('div');
   affordance.className='session-swipe-affordance session-swipe-affordance-'+side;
   affordance.setAttribute('aria-hidden','true');
+  const stack=document.createElement('span');
+  stack.className='session-swipe-action-stack';
   const badge=document.createElement('span');
   badge.className='session-swipe-badge';
   badge.innerHTML=li(icon,18);
   const text=document.createElement('span');
   text.className='session-swipe-label';
   text.textContent=label;
-  affordance.append(badge,text);
+  stack.append(badge,text);
+  affordance.append(stack);
   return affordance;
 }
 const SESSION_VIRTUAL_ROW_HEIGHT = 52;
@@ -3864,10 +3867,17 @@ function renderSessionListFromCache(){
       const progress=Math.min(1,Math.abs(revealedOffset)/72);
       const reveal=Math.abs(offset);
       const iconScale=Math.min(1,Math.max(.01,progress*1.12));
-      const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15);
+      const badgeSize=34*iconScale;
+      const iconSize=18*iconScale;
+      const labelScale=Math.min(1,Math.max(.01,progress*1.12));
+      const actionInset=0;
+      const tileGap=6;
+      const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15,Math.max(0,reveal-badgeSize-actionInset-tileGap));
       el.style.setProperty('--session-swipe-offset',offset+'px');
       el.style.setProperty('--session-swipe-reveal',reveal+'px');
-      el.style.setProperty('--session-swipe-icon-scale',iconScale);
+      el.style.setProperty('--session-swipe-badge-size',badgeSize+'px');
+      el.style.setProperty('--session-swipe-icon-size',iconSize+'px');
+      el.style.setProperty('--session-swipe-label-scale',labelScale);
       el.style.setProperty('--session-swipe-badge-stretch',badgeStretch+'px');
       el.style.setProperty('--session-swipe-progress',Math.pow(progress,1.5));
       el.classList.toggle('swiping-right',offset>0);
@@ -3876,7 +3886,9 @@ function renderSessionListFromCache(){
     const _clearSessionSwipePaint=()=>{
       el.style.removeProperty('--session-swipe-offset');
       el.style.removeProperty('--session-swipe-reveal');
-      el.style.removeProperty('--session-swipe-icon-scale');
+      el.style.removeProperty('--session-swipe-badge-size');
+      el.style.removeProperty('--session-swipe-icon-size');
+      el.style.removeProperty('--session-swipe-label-scale');
       el.style.removeProperty('--session-swipe-badge-stretch');
       el.style.removeProperty('--session-swipe-progress');
       el.style.removeProperty('height');

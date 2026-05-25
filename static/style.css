@@ -733,7 +733,7 @@
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:3px;
+    gap:0;
     width:var(--session-swipe-reveal,0px);
     padding:0;
     box-sizing:border-box;
@@ -748,6 +748,7 @@
     color:#fff;
     background:transparent;
     border-radius:0;
+    align-items:flex-start;
     transform-origin:left center;
     --session-swipe-action-color:var(--warning);
   }
@@ -756,6 +757,7 @@
     color:#fff;
     background:transparent;
     border-radius:0;
+    align-items:flex-end;
     transform-origin:right center;
     --session-swipe-action-color:var(--error);
   }
@@ -764,9 +766,18 @@
     opacity:var(--session-swipe-progress,0);
   }
   .session-text,.session-state-indicator,.session-actions{z-index:1;}
+  .session-swipe-action-stack{
+    width:calc(var(--session-swipe-badge-size,34px) + var(--session-swipe-badge-stretch,0px));
+    max-width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    flex:0 0 auto;
+  }
   .session-swipe-badge{
-    width:calc(34px + var(--session-swipe-badge-stretch,0px));
-    height:34px;
+    width:calc(var(--session-swipe-badge-size,34px) + var(--session-swipe-badge-stretch,0px));
+    height:var(--session-swipe-badge-size,34px);
     border-radius:999px;
     background:var(--session-swipe-action-color);
     display:flex;
@@ -774,19 +785,29 @@
     justify-content:center;
     color:#fff;
     flex:0 0 auto;
-    transform:scale(var(--session-swipe-icon-scale,1));
-    transform-origin:center;
+    overflow:hidden;
   }
-  .session-swipe-badge svg{display:block;stroke-width:2.2;}
+  .session-swipe-badge svg{
+    display:block;
+    width:var(--session-swipe-icon-size,18px);
+    height:var(--session-swipe-icon-size,18px);
+    stroke-width:2.2;
+  }
   .session-swipe-label{
-    max-width:58px;
+    min-width:58px;
+    width:100%;
     overflow:hidden;
     text-overflow:ellipsis;
     white-space:nowrap;
+    text-align:center;
     font-size:10px;
     font-weight:600;
     line-height:1;
+    transform:scale(var(--session-swipe-label-scale,1));
+    transform-origin:top center;
   }
+  .session-swipe-affordance-right .session-swipe-action-stack{margin-left:0;}
+  .session-swipe-affordance-left .session-swipe-action-stack{margin-right:0;}
   .session-item.dragging{transition:background .15s,color .15s,box-shadow .15s ease;will-change:transform;}
   .session-item.session-reflowing{transition:background .15s,color .15s,transform .36s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}
   .session-item.swipe-committed,

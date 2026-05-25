@@ -124,16 +124,27 @@ def test_session_swipe_paint_uses_transform_only_exit():
     assert "--session-swipe-badge-stretch" in paint
     assert "const reveal=Math.abs(offset);" in paint
     assert "const iconScale=Math.min(1,Math.max(.01,progress*1.12));" in paint
-    assert "const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15);" in paint
+    assert "const badgeSize=34*iconScale;" in paint
+    assert "const iconSize=18*iconScale;" in paint
+    assert "const labelScale=Math.min(1,Math.max(.01,progress*1.12));" in paint
+    assert "const actionInset=0;" in paint
+    assert "const tileGap=6;" in paint
+    assert "const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15,Math.max(0,reveal-badgeSize-actionInset-tileGap));" in paint
+    assert "el.style.setProperty('--session-swipe-badge-size',badgeSize+'px');" in paint
+    assert "el.style.setProperty('--session-swipe-icon-size',iconSize+'px');" in paint
+    assert "el.style.setProperty('--session-swipe-label-scale',labelScale);" in paint
     assert "window.innerWidth+'px'" in complete
     assert "el.style.height=rect.height+'px'" in complete
     assert "requestAnimationFrame(()=>el.classList.add('swipe-removing'))" in complete
     assert "requestAnimationFrame(()=>requestAnimationFrame(_clearSessionSwipePaint))" in SESSIONS_JS
     assert "el.classList.remove('swiping-right','swiping-left','swipe-committed','swipe-removing')" in clear
+    assert "el.style.removeProperty('--session-swipe-badge-size');" in clear
+    assert "el.style.removeProperty('--session-swipe-icon-size');" in clear
+    assert "el.style.removeProperty('--session-swipe-label-scale');" in clear
     assert "el.style.removeProperty('--session-swipe-badge-stretch');" in clear
     assert ".session-item.swipe-committed,\n  .session-item.swipe-removing{transition:" in STYLE_CSS
     assert "transform:translate3d(calc(-1 * var(--session-swipe-offset,0px)),0,0)" in STYLE_CSS
-    assert "transform:scale(var(--session-swipe-icon-scale,1))" in STYLE_CSS
+    assert "transform:scale(var(--session-swipe-icon-scale,1))" not in STYLE_CSS
     swipe_start = STYLE_CSS.find(".session-item.swipe-removing{")
     swipe_end = STYLE_CSS.find("}", swipe_start)
     assert swipe_start >= 0 and swipe_end > swipe_start
@@ -153,18 +164,32 @@ def test_session_swipe_actions_use_circular_icon_badges():
     badge = STYLE_CSS[badge_start:STYLE_CSS.find(".session-swipe-badge svg", badge_start)]
     assert "background:transparent" in right
     assert "background:transparent" in left
+    assert "align-items:flex-start" in right
+    assert "align-items:flex-end" in left
     assert "--session-swipe-action-color:var(--warning)" in right
     assert "--session-swipe-action-color:var(--error)" in left
-    assert "width:calc(34px + var(--session-swipe-badge-stretch,0px))" in badge
-    assert "height:34px" in badge
+    assert "width:calc(var(--session-swipe-badge-size,34px) + var(--session-swipe-badge-stretch,0px))" in badge
+    assert "height:var(--session-swipe-badge-size,34px)" in badge
     assert "border-radius:999px" in badge
     assert "background:var(--session-swipe-action-color)" in badge
+    assert "overflow:hidden" in badge
     assert ".session-item.archived .session-swipe-affordance-right{--session-swipe-action-color:var(--success);}" in STYLE_CSS
     assert "_makeSessionSwipeAffordance('right',s.archived?'undo':'archive',s.archived?'Restore':t('session_batch_archive'))" in SESSIONS_JS
+    assert "stack.className='session-swipe-action-stack'" in SESSIONS_JS
+    assert "stack.append(badge,text)" in SESSIONS_JS
+    stack = STYLE_CSS[STYLE_CSS.find(".session-swipe-action-stack{"):STYLE_CSS.find(".session-swipe-badge{")]
     label = STYLE_CSS[STYLE_CSS.find(".session-swipe-label{"):STYLE_CSS.find(".session-item.dragging")]
     assert "session-swipe-label" in SESSIONS_JS
-    assert "max-width:58px" in label
+    assert "width:calc(var(--session-swipe-badge-size,34px) + var(--session-swipe-badge-stretch,0px))" in stack
+    assert "align-items:center" in stack
+    assert "min-width:58px" in label
+    assert "width:100%" in label
+    assert "text-align:center" in label
     assert "font-size:10px" in label
+    assert "transform:scale(var(--session-swipe-label-scale,1))" in label
+    assert "transform-origin:top center" in label
+    assert ".session-swipe-affordance-right .session-swipe-action-stack{margin-left:0;}" in STYLE_CSS
+    assert ".session-swipe-affordance-left .session-swipe-action-stack{margin-right:0;}" in STYLE_CSS
 
 
 def test_session_removal_reflows_surviving_rows_smoothly():
