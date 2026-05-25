@@ -6440,9 +6440,11 @@ def handle_post(handler, parsed) -> bool:
         return True
 
     if parsed.path == "/api/auth/passkey/options":
-        from api.auth import is_auth_enabled
+        from api.auth import _passkey_feature_flag_enabled, is_auth_enabled
         from api.passkeys import PasskeyError, authentication_options
 
+        if not _passkey_feature_flag_enabled():
+            return j(handler, {"error": "Passkey support is disabled. Set HERMES_WEBUI_PASSKEY=1 or webui_passkey_enabled: true to enable."}, status=404)
         if not is_auth_enabled():
             return j(handler, {"error": "Auth not enabled"}, status=400)
         try:
@@ -6451,10 +6453,12 @@ def handle_post(handler, parsed) -> bool:
             return bad(handler, str(e), status=400)
 
     if parsed.path == "/api/auth/passkey/login":
-        from api.auth import create_session, is_auth_enabled, set_auth_cookie
+        from api.auth import _passkey_feature_flag_enabled, create_session, is_auth_enabled, set_auth_cookie
         from api.auth import _check_login_rate, _record_login_attempt
         from api.passkeys import PasskeyError, finish_login
 
+        if not _passkey_feature_flag_enabled():
+            return j(handler, {"error": "Passkey support is disabled."}, status=404)
         if not is_auth_enabled():
             return j(handler, {"error": "Auth not enabled"}, status=400)
         client_ip = handler.client_address[0]
@@ -6476,11 +6480,19 @@ def handle_post(handler, parsed) -> bool:
         return True
 
     if parsed.path == "/api/auth/passkey/register/options":
+        from api.auth import _passkey_feature_flag_enabled
         from api.passkeys import registration_options
+
+        if not _passkey_feature_flag_enabled():
+            return j(handler, {"error": "Passkey support is disabled."}, status=404)
         return j(handler, {"ok": True, "publicKey": registration_options(handler)})
 
     if parsed.path == "/api/auth/passkey/register":
+        from api.auth import _passkey_feature_flag_enabled
         from api.passkeys import PasskeyError, finish_registration, registered_credentials
+
+        if not _passkey_feature_flag_enabled():
+            return j(handler, {"error": "Passkey support is disabled."}, status=404)
         try:
             result = finish_registration(body, handler)
             result["credentials"] = registered_credentials()
@@ -6489,8 +6501,11 @@ def handle_post(handler, parsed) -> bool:
             return bad(handler, str(e), status=400)
 
     if parsed.path == "/api/auth/passkey/delete":
-        from api.auth import get_password_hash
+        from api.auth import _passkey_feature_flag_enabled, get_password_hash
         from api.passkeys import PasskeyError, delete_credential, registered_credentials
+
+        if not _passkey_feature_flag_enabled():
+            return j(handler, {"error": "Passkey support is disabled."}, status=404)
         try:
             credential_id = str(body.get("id") or "")
             creds = registered_credentials()
@@ -6501,7 +6516,11 @@ def handle_post(handler, parsed) -> bool:
             return bad(handler, str(e), status=404)
 
     if parsed.path == "/api/auth/passkeys":
+        from api.auth import _passkey_feature_flag_enabled
         from api.passkeys import registered_credentials
+
+        if not _passkey_feature_flag_enabled():
+            return j(handler, {"credentials": [], "disabled": True})
         return j(handler, {"credentials": registered_credentials()})
 
     if parsed.path == "/api/auth/logout":

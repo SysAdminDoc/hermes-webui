@@ -296,8 +296,42 @@ def is_password_auth_enabled() -> bool:
     return get_password_hash() is not None
 
 
+def _passkey_feature_flag_enabled() -> bool:
+    """Return True if the passkey/WebAuthn surface is enabled for this deployment.
+
+    Passkey support is opt-in default-off behind a feature flag so deployments
+    that don't want the WebAuthn surface (or whose RP-ID setup isn't ready for
+    non-localhost hosts) can disable it entirely with no UI surface, no
+    endpoints, no credential storage. To enable:
+
+      - Set ``HERMES_WEBUI_PASSKEY=1`` in the environment, OR
+      - Set ``webui_passkey_enabled: true`` in the per-profile config.yaml
+
+    With the flag off, ``are_passkeys_enabled()`` always returns False even if
+    credentials were registered in the past, and ``/login`` shows password-only.
+    """
+    env_value = os.getenv("HERMES_WEBUI_PASSKEY", "")
+    if env_value:
+        return env_value.strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        from api.config import get_config
+
+        cfg = get_config()
+        if isinstance(cfg, dict):
+            raw = cfg.get("webui_passkey_enabled")
+            if isinstance(raw, bool):
+                return raw
+            if isinstance(raw, str):
+                return raw.strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        pass
+    return False
+
+
 def are_passkeys_enabled() -> bool:
-    """True if at least one local passkey credential is registered."""
+    """True if the passkey feature flag is on AND at least one local passkey credential is registered."""
+    if not _passkey_feature_flag_enabled():
+        return False
     try:
         from api.passkeys import passkeys_available
 
