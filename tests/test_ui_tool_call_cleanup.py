@@ -331,6 +331,10 @@ class TestToolCallGroupingStatic:
         assert interim_match and "_flushPendingSegmentRender({force:true})" in interim_match.group(1), (
             "Visible interim assistant progress must be synchronously rendered before the segment reset."
         )
+        timer_fn = _function_body(UI_JS, "_updateActiveActivityElapsedTimer")
+        assert "data-live-activity-current" in timer_fn, (
+            "Elapsed timers should clear once an Activity group is no longer current."
+        )
         tool_start_segment = MESSAGES_JS.split("source.addEventListener('tool',e=>{", 1)[1].split("source.addEventListener('tool_complete'", 1)[0]
         assert "_resetAssistantSegment();" in tool_start_segment, (
             "Tool starts should reset the next assistant text segment without closing the current Activity burst."
