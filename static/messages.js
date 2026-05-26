@@ -1352,9 +1352,10 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     };
     step();
   }
-  function _flushPendingSegmentRender(){
-    if(!assistantBody||!_renderPending) return;
-    _cancelAnimationFramePendingStreamRender();
+  function _flushPendingSegmentRender(options={}){
+    const force=!!(options&&options.force);
+    if(!assistantBody||(!force&&!_renderPending)) return;
+    if(_renderPending) _cancelAnimationFramePendingStreamRender();
     const displayText=segmentStart===0
       ? _parseStreamState().displayText
       : _stripXmlToolCalls(assistantText.slice(segmentStart));
@@ -1512,8 +1513,9 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
         if(typeof updateThinking==='function') updateThinking(_liveThinkingText());
         else appendThinking(_liveThinkingText());
       }
-      _flushPendingSegmentRender();
       ensureAssistantRow(true);
+      _flushPendingSegmentRender({force:true});
+      if(typeof closeCurrentLiveActivityGroup==='function') closeCurrentLiveActivityGroup();
       _resetAssistantSegment();
       _scheduleRender();
     });
