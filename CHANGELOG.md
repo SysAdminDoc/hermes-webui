@@ -3,6 +3,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Vendored KaTeX CSS, JavaScript, and fonts locally so math rendering no longer triggers CSP font reports for `cdn.jsdelivr.net` font files.
+- Vendored `js-yaml` locally so YAML tree-view loading no longer triggers CSP script reports for `cdnjs.cloudflare.com`.
+
 ## [v0.51.137] — 2026-05-25 — Release DI (stage-batch19 — 6-PR medium-risk batch)
 
 ### Added
