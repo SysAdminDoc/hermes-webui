@@ -102,6 +102,26 @@ Evidence needed before claiming done:
 For small, obvious fixes, keep this short. The goal is to avoid routing mistakes,
 not to create process overhead.
 
+## Contract changes
+
+Changing contract documents, RFC guidance, or contract tests changes review
+expectations for future contributors. A PR that intentionally changes an
+existing contract should include a `Contract Change` section in its PR body with:
+
+- the previous contract,
+- the new contract,
+- the affected docs and tests,
+- the compatibility or migration reason.
+
+Contract tests and corresponding docs must move together. Tests that encode
+product semantics must not silently redefine the contract by asserting the
+opposite behavior without updating the public docs and naming the change in the
+PR body.
+
+Release batches should list included contract-affecting PRs explicitly so
+reviewers can distinguish ordinary green-CI fixes from changes that update the
+project's product or runtime guardrails.
+
 ## PR preparation checklist
 
 Before opening or updating a PR, verify `CONTRIBUTING.md` against the actual PR
@@ -118,6 +138,8 @@ Required checks:
 - UI/UX changes include before/after evidence and responsive-state coverage.
 - Runtime/streaming changes name the state layer or invariant being changed and
   list the regression or manual invariant check.
+- Contract-affecting PRs include `Contract Routing`; intentional contract
+  changes also include `Contract Change`.
 - Onboarding/setup validation used isolated `HERMES_HOME` and
   `HERMES_WEBUI_STATE_DIR`, unless the human operator explicitly requested real
   state.
