@@ -13,6 +13,11 @@
 - Removing a provider key now surfaces the server's specific CSRF rejection reason ("Session expired - reload the page", "Cross-origin mismatch - check reverse proxy headers", or the fallback "Cross-origin request rejected") when the underlying POST is rejected with 403, instead of swallowing all three into one generic toast. (Refs #2572)
 - Tool cards in the transcript now use a slightly stronger border and a 2px left edge so tool output stays visually distinct from final assistant prose without requiring hover. (#2867)
 - Tasks panel "Gateway not configured" banner now includes a direct link to the new `docs/docker.md#scheduled-jobs-and-the-gateway-daemon` section that walks through running the gateway container so scheduled cron jobs actually tick. (Refs #2785)
+- WebUI structured request logs now include `remote` (client IP) and an optional `forwarded_for` field when an `X-Forwarded-For` header is present, making failed-login and unauthorized-access logs usable by downstream security tooling like fail2ban behind a reverse proxy.
+
+### Internal
+
+- Test cleanup in `tests/test_issue1894_provider_overlap.py`: canonicalize the `opencode-go` base URL to `opencode.ai/zen/go/v1` (matching `hermes_cli/auth.py` and `api/config.py`), drop a vestigial `# noqa: N801`, and convert section banner comments to per-test docstrings.
 
 ## [v0.51.137] — 2026-05-25 — Release DI (stage-batch19 — 6-PR medium-risk batch)
 
