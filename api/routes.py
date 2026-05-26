@@ -2231,6 +2231,11 @@ def _metadata_only_message_summary(sid: str, profile: str | None = None) -> dict
         except (TypeError, ValueError):
             sidecar_last_message_at = 0.0
         if getattr(sidecar_session, "truncation_watermark", None) is not None:
+            # Intentional: once the user has truncated this sidecar, metadata
+            # polling must keep the sidecar as authoritative.  A full message
+            # load can still apply the watermark-aware merge, but the cheap
+            # metadata path should not treat later state.db rows as external
+            # growth and resurrect turns the user deliberately cut away.
             return {
                 "message_count": sidecar_count,
                 "last_message_at": sidecar_last_message_at,
