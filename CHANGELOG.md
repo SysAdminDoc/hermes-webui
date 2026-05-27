@@ -3,9 +3,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- New `GET /api/crons/delivery-options` endpoint surfaces the agent's full delivery-platform registry. The cron-create UI now reads delivery options dynamically (including telegram, discord, slack, feishu, wecom, signal, etc.) instead of a 4-option hardcoded select, and the deliver field is editable for existing jobs. (#2996)
+
 ### Fixed
 
-- WebUI streaming sessions created under a non-default profile now attach `session_search` to that profile's `state.db` instead of the server's default profile database. (#2965)
+- Browser chat fallback now merges `fallback_providers` with the legacy `fallback_model` in Hermes CLI/gateway order, so WebUI can continue to a later non-Codex fallback when the primary Codex provider path fails. Duplicate provider/model/base_url routes are de-duplicated. (#2993)
+- WebUI streaming sessions created under a non-default profile now attach `session_search` to that profile's `state.db` instead of the server's default profile database. (#2965, #2995)
+- `client_secret` deny-list entry in the models-cache auth.json fingerprint now carries an inline rationale comment, and the `_write_auth` test helper docstring matches its actual contract. Follow-up to #2964 review nits. (#2994)
 
 ## [v0.51.141] — 2026-05-26 — Release DM (stage-batch23 — 4-PR second hold-bucket pass)
 
