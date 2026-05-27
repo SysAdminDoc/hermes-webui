@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.139] — 2026-05-25 — Release DK (stage-batch21 — 5-PR tier-2 batch)
+
 ### Added
 
 - Image lightbox now supports prev/next navigation when multiple images are present in the same message. Click `‹` / `›` buttons or use `←` / `→` keyboard arrows to browse; an image counter (`1 / 5`) is shown at the bottom. (#2967)
