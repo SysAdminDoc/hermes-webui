@@ -2206,25 +2206,55 @@ def _message_summary(messages) -> dict:
 
 
 def _metadata_only_message_summary(sid: str, profile: str | None = None) -> dict:
-    """Return the reconciled message summary used by metadata-only session loads.
+    """Return the cheap message summary used by metadata-only session loads.
 
-    Threads ``profile=`` through to ``get_state_db_session_messages`` so
+    Threads ``profile=`` through to ``get_state_db_session_summary`` so
     background-thread reads land on the correct profile's state.db (per the
     cookie-bound profile selector — fixes the same TLS-vs-thread race the
     #2762 fix addressed for write paths).
+
+    This intentionally does not full-read or merge transcripts.  If state.db has
+    grown beyond the sidecar count, report that growth so active-session polling
+    can refresh.  If state.db only contains restamped replay rows at or below the
+    sidecar count, keep the sidecar metadata so polling does not loop forever on
+    a false "newer transcript" signal.
     """
-    sidecar_session = Session.load(sid)
-    sidecar_messages = []
+    sidecar_session = Session.load_metadata_only(sid)
+    sidecar_count = 0
+    sidecar_last_message_at = 0.0
     if sidecar_session:
-        sidecar_messages = getattr(sidecar_session, "messages", []) or []
-    state_db_messages = get_state_db_session_messages(sid, profile=profile)
-    return _message_summary(
-        merge_session_messages_append_only(
-            sidecar_messages,
-            state_db_messages,
-            truncation_watermark=getattr(sidecar_session, "truncation_watermark", None),
-        )
-    )
+        sidecar_count = _numeric_count(getattr(sidecar_session, "_metadata_message_count", None))
+        if sidecar_count <= 0:
+            sidecar_count = _numeric_count(sidecar_session.compact().get("message_count"))
+        try:
+            sidecar_last_message_at = float(getattr(sidecar_session, "updated_at", 0) or 0)
+        except (TypeError, ValueError):
+            sidecar_last_message_at = 0.0
+        if getattr(sidecar_session, "truncation_watermark", None) is not None:
+            # Intentional: once the user has truncated this sidecar, metadata
+            # polling must keep the sidecar as authoritative.  A full message
+            # load can still apply the watermark-aware merge, but the cheap
+            # metadata path should not treat later state.db rows as external
+            # growth and resurrect turns the user deliberately cut away.
+            return {
+                "message_count": sidecar_count,
+                "last_message_at": sidecar_last_message_at,
+            }
+    state_summary = get_state_db_session_summary(sid, profile=profile)
+    state_count = _numeric_count(state_summary.get("message_count"))
+    try:
+        state_last_message_at = float(state_summary.get("last_message_at") or 0)
+    except (TypeError, ValueError):
+        state_last_message_at = 0.0
+    if state_count > sidecar_count and state_last_message_at > sidecar_last_message_at:
+        return {
+            "message_count": state_count,
+            "last_message_at": state_last_message_at,
+        }
+    return {
+        "message_count": sidecar_count,
+        "last_message_at": sidecar_last_message_at,
+    }
 
 
 def _session_requires_cli_metadata_lookup(session) -> bool:
@@ -2457,8 +2487,10 @@ from api.models import (
     get_cli_sessions,
     get_cli_session_messages,
     get_state_db_session_messages,
+    get_state_db_session_summary,
     merge_session_messages_append_only,
     _session_message_merge_key,
+    prune_session_from_index,
     ensure_cron_project,
     is_cron_session,
 )
@@ -5306,7 +5338,7 @@ def handle_post(handler, parsed) -> bool:
             # here makes the active-session external-refresh poll force-reload the
             # current chat every few seconds while the user is typing, and that
             # delayed reload can restore an older draft over newer local input.
-            s.save(touch_updated_at=False)
+            s.save(touch_updated_at=False, skip_index=True)
         return j(handler, {"ok": True, "draft": s.composer_draft})
 
     if parsed.path == "/api/session/update":
@@ -5392,10 +5424,6 @@ def handle_post(handler, parsed) -> bool:
         # Delete from WebUI session store
         with LOCK:
             SESSIONS.pop(sid, None)
-        try:
-            SESSION_INDEX_FILE.unlink(missing_ok=True)
-        except Exception:
-            logger.debug("Failed to unlink session index")
         # Evict cached agent so turn count doesn't leak into a recycled session
         from api.config import _evict_session_agent
         _evict_session_agent(sid)
@@ -5409,6 +5437,10 @@ def handle_post(handler, parsed) -> bool:
             p.with_suffix('.json.bak').unlink(missing_ok=True)
         except Exception:
             logger.debug("Failed to unlink session file %s", p)
+        try:
+            prune_session_from_index(sid)
+        except Exception:
+            logger.debug("Failed to prune deleted session from index: %s", sid, exc_info=True)
         try:
             from api.upload import _session_attachment_dir
 
@@ -6787,6 +6819,51 @@ def _handle_session_export(handler, parsed):
     return True
 
 
+def _session_search_message_text(message):
+    content = message.get("content") if isinstance(message, dict) else ""
+    if isinstance(content, list):
+        return " ".join(
+            str(part.get("text", ""))
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        )
+    return str(content or "")
+
+
+def _session_search_preview(text, query, max_len=124):
+    normalized = re.sub(r"\s+", " ", str(text or "")).strip()
+    q = re.sub(r"\s+", " ", str(query or "")).strip()
+    if not normalized or not q:
+        return ""
+    idx = normalized.lower().find(q.lower())
+    if idx < 0:
+        return ""
+
+    max_len = max(32, int(max_len or 124))
+    if len(normalized) <= max_len:
+        return normalized
+
+    context = max(12, (max_len - len(q)) // 2)
+    start = max(0, idx - context)
+    end = min(len(normalized), idx + len(q) + context)
+    if start > 0:
+        while start < idx and normalized[start] != " ":
+            start += 1
+        if start >= idx:
+            start = max(0, idx - context)
+    if end < len(normalized):
+        while end > idx + len(q) and normalized[end - 1] != " ":
+            end -= 1
+        if end <= idx + len(q):
+            end = min(len(normalized), idx + len(q) + context)
+    excerpt = normalized[start:end].strip()
+    if start > 0:
+        excerpt = "..." + excerpt
+    if end < len(normalized):
+        excerpt = excerpt + "..."
+    return excerpt
+
+
 def _handle_sessions_search(handler, parsed):
     qs = parse_qs(parsed.query)
     q = qs.get("q", [""])[0].lower().strip()
@@ -6814,15 +6891,12 @@ def _handle_sessions_search(handler, parsed):
                 sess = get_session(s["session_id"])
                 msgs = sess.messages[:depth] if depth else sess.messages
                 for m in msgs:
-                    c = m.get("content") or ""
-                    if isinstance(c, list):
-                        c = " ".join(
-                            p.get("text", "")
-                            for p in c
-                            if isinstance(p, dict) and p.get("type") == "text"
-                        )
+                    c = _session_search_message_text(m)
                     if q in str(c).lower():
                         item = dict(s, match_type="content")
+                        preview = _session_search_preview(c, q)
+                        if preview:
+                            item["match_preview"] = _redact_text(preview)
                         if isinstance(item.get("title"), str):
                             item["title"] = _redact_text(item["title"])
                         results.append(item)
