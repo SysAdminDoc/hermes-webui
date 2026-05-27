@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.144] — 2026-05-26 — Release DP (stage-batch26 — single-PR terminal supervisor hardening)
+
 ### Fixed
 
 - Embedded workspace terminals now use a dedicated supervisor thread for shell spawning to eliminate timeout-vs-spawn race conditions. If a `start_terminal()` call times out (5s) but the supervisor's `subprocess.Popen` completes later, the late-arriving process is now reaped via `_reap_abandoned_spawn()` (SIGHUP → wait → SIGKILL escalation) instead of being orphaned. Adds 8 Linux-only concurrency regression tests covering concurrent spawns, Popen-failure recovery, repeated-failure-survival, and the timeout-race late-commit path. (#2880)
