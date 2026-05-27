@@ -8,6 +8,10 @@
 - WebUI can now opt into a `webui_prefill_messages_script` / `HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT` hook for dynamic browser-turn prefill context from local notes or recall systems. The script output is capped at 256 KiB, normalized to ephemeral prefill messages, and browser status still hides message bodies while redacting script errors.
 - Added a read-only WebUI/CLI session source switch in the chat sidebar when agent session sync is enabled. WebUI conversations stay in the default list, while imported CLI/agent sessions are surfaced under a separate `CLI sessions` tab with counts so large CLI histories do not clutter the normal conversation list. (Refs #2351)
 
+### Fixed
+
+- Compact tool activity now keeps visible interim assistant progress in the live Session timeline instead of making that progress effectively collapsed-only inside Activity details. The interim assistant stream path creates and flushes a visible assistant segment before resetting for later tool/compression activity.
+
 ## [v0.51.140] — 2026-05-26 — Release DL (stage-batch22 — 5-PR hold-bucket reassessment)
 
 ### Fixed
