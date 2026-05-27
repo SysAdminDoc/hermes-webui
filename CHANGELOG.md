@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Live streamed assistant Markdown now treats underscores in ordinary text and identifiers literally, matching the settled message renderer while preserving asterisk-based emphasis.
+
 ## [v0.51.139] — 2026-05-25 — Release DK (stage-batch21 — 5-PR tier-2 batch)
 
 ### Added
