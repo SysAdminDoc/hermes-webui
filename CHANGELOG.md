@@ -14,6 +14,7 @@
 - Session transcript reconciliation now precomputes visible-duplicate lookup state instead of recomputing loose-content normalization for every state.db row, reducing long-session tail-load latency without changing the append-only merge contract.
 - Vendored KaTeX CSS, JavaScript, and fonts locally so math rendering no longer triggers CSP font reports for `cdn.jsdelivr.net` font files.
 - Vendored `js-yaml` locally so YAML tree-view loading no longer triggers CSP script reports for `cdnjs.cloudflare.com`.
+- Session delete now prunes the deleted row from `_index.json` in place instead of discarding the whole index, and composer draft saves skip the sidebar index entirely. Both reduce churn on new-session sends after a delete or while typing.
 
 ### Changed
 
