@@ -265,9 +265,42 @@ function _statusCardHtml(card){
 const MESSAGE_RENDER_WINDOW_DEFAULT=50;
 let _messageRenderWindowSid=null;
 let _messageRenderWindowSize=MESSAGE_RENDER_WINDOW_DEFAULT;
+// Cached visWithIdx array — invalidated when S.messages.length changes.
+let _visWithIdxCache=null;
+let _visWithIdxCacheLen=0;
 function _resetMessageRenderWindow(sid){
   _messageRenderWindowSid=sid||null;
   _messageRenderWindowSize=MESSAGE_RENDER_WINDOW_DEFAULT;
+  _clearRenderCache();
+  _visWithIdxCache=null;
+  _visWithIdxCacheLen=0;
+}
+
+// ── renderMd / _renderUserFencedBlocks cache ──────────────────────────────
+// Long sessions re-render the same messages on every renderMessages() call.
+// Cache the rendered HTML so unchanged messages skip the expensive regex
+// pipeline entirely.  ~95% of messages are identical between renders.
+const _renderCache = new Map();
+const _renderCacheMax = 300;
+function _clearRenderCache(){ _renderCache.clear(); }
+function _renderCacheKey(text, isUser){
+  const p = isUser ? 'u' : 'a';
+  // Short content: use the full string as key (cheap Map lookup).
+  // Long content: length + prefix + suffix is good enough — collisions on
+  // 20-char prefix+suffix are vanishingly rare for chat messages.
+  if(text.length <= 500) return p + ':' + text;
+  return p + ':' + text.length + ':' + text.slice(0,20) + ':' + text.slice(-20);
+}
+function _getCachedRender(text, isUser){
+  const key = _renderCacheKey(text, isUser);
+  const hit = _renderCache.get(key);
+  if(hit !== undefined) return hit;
+  const rendered = isUser
+    ? _renderUserFencedBlocks(text)
+    : renderMd(_stripXmlToolCallsDisplay(String(text)));
+  if(_renderCache.size > _renderCacheMax) _renderCache.clear();
+  _renderCache.set(key, rendered);
+  return rendered;
 }
 function _currentMessageRenderWindowSize(){
   return Math.max(
@@ -6159,15 +6192,29 @@ function renderMessages(options){
     ? (()=>{const row=document.createElement('div');row.innerHTML=`<div class="compression-turn"><div class="compression-turn-blocks">${_compressionReferenceCardHtml(referenceText,false)}${_preservedCompressionTaskListCardsHtml(preservedCompressionTaskMessages)}</div></div>`;return row.firstElementChild;})()
     : null;
   let preservedCompressionTaskCardsAttached=!!referenceNode;
-  const visWithIdx=[];
+  // Cache visWithIdx so expanding the render window (Load earlier) doesn't
+  // re-scan S.messages from scratch.  Invalidate only when the message array
+  // length changes — i.e. new messages arrived or session was truncated.
+  if(!_visWithIdxCache || _visWithIdxCacheLen !== S.messages.length){
+    const rebuilt=[];
+    let ri=0;
+    for(const m of S.messages){
+      if(!m||!m.role||m.role==='tool'){ri++;continue;}
+      if(_isPreservedCompressionTaskListMessage(m)){ri++;continue;}
+      const hasTc=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
+      const hasTu=Array.isArray(m.content)&&m.content.some(p=>p&&p.type==='tool_use');
+      if(msgContent(m)||m._statusCard||m.attachments?.length||(m.role==='assistant'&&(hasTc||hasTu||_messageHasReasoningPayload(m)))) rebuilt.push({m,rawIdx:ri});
+      ri++;
+    }
+    _visWithIdxCache=rebuilt;
+    _visWithIdxCacheLen=S.messages.length;
+  }
+  const visWithIdx=_visWithIdxCache;
   const preservedCompressionRawIdxs=[];
   let rawIdx=0;
   for(const m of S.messages){
     if(!m||!m.role||m.role==='tool'){rawIdx++;continue;}
     if(_isPreservedCompressionTaskListMessage(m)){preservedCompressionRawIdxs.push(rawIdx);rawIdx++;continue;}
-    const hasTc=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
-    const hasTu=Array.isArray(m.content)&&m.content.some(p=>p&&p.type==='tool_use');
-    if(msgContent(m)||m._statusCard||m.attachments?.length||(m.role==='assistant'&&(hasTc||hasTu||_messageHasReasoningPayload(m)))) visWithIdx.push({m,rawIdx});
     rawIdx++;
   }
   // Show a top affordance when earlier transcript content exists either in
@@ -6217,9 +6264,19 @@ function renderMessages(options){
   }
   let _prevSepKey=null;
   let currentAssistantTurn=null;
+  // Only build question→assistant mapping for the visible window, not the
+  // full visWithIdx.  The jump-to-question button is only rendered for
+  // assistant messages that appear in the current render window anyway.
   const questionRawIdxByAssistantRawIdx=new Map();
+  // Seed lastQuestionRawIdx from hidden messages so the first visible
+  // assistant message still gets a valid jump target even when its
+  // corresponding user message sits just before the render window.
   let lastQuestionRawIdx=-1;
-  for(const entry of visWithIdx){
+  for(let i=0;i<windowStart;i++){
+    const role=visWithIdx[i]?.m?.role;
+    if(role==='user') lastQuestionRawIdx=visWithIdx[i].rawIdx;
+  }
+  for(const entry of renderVisWithIdx){
     const role=entry&&entry.m&&entry.m.role;
     if(role==='user') lastQuestionRawIdx=entry.rawIdx;
     else if(role==='assistant') questionRawIdxByAssistantRawIdx.set(entry.rawIdx,lastQuestionRawIdx);
@@ -6227,11 +6284,19 @@ function renderMessages(options){
   const assistantSegments=new Map();
   const assistantThinking=new Map();
   const userRows=new Map();
+  // Only collect tool-call assistant indices for messages that are actually
+  // rendered in the current window.  S.toolCalls can grow large in long turns,
+  // but we only need the ones whose assistant_msg_idx falls inside the visible
+  // range.
   const toolCallAssistantIdxs=new Set();
   if(Array.isArray(S.toolCalls)){
+    const renderedRawIdxs=new Set(renderVisWithIdx.map(e=>e.rawIdx));
     for(const tc of S.toolCalls){
       if(!tc) continue;
-      toolCallAssistantIdxs.add(tc.assistant_msg_idx!==undefined?tc.assistant_msg_idx:-1);
+      const idx=tc.assistant_msg_idx;
+      if(idx!==undefined && renderedRawIdxs.has(idx)){
+        toolCallAssistantIdxs.add(idx);
+      }
     }
   }
   // Windowed render loop replaces the legacy full loop:
@@ -6303,7 +6368,7 @@ function renderMessages(options){
         return _renderAttachmentHtml(fname,fileUrl);
       }).join('')}</div>`;
     }
-    let bodyHtml = isUser ? _renderUserFencedBlocks(displayContent) : renderMd(_stripXmlToolCallsDisplay(String(displayContent)));
+    let bodyHtml = _getCachedRender(displayContent, isUser);
     if(!isUser&&m.provider_details){
       const summary=m.provider_details_label||'Provider details';
       bodyHtml += `<details class="provider-error-details"><summary>${esc(String(summary))}</summary><pre><code>${esc(String(m.provider_details))}</code></pre></details>`;
@@ -7084,11 +7149,22 @@ function postProcessRenderedMessages(container) {
 }
 
 function highlightCode(container) {
-  // Apply Prism.js syntax highlighting to all code blocks in container (or whole messages area)
-  if(typeof Prism === 'undefined' || !Prism.highlightAllUnder) return;
+  // Apply Prism.js syntax highlighting only to *new* code blocks.
+  // Previously every renderMessages() called Prism.highlightAllUnder() which
+  // re-scanned and re-highlighted every <pre> in the container — expensive in
+  // long sessions with dozens of code blocks.  Now we only touch blocks that
+  // don't already have the data-highlighted marker.
+  if(typeof Prism === 'undefined') return;
   const el = container || $('msgInner');
   if(!el) return;
-  Prism.highlightAllUnder(el);
+  // Prefer per-element highlight (avoids the full DOM walk of highlightAllUnder)
+  const blocks = el.querySelectorAll('pre code:not([data-highlighted])');
+  if(blocks.length === 0) return;
+  for(let i = 0; i < blocks.length; i++){
+    const block = blocks[i];
+    if(typeof Prism.highlightElement === 'function') Prism.highlightElement(block);
+    block.dataset.highlighted = '1';
+  }
 }
 
 // Lazy load js-yaml for YAML tree view support
