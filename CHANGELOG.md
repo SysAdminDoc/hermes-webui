@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Browser chat fallback now merges `fallback_providers` with the legacy `fallback_model` in Hermes CLI/gateway order, so WebUI can continue to a later non-Codex fallback when the primary Codex provider path fails.
+
 ## [v0.51.139] — 2026-05-25 — Release DK (stage-batch21 — 5-PR tier-2 batch)
 
 ### Added
