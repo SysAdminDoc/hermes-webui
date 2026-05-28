@@ -113,12 +113,28 @@ def _run_git(args, cwd, timeout=10):
 
 def _dirty_suffix(path: Path, timeout=1) -> str:
     """Return a best-effort ``-dirty`` suffix without blocking version display."""
-    out, ok = _run_git(['diff-index', '--quiet', 'HEAD', '--'], path, timeout=timeout)
-    if ok:
+    try:
+        r = subprocess.run(
+            ['git', 'diff-index', '--quiet', 'HEAD', '--'],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return ""
+    if r.returncode == 0:
         return ""
     # diff-index exits 1 with no output for a dirty tree. Timeouts and real git
     # failures include a diagnostic; skip the suffix so the base version remains.
-    return "-dirty" if not out else ""
+    diagnostic = (r.stderr or r.stdout or "").strip()
+    if r.returncode != 1 or diagnostic:
+        return ""
+    diff, ok = _run_git(['diff', '--binary', 'HEAD', '--'], path, timeout=timeout)
+    if not (ok and diff):
+        return "-dirty"
+    digest = hashlib.sha1(diff.encode('utf-8', errors='replace')).hexdigest()[:8]
+    return f"-dirty-{digest}"
 
 
 def _describe_git_version(path: Path, *, timeout=5, dirty_timeout=1) -> str | None:

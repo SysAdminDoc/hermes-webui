@@ -123,16 +123,22 @@ def test_session_swipe_paint_uses_transform_only_exit():
     assert "--session-swipe-progress" in paint
     assert "--session-swipe-badge-stretch" in paint
     assert "const reveal=Math.abs(offset);" in paint
-    assert "const iconScale=Math.min(1,Math.max(.01,progress*1.7));" in paint
+    assert "const actionRevealScale=1.15;" in paint
+    assert "const iconScale=Math.min(1,Math.max(.01,progress*actionRevealScale));" in paint
     assert "const badgeSize=34*iconScale;" in paint
     assert "const iconSize=18*iconScale;" in paint
-    assert "const labelScale=Math.min(1,Math.max(.01,progress*1.7));" in paint
-    assert "const actionInset=0;" in paint
+    assert "const labelScale=Math.min(1,Math.max(.01,progress*actionRevealScale));" in paint
+    assert "const actionOpacity=Math.min(1,Math.max(.01,progress*actionRevealScale));" in paint
+    assert "const actionInset=6;" in paint
     assert "const tileGap=6;" in paint
-    assert "const badgeStretch=Math.min(Math.max(0,reveal-34),overshoot*1.15,Math.max(0,reveal-badgeSize-actionInset-tileGap));" in paint
+    assert "const stretchStart=72/actionRevealScale;" in paint
+    assert "const stretchProgress=Math.max(0,reveal-stretchStart);" in paint
+    assert "const badgeStretch=Math.min(Math.max(0,reveal-34),stretchProgress*1.15,Math.max(0,reveal-badgeSize-actionInset-tileGap));" in paint
     assert "el.style.setProperty('--session-swipe-badge-size',badgeSize+'px');" in paint
     assert "el.style.setProperty('--session-swipe-icon-size',iconSize+'px');" in paint
     assert "el.style.setProperty('--session-swipe-label-scale',labelScale);" in paint
+    assert "el.style.setProperty('--session-swipe-progress',actionOpacity);" in paint
+    assert "Math.pow(progress,1.5)" not in paint
     assert "window.innerWidth+'px'" in complete
     assert "el.style.height=rect.height+'px'" in complete
     assert "requestAnimationFrame(()=>el.classList.add('swipe-removing'))" in complete
@@ -189,8 +195,8 @@ def test_session_swipe_actions_use_circular_icon_badges():
     assert "font-size:10px" in label
     assert "transform:scale(var(--session-swipe-label-scale,1))" in label
     assert "transform-origin:top center" in label
-    assert ".session-swipe-affordance-right .session-swipe-action-stack{margin-left:0;}" in STYLE_CSS
-    assert ".session-swipe-affordance-left .session-swipe-action-stack{margin-right:0;}" in STYLE_CSS
+    assert ".session-swipe-affordance-right .session-swipe-action-stack{transform:translateX(6px);}" in STYLE_CSS
+    assert ".session-swipe-affordance-left .session-swipe-action-stack{transform:translateX(-6px);}" in STYLE_CSS
 
 
 def test_session_removal_reflows_surviving_rows_smoothly():

@@ -35,6 +35,59 @@ _MODULE = 'api.updates'
 
 
 # ---------------------------------------------------------------------------
+# Tests for version dirty suffix
+# ---------------------------------------------------------------------------
+
+class TestVersionDirtySuffix:
+    def test_dirty_suffix_detects_diff_index_dirty_exit(self, tmp_path):
+        """git diff-index exits 1 with no output for normal dirty checkouts."""
+        from api import updates
+
+        diff_index = subprocess.CompletedProcess(
+            ['git', 'diff-index', '--quiet', 'HEAD', '--'],
+            1,
+            stdout='',
+            stderr='',
+        )
+        with patch(f'{_MODULE}.subprocess.run', return_value=diff_index), \
+             patch(f'{_MODULE}._run_git', return_value=('changed file content', True)):
+            assert updates._dirty_suffix(tmp_path).startswith('-dirty-')
+
+    def test_dirty_suffix_changes_with_diff_content(self, tmp_path):
+        """Dirty asset tokens should change when local tracked edits change."""
+        from api import updates
+
+        diff_index = subprocess.CompletedProcess(
+            ['git', 'diff-index', '--quiet', 'HEAD', '--'],
+            1,
+            stdout='',
+            stderr='',
+        )
+        with patch(f'{_MODULE}.subprocess.run', return_value=diff_index), \
+             patch(f'{_MODULE}._run_git', return_value=('first diff', True)):
+            first = updates._dirty_suffix(tmp_path)
+        with patch(f'{_MODULE}.subprocess.run', return_value=diff_index), \
+             patch(f'{_MODULE}._run_git', return_value=('second diff', True)):
+            second = updates._dirty_suffix(tmp_path)
+        assert first.startswith('-dirty-')
+        assert second.startswith('-dirty-')
+        assert first != second
+
+    def test_dirty_suffix_ignores_git_errors(self, tmp_path):
+        """Real git diagnostics should not mark unknown/broken repos dirty."""
+        from api import updates
+
+        completed = subprocess.CompletedProcess(
+            ['git', 'diff-index', '--quiet', 'HEAD', '--'],
+            128,
+            stdout='',
+            stderr='fatal: not a git repository',
+        )
+        with patch(f'{_MODULE}.subprocess.run', return_value=completed):
+            assert updates._dirty_suffix(tmp_path) == ''
+
+
+# ---------------------------------------------------------------------------
 # Tests for _apply_update_inner() diagnostic paths
 # ---------------------------------------------------------------------------
 

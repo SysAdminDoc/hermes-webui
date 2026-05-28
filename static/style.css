@@ -807,8 +807,8 @@
     transform:scale(var(--session-swipe-label-scale,1));
     transform-origin:top center;
   }
-  .session-swipe-affordance-right .session-swipe-action-stack{margin-left:0;}
-  .session-swipe-affordance-left .session-swipe-action-stack{margin-right:0;}
+  .session-swipe-affordance-right .session-swipe-action-stack{transform:translateX(6px);}
+  .session-swipe-affordance-left .session-swipe-action-stack{transform:translateX(-6px);}
   .session-item.dragging{transition:background .15s,color .15s,box-shadow .15s ease;will-change:transform;}
   .session-item.session-reflowing{transition:background .15s,color .15s,transform .36s cubic-bezier(.2,.8,.2,1),box-shadow .15s ease;will-change:transform;}
   .session-item.swipe-committed,
