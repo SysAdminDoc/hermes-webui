@@ -3,6 +3,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Empty partial activity rows preserved from cancelled turns no longer define
+  sidebar recency, anchor the initial paginated message window, or get restored
+  after newer completed turns. Long sessions with old activity-only partials
+  after recent replies now stay grouped by their latest real message and open on
+  the recent readable transcript. (#3057)
+
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
 
 ### Added
