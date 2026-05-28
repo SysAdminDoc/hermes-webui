@@ -690,8 +690,10 @@ class Session:
 
     @classmethod
     def load(cls, sid):
-        # Validate session ID format to prevent path traversal
-        if not sid or not all(c in '0123456789abcdefghijklmnopqrstuvwxyz_' for c in sid):
+        # Validate session ID format to prevent path traversal.  API/gateway
+        # session ids may contain hyphens (for example ``api-*`` and
+        # ``reachy-voice-*``); allow those but still reject dots/slashes.
+        if not sid or not all(c in '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-' for c in sid):
             return None
         p = SESSION_DIR / f'{sid}.json'
         if not p.exists():
@@ -718,7 +720,9 @@ class Session:
         top-level "messages" field and synthesize a small metadata-only object.
         Falls back to load() for legacy or unexpected file layouts.
         """
-        if not sid or not all(c in '0123456789abcdefghijklmnopqrstuvwxyz_' for c in sid):
+        # Same path-safety contract as load(): hyphens are valid session ids,
+        # path separators and traversal dots are not.
+        if not sid or not all(c in '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-' for c in sid):
             return None
         p = SESSION_DIR / f'{sid}.json'
         if not p.exists():
