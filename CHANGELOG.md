@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Gateway-backed browser chat now forwards Hermes Gateway `hermes.tool.progress` SSE events into WebUI's live tool/activity stream, so Gateway runs no longer appear idle while server-side tools are running.
+
 ## [v0.51.156] — 2026-05-28 — Release EB (stage-batch38 — 2-PR Tier B cleanup: WebUI request/runtime hardening + chat-start provider fallback)
 
 ### Fixed
