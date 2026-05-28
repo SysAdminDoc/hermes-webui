@@ -45,6 +45,9 @@
 
 - Local `MEDIA:` image tokens in chat history now include the current session id and can render exact image paths already present in that session transcript, so agent-generated artifacts outside the active workspace no longer show as broken thumbnails while arbitrary local paths remain blocked.
 
+
+- Gateway-backed browser chat now turns Gateway API Server 401s into a specific `gateway_auth_error` explaining that `HERMES_WEBUI_GATEWAY_API_KEY` must match `API_SERVER_KEY`, instead of surfacing the Gateway's generic "Invalid API key" body as if the model provider key failed. The browser error renderer recognizes this event type as "Gateway authentication failed" instead of falling back to a generic "Error" heading. `/api/health/agent` also reports redacted gateway-chat configuration status (`enabled`, backend, base URL configured, API key configured) as an operator diagnostic payload; it is not currently rendered as a user-facing health banner.
+
 ### Documentation
 
 - Clarify two Docker onboarding traps: `sudo docker compose` can mount `/root/.hermes` instead of the user's Hermes home on Linux, and Linux Docker Engine users should use a `host-gateway` alias such as `api.local` for host-local model servers instead of configuring `localhost` inside the container. (#3006, #3012)
