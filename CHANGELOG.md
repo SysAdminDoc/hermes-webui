@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Visible but unfocused chat windows now still attempt the immediate SSE reconnect for the current session; only a real session switch skips the reconnect path. (Refs #3040)
+
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
 
 ### Added

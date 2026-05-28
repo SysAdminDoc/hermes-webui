@@ -2155,7 +2155,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       // If the user has switched to a different session, don't attempt to
       // reconnect — the old stream's EventSource was closed intentionally
       // during session switch and reconnecting would leak a background stream.
-      if(!_isSessionActivelyViewed(activeSid)) return;
+      if(!_isSessionCurrentPane(activeSid)) return;
       if(_terminalStateReached || _streamFinalized){
         return;
       }
