@@ -167,6 +167,80 @@ def test_webui_prefill_script_rejects_oversized_stdout(tmp_path):
     assert "output exceeded" in result["error"]
 
 
+def test_webui_prefill_script_over_budget_uses_static_file_fallback(tmp_path):
+    from api.streaming import _load_webui_prefill_context, _public_prefill_context_status
+
+    prefill = tmp_path / "router.json"
+    prefill.write_text(json.dumps([{"role": "user", "content": "Compact router context"}]), encoding="utf-8")
+    script = tmp_path / "large_recall.py"
+    script.write_text("print('x' * 80)\n", encoding="utf-8")
+
+    result = _load_webui_prefill_context(
+        {
+            "webui_prefill_messages_script": [sys.executable, str(script)],
+            "prefill_messages_file": str(prefill),
+            "webui_prefill_context_max_chars": 40,
+        }
+    )
+
+    assert result["status"] == "loaded"
+    assert result["source"] == "file_budget_fallback"
+    assert result["messages"] == [{"role": "user", "content": "Compact router context"}]
+    assert result["compacted"] is True
+    assert result["original_source"] == "script"
+    assert result["original_char_count"] == 80
+    public = _public_prefill_context_status(result)
+    assert public["compacted"] is True
+    assert public["original_char_count"] == 80
+    assert "messages" not in public
+
+
+def test_webui_prefill_file_over_budget_compacts_without_leaking_body(tmp_path):
+    from api.streaming import _load_webui_prefill_context, _public_prefill_context_status
+
+    prefill = tmp_path / "huge.json"
+    prefill.write_text(json.dumps([{"role": "user", "content": "secret project note " * 20}]), encoding="utf-8")
+
+    result = _load_webui_prefill_context(
+        {
+            "prefill_messages_file": str(prefill),
+            "webui_prefill_context_max_chars": 50,
+        }
+    )
+
+    assert result["status"] == "loaded"
+    assert result["source"] == "budget_compacted"
+    assert result["message_count"] == 1
+    assert result["compacted"] is True
+    assert result["original_source"] == "file"
+    assert result["original_char_count"] > 50
+    compact_message = result["messages"][0]["content"]
+    assert "exceeded the WebUI prefill context budget" in compact_message
+    assert "secret project note" not in compact_message
+    public = _public_prefill_context_status(result)
+    assert public["source"] == "budget_compacted"
+    assert public["compacted"] is True
+    assert "messages" not in public
+
+
+def test_webui_prefill_context_budget_can_be_disabled(tmp_path):
+    from api.streaming import _load_webui_prefill_context
+
+    prefill = tmp_path / "huge.json"
+    prefill.write_text(json.dumps([{"role": "user", "content": "x" * 80}]), encoding="utf-8")
+
+    result = _load_webui_prefill_context(
+        {
+            "prefill_messages_file": str(prefill),
+            "webui_prefill_context_max_chars": 0,
+        }
+    )
+
+    assert result["source"] == "file"
+    assert result["messages"] == [{"role": "user", "content": "x" * 80}]
+    assert "compacted" not in result
+
+
 def test_public_prefill_status_strips_message_bodies():
     from api.streaming import _public_prefill_context_status
 
