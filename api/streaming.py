@@ -292,6 +292,74 @@ def _resolve_prefill_path(raw: str) -> Path:
 
 
 _PREFILL_SCRIPT_OUTPUT_LIMIT = 262_144
+_PREFILL_CONTEXT_DEFAULT_MAX_CHARS = 12_000
+
+
+def _prefill_context_max_chars(config_data: dict) -> int:
+    raw = os.getenv("HERMES_WEBUI_PREFILL_CONTEXT_MAX_CHARS", "") or str(
+        config_data.get("webui_prefill_context_max_chars") or ""
+    )
+    try:
+        value = int(raw or _PREFILL_CONTEXT_DEFAULT_MAX_CHARS)
+    except Exception:
+        value = _PREFILL_CONTEXT_DEFAULT_MAX_CHARS
+    return max(0, min(value, _PREFILL_SCRIPT_OUTPUT_LIMIT))
+
+
+def _prefill_context_char_count(messages: list[dict]) -> int:
+    return sum(len(str(message.get("content") or "")) for message in messages if isinstance(message, dict))
+
+
+def _budget_compacted_prefill_context(context: dict, *, max_chars: int, char_count: int) -> dict:
+    label = str(context.get("label") or "prefill context")
+    message = (
+        "A configured WebUI startup prefill source was available, but it exceeded "
+        f"the WebUI prefill context budget ({char_count} chars > {max_chars} chars), "
+        "so the note/body payload was omitted from this new chat. If the user's "
+        "request depends on prior decisions, durable notes, runbooks, current "
+        "context, or open issues, use the available retrieval/search/note tools "
+        "to fetch only the relevant details before answering."
+    )
+    return {
+        "status": "loaded",
+        "source": "budget_compacted",
+        "label": label,
+        "messages": [{"role": "user", "content": message}],
+        "message_count": 1,
+        "compacted": True,
+        "original_source": context.get("source", ""),
+        "original_message_count": int(context.get("message_count") or 0),
+        "original_char_count": char_count,
+        "max_chars": max_chars,
+    }
+
+
+def _apply_prefill_context_budget(context: dict, config_data: dict) -> dict:
+    if context.get("status") != "loaded":
+        return context
+    max_chars = _prefill_context_max_chars(config_data)
+    if max_chars <= 0:
+        return context
+    messages = context.get("messages") or []
+    char_count = _prefill_context_char_count(messages if isinstance(messages, list) else [])
+    if char_count <= max_chars:
+        return context
+
+    file_raw = os.getenv("HERMES_PREFILL_MESSAGES_FILE", "") or str(config_data.get("prefill_messages_file") or "")
+    if context.get("source") == "script" and file_raw:
+        fallback = _load_prefill_messages_file(file_raw, source="file_budget_fallback")
+        fallback_messages = fallback.get("messages") if isinstance(fallback, dict) else []
+        fallback_chars = _prefill_context_char_count(fallback_messages if isinstance(fallback_messages, list) else [])
+        if fallback.get("status") == "loaded" and fallback_chars <= max_chars:
+            fallback["compacted"] = True
+            fallback["original_source"] = context.get("source", "")
+            fallback["original_label"] = context.get("label", "")
+            fallback["original_message_count"] = int(context.get("message_count") or 0)
+            fallback["original_char_count"] = char_count
+            fallback["max_chars"] = max_chars
+            return fallback
+
+    return _budget_compacted_prefill_context(context, max_chars=max_chars, char_count=char_count)
 
 
 def _prefill_not_configured() -> dict:
@@ -397,10 +465,10 @@ def _load_webui_prefill_context(
     cfg = config_data if isinstance(config_data, dict) else get_config()
     script_context = _load_prefill_messages_script(cfg)
     if script_context.get("status") != "not_configured":
-        return script_context
+        return _apply_prefill_context_budget(script_context, cfg)
     file_raw = os.getenv("HERMES_PREFILL_MESSAGES_FILE", "") or str(cfg.get("prefill_messages_file") or "")
     if file_raw:
-        return _load_prefill_messages_file(file_raw)
+        return _apply_prefill_context_budget(_load_prefill_messages_file(file_raw), cfg)
     return _prefill_not_configured()
 
 
@@ -412,6 +480,11 @@ def _public_prefill_context_status(prefill_context: dict) -> dict:
         "label": prefill_context.get("label", ""),
         "message_count": int(prefill_context.get("message_count") or 0),
         **({"error": prefill_context.get("error", "")} if prefill_context.get("error") else {}),
+        **({"compacted": True} if prefill_context.get("compacted") else {}),
+        **({"original_source": prefill_context.get("original_source", "")} if prefill_context.get("original_source") else {}),
+        **({"original_message_count": int(prefill_context.get("original_message_count") or 0)} if prefill_context.get("original_message_count") else {}),
+        **({"original_char_count": int(prefill_context.get("original_char_count") or 0)} if prefill_context.get("original_char_count") else {}),
+        **({"max_chars": int(prefill_context.get("max_chars") or 0)} if prefill_context.get("max_chars") else {}),
     }
 
 

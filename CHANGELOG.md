@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Oversized WebUI startup prefill payloads now respect a configurable context budget (`webui_prefill_context_max_chars` / `HERMES_WEBUI_PREFILL_CONTEXT_MAX_CHARS`, default 12,000 chars). When a dynamic prefill script exceeds the budget and a compact static prefill file is configured, WebUI falls back to the compact file; otherwise it injects a small retrieval instruction instead of dumping the full note/body payload into every new chat.
+
 ## [v0.51.155] — 2026-05-28 — Release EA (stage-batch37 — 3-PR very low-risk cleanup: passive timeout toasts + sidecar order + subsecond timestamps)
 
 ### Fixed
