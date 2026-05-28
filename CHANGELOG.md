@@ -10,6 +10,12 @@
 
 - Browser chat can now opt into a default-off `HERMES_WEBUI_CHAT_BACKEND=gateway` bridge that routes new WebUI turns through a running Hermes Gateway API server while preserving the existing WebUI chat start/stream contract. Strict enable: only the literal values `gateway`, `api_server`, or `api-server` activate the bridge — generic truthy strings like `1` or `true` keep the legacy in-process WebUI runtime. Configurable via `HERMES_WEBUI_GATEWAY_BASE_URL` (default `http://127.0.0.1:8642`) and `HERMES_WEBUI_GATEWAY_API_KEY` (falls back to `API_SERVER_KEY`). New `api/gateway_chat.py` module isolates the bridge logic; existing direct WebUI chat path unchanged when the env/config is not set. (#3021)
 
+### Fixed
+
+- Messaging/session display merges now preserve sidecar transcript order when the sidecar already contains at least as many rows as the mirrored state store, avoiding role/content fallback sorting when timestamp precision collapses.
+
+## [v0.51.153] — 2026-05-28 — Release DY (stage-batch35 — 11-PR low-risk cleanup: title-language + clarify SSE + upload filename + discoverability + SSE reconnect + gateway image + docker docs)
+
 ### Changed
 
 - The third-party notes drawer's "Recently used by AI" list now follows the provider-neutral WebUI-specific `HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT` / `webui_prefill_messages_script` hook when configured, including argv-style hooks such as `[python3, /path/to/recall.py]` and command strings such as `python3 /path/to/recall.py`, before falling back to the legacy generic `prefill_messages_script`. Configured third-party notes sources such as Joplin, Obsidian, Notion, and llm-wiki remain visible even before runtime tool inventory hydrates.
