@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- WebUI's browser-session surface prompt now explicitly tells agents not to dump browser transcripts into external notes or durable memory by default; it limits saving to explicit captures and clearly reusable durable signals such as preferences, decisions, blockers, and runbook-worthy workflows.
+
 ## [v0.51.156] — 2026-05-28 — Release EB (stage-batch38 — 2-PR Tier B cleanup: WebUI request/runtime hardening + chat-start provider fallback)
 
 ### Fixed
