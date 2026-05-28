@@ -229,6 +229,28 @@ class TestGenerateTitleRawViaAuxTimeout(unittest.TestCase):
         self.assertIn('Match the language of the user question', messages[0]['content'])
         self.assertIn('If the user writes German, output a German title', messages[0]['content'])
 
+    def test_title_language_detection_avoids_english_tech_false_positives(self):
+        """English tech/jargon text must not be classified as German by shared tokens."""
+        from api.streaming import _detect_title_language
+
+        examples = [
+            'Why did the session die after the DAS storage failover?',
+            'The session can die when DAS storage disconnects.',
+            'Debug the session and DER certificate import failure.',
+        ]
+        for text in examples:
+            with self.subTest(text=text):
+                self.assertEqual(_detect_title_language(text), '')
+
+    def test_title_language_detection_keeps_german_without_umlaut(self):
+        """German without umlauts still needs a language hint when evidence is specific."""
+        from api.streaming import _detect_title_language
+
+        self.assertEqual(
+            _detect_title_language('Warum werden hier die Bilder der alten Session nicht angezeigt?'),
+            'de',
+        )
+
     def test_german_source_rejects_english_aux_title(self):
         """Regression: an English aux title must not overwrite a German conversation."""
         from api.streaming import _generate_llm_session_title_via_aux

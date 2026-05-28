@@ -1385,12 +1385,12 @@ def _detect_title_language(text: str) -> str:
         return ''
     german_markers = {
         'warum', 'werden', 'wird', 'wurde', 'hier', 'nicht', 'mehr', 'alte', 'alten',
-        'bilder', 'angezeigt', 'session', 'prüfe', 'ich', 'die', 'der', 'das', 'den',
-        'und', 'oder', 'mit', 'für', 'von', 'zu', 'ist', 'sind', 'bitte', 'kannst',
+        'bilder', 'angezeigt', 'prüfe', 'ich', 'und', 'oder', 'mit', 'für', 'von',
+        'zu', 'ist', 'sind', 'bitte', 'kannst',
     }
     tokens = re.findall(r'[A-Za-zÀ-ÖØ-öø-ÿ]+', s)
     german_hits = sum(1 for tok in tokens if tok in german_markers)
-    if re.search(r'[äöüß]', s) or german_hits >= 2:
+    if re.search(r'[äöüß]', s) or german_hits >= 3:
         return 'de'
     return ''
 

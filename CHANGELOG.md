@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Title-language detection no longer treats common English tech/jargon text such as "session die" or DAS/DER references as German just because of shared tokens. (Refs #3040)
+
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
 
 ### Added
