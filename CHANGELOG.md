@@ -32,6 +32,9 @@
 
 - Cron sessions assigned to the dedicated Cron Jobs project now remain hidden from the default sidebar while still appearing when that project chip is selected.
 
+
+- Compression parent sessions are no longer repaired as stale interrupted turns when a continuation already exists, preventing false "Response interrupted" markers and hidden continuation rows after auto-compression session rotation. (Refs #2361)
+
 ### Documentation
 
 - Clarify two Docker onboarding traps: `sudo docker compose` can mount `/root/.hermes` instead of the user's Hermes home on Linux, and Linux Docker Engine users should use a `host-gateway` alias such as `api.local` for host-local model servers instead of configuring `localhost` inside the container. (#3006, #3012)

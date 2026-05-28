@@ -1175,6 +1175,19 @@ def _run_journal_has_visible_output(session, stream_id: str | None) -> bool:
     return False
 
 
+def _run_journal_terminal_state(session, stream_id: str | None) -> str | None:
+    if not stream_id:
+        return None
+    try:
+        from api.run_journal import latest_run_summary
+        summary = latest_run_summary(session.session_id, stream_id)
+    except Exception:
+        return None
+    if not summary.get('terminal'):
+        return None
+    return str(summary.get('terminal_state') or '') or None
+
+
 def _journal_is_still_arriving(session, stream_id: str | None) -> bool:
     """Return True for journals that may become visible on a later read.
 
@@ -1689,13 +1702,35 @@ def _apply_core_sync_or_error_marker(
         _pending_text = " ".join(str(session.pending_user_message or "").split())
         _already_checkpointed = False
         if _pending_text and session.messages:
-            _last_msg = session.messages[-1]
-            if isinstance(_last_msg, dict) and _last_msg.get('role') == 'user':
-                _last_text = " ".join(str(_last_msg.get('content') or "").split())
-                _already_checkpointed = _last_text == _pending_text
+            for _last_msg in reversed(session.messages):
+                if isinstance(_last_msg, dict) and _last_msg.get('role') == 'user':
+                    _last_text = " ".join(str(_last_msg.get('content') or "").split())
+                    _already_checkpointed = _last_text == _pending_text
+                    break
         _recovered_ts = int(time.time())
         if isinstance(session.pending_started_at, (int, float)) and session.pending_started_at > 0:
             _recovered_ts = int(session.pending_started_at)
+        _stream_id = stream_id_for_recheck or session.active_stream_id
+        _pending_started_at = session.pending_started_at
+        if _run_journal_terminal_state(session, _stream_id) == 'completed':
+            if not _already_checkpointed:
+                _append_recovered_pending_turn(session, timestamp=_recovered_ts)
+            _append_journaled_partial_output(
+                session,
+                _stream_id,
+                dedupe_existing=True,
+            )
+            session.active_stream_id = None
+            session.pending_user_message = None
+            session.pending_attachments = []
+            session.pending_started_at = None
+            session.save(touch_updated_at=touch_updated_at)
+            logger.info(
+                "Session %s: cleared stale pending state for completed stream %s without error marker",
+                sid,
+                _stream_id,
+            )
+            return True
         if not _already_checkpointed:
             _append_recovered_pending_turn(session, timestamp=_recovered_ts)
         else:
@@ -1709,10 +1744,8 @@ def _apply_core_sync_or_error_marker(
             _append_recovered_turn_to_context(session, recovered)
         recovered_output = _append_journaled_partial_output(
             session,
-            stream_id_for_recheck or session.active_stream_id,
+            _stream_id,
         )
-        _stream_id = stream_id_for_recheck or session.active_stream_id
-        _pending_started_at = session.pending_started_at
         session.active_stream_id = None
         session.pending_user_message = None
         session.pending_attachments = []
@@ -1850,6 +1883,72 @@ def _apply_core_sync_or_error_marker(
 _REPAIR_STALE_PENDING_GRACE_SECONDS = 30
 
 
+def _has_compression_continuation(session) -> bool:
+    """Return True when ``session`` is an archived compression parent.
+
+    Context compression rotates the live WebUI session id: the old sidecar is
+    preserved for lineage while the new child owns the running/completed turn.
+    Stale-pending repair must not append an interruption marker to that old
+    parent just because its stream bookkeeping disappeared after the rotation.
+    """
+    sid = getattr(session, 'session_id', None)
+    if not sid:
+        return False
+
+    def _row_is_continuation(row) -> bool:
+        if not isinstance(row, dict):
+            return False
+        child_sid = row.get('session_id')
+        if not child_sid or child_sid == sid:
+            return False
+        if row.get('parent_session_id') != sid:
+            return False
+        # Any child row is enough evidence that this pending state belongs to a
+        # compression lineage, not a dead standalone turn. The child may itself
+        # temporarily carry a bad pre_compression_snapshot flag from older code;
+        # do not filter it out here or the guard misses the exact regression.
+        return True
+
+    try:
+        with LOCK:
+            for child in SESSIONS.values():
+                if getattr(child, 'session_id', None) == sid:
+                    continue
+                if getattr(child, 'parent_session_id', None) == sid:
+                    return True
+    except Exception:
+        pass
+
+    try:
+        if SESSION_INDEX_FILE.exists():
+            entries = json.loads(SESSION_INDEX_FILE.read_text(encoding='utf-8'))
+            if isinstance(entries, list) and any(_row_is_continuation(e) for e in entries):
+                return True
+    except Exception:
+        logger.debug("Failed to inspect session index for compression continuation", exc_info=True)
+
+    # Index rows can lag behind rapid compression/save races. Fall back to a
+    # shallow JSON metadata scan; session files write parent_session_id before
+    # the messages array, so this avoids loading multi-MB transcripts.
+    try:
+        needle = f'"parent_session_id": "{sid}"'
+        for path in SESSION_DIR.glob('*.json'):
+            if path.name.startswith('_') or path.stem == sid:
+                continue
+            try:
+                head = path.read_text(encoding='utf-8', errors='ignore')[:4096]
+            except TypeError:
+                head = path.read_text(encoding='utf-8')[:4096]
+            except OSError:
+                continue
+            if needle in head:
+                return True
+    except Exception:
+        logger.debug("Failed to scan session files for compression continuation", exc_info=True)
+
+    return False
+
+
 def _repair_stale_pending(session) -> bool:
     """Recover a sidecar stuck with messages=[] and stale pending state.
 
@@ -1871,6 +1970,18 @@ def _repair_stale_pending(session) -> bool:
     if (not session.pending_user_message
             or not _seen_stream_id
             or _seen_stream_id in _active_stream_ids()):
+        return False
+    if getattr(session, 'pre_compression_snapshot', False):
+        logger.debug(
+            "_repair_stale_pending: skipping pre-compression snapshot %s",
+            getattr(session, 'session_id', '?'),
+        )
+        return False
+    if _has_compression_continuation(session):
+        logger.debug(
+            "_repair_stale_pending: skipping compression parent %s with continuation",
+            getattr(session, 'session_id', '?'),
+        )
         return False
 
     # Grace-period guard: bail if the turn is too fresh to be a real crash.
