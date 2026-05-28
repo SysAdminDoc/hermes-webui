@@ -1,5 +1,7 @@
 from collections import OrderedDict
 from email.message import Message
+from pathlib import Path
+import re
 import urllib.error
 
 import api.gateway_chat as gateway_chat
@@ -128,6 +130,44 @@ def test_gateway_http_401_with_key_suggests_key_mismatch():
 
     assert event["type"] == "gateway_auth_error"
     assert event["hint"] == "Check that HERMES_WEBUI_GATEWAY_API_KEY matches the Hermes Gateway API_SERVER_KEY."
+
+
+def test_frontend_renders_gateway_auth_error_with_specific_label():
+    src = Path("static/messages.js").read_text(encoding="utf-8")
+    start = src.find("source.addEventListener('apperror'")
+    end = src.find("source.addEventListener('warning'", start)
+    assert start != -1 and end != -1, "apperror handler not found"
+    block = src[start:end]
+
+    assert "d.type==='gateway_auth_error'" in block
+    assert "isGatewayAuthError" in block
+    assert "gateway_auth_label" in block
+    assert "Gateway authentication failed" in block
+    assert "isGatewayAuthError?(typeof t==='function'?t('gateway_auth_label'):'Gateway authentication failed'):isAuthMismatch" in block, (
+        "Gateway API key failures should use their own label before generic provider mismatch handling."
+    )
+
+
+def test_gateway_auth_label_i18n_key_exists_for_every_locale():
+    src = Path("static/i18n.js").read_text(encoding="utf-8")
+    locale_names = [
+        match.group("quoted") or match.group("plain")
+        for match in re.finditer(
+            r"^\s{2}(?:'(?P<quoted>[A-Za-z0-9-]+)'|(?P<plain>[A-Za-z0-9-]+))\s*:\s*\{",
+            src,
+            re.MULTILINE,
+        )
+    ]
+    assert src.count("gateway_auth_label") >= len(locale_names)
+
+
+def test_gateway_chat_health_payload_is_documented_as_operator_diagnostic_only():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    for text in (readme, changelog):
+        assert "gateway_chat" in text
+        assert "operator diagnostic" in text
+        assert "not currently rendered as a user-facing health banner" in text
 
 
 def test_gateway_chat_worker_translates_sse_and_persists_session(tmp_path, monkeypatch):

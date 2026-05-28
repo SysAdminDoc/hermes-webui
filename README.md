@@ -185,7 +185,9 @@ reports a `gateway_auth_error` that points at this WebUI↔Gateway key mismatch
 rather than showing the Gateway's generic provider-style "Invalid API key" body.
 `/api/health/agent` also includes a redacted `gateway_chat` block so operators can
 see whether gateway mode, base URL, and API-key presence are configured without
-exposing the key value.
+exposing the key value. That `gateway_chat` field is an operator diagnostic
+payload only; it is not currently rendered as a user-facing health banner in the
+browser UI.
 
 The bridge is best used by operators who already run Hermes Gateway/API Server
 locally and want browser-originated chat to use the same runtime/tool path as

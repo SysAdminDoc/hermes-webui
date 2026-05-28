@@ -5,7 +5,7 @@
 
 ### Fixed
 
-- Gateway-backed browser chat now turns Gateway API Server 401s into a specific `gateway_auth_error` explaining that `HERMES_WEBUI_GATEWAY_API_KEY` must match `API_SERVER_KEY`, instead of surfacing the Gateway's generic "Invalid API key" body as if the model provider key failed. `/api/health/agent` also reports redacted gateway-chat configuration status (`enabled`, backend, base URL configured, API key configured) for support diagnostics.
+- Gateway-backed browser chat now turns Gateway API Server 401s into a specific `gateway_auth_error` explaining that `HERMES_WEBUI_GATEWAY_API_KEY` must match `API_SERVER_KEY`, instead of surfacing the Gateway's generic "Invalid API key" body as if the model provider key failed. The browser error renderer recognizes this event type as "Gateway authentication failed" instead of falling back to a generic "Error" heading. `/api/health/agent` also reports redacted gateway-chat configuration status (`enabled`, backend, base URL configured, API key configured) as an operator diagnostic payload; it is not currently rendered as a user-facing health banner.
 
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
 
