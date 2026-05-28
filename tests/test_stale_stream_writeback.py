@@ -131,6 +131,45 @@ def test_stale_stream_clear_skips_fresh_pending_turn_inside_grace_window(monkeyp
     assert all(not m.get("_error") for m in s.messages)
 
 
+def test_stale_stream_clear_trusts_completed_run_journal_instead_of_adding_marker(monkeypatch):
+    import api.routes as routes
+    from api.run_journal import append_run_event
+
+    sid = "completed_journal_late_pending_clear"
+    stream_id = "completed-stream"
+    s = Session(
+        session_id=sid,
+        title="Completed journal late pending clear",
+        messages=[
+            {"role": "user", "content": "previous prompt"},
+            {"role": "assistant", "content": "previous answer"},
+            {"role": "user", "content": "new prompt"},
+            {"role": "assistant", "content": "finished answer"},
+        ],
+    )
+    s.active_stream_id = stream_id
+    s.pending_user_message = "new prompt"
+    s.pending_started_at = 1000.0
+    s.save()
+    models.SESSIONS[sid] = s
+    append_run_event(sid, stream_id, "done", {"session": {"session_id": sid}})
+    monkeypatch.setattr(routes.time, "time", lambda: 1400.0)
+
+    assert routes._clear_stale_stream_state(s) is True
+
+    assert s.active_stream_id is None
+    assert s.pending_user_message is None
+    assert s.pending_started_at is None
+    assert [m["content"] for m in s.messages] == [
+        "previous prompt",
+        "previous answer",
+        "new prompt",
+        "finished answer",
+    ]
+    assert all("Response interrupted" not in str(m.get("content") or "") for m in s.messages)
+    assert all(not m.get("_error") for m in s.messages)
+
+
 def test_success_path_checks_stream_ownership_before_persisting_result():
     src = Path("api/streaming.py").read_text(encoding="utf-8")
     guard = "if not ephemeral and not _stream_writeback_is_current(s, stream_id):"

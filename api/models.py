@@ -1175,6 +1175,19 @@ def _run_journal_has_visible_output(session, stream_id: str | None) -> bool:
     return False
 
 
+def _run_journal_terminal_state(session, stream_id: str | None) -> str | None:
+    if not stream_id:
+        return None
+    try:
+        from api.run_journal import latest_run_summary
+        summary = latest_run_summary(session.session_id, stream_id)
+    except Exception:
+        return None
+    if not summary.get('terminal'):
+        return None
+    return str(summary.get('terminal_state') or '') or None
+
+
 def _journal_is_still_arriving(session, stream_id: str | None) -> bool:
     """Return True for journals that may become visible on a later read.
 
@@ -1689,13 +1702,35 @@ def _apply_core_sync_or_error_marker(
         _pending_text = " ".join(str(session.pending_user_message or "").split())
         _already_checkpointed = False
         if _pending_text and session.messages:
-            _last_msg = session.messages[-1]
-            if isinstance(_last_msg, dict) and _last_msg.get('role') == 'user':
-                _last_text = " ".join(str(_last_msg.get('content') or "").split())
-                _already_checkpointed = _last_text == _pending_text
+            for _last_msg in reversed(session.messages):
+                if isinstance(_last_msg, dict) and _last_msg.get('role') == 'user':
+                    _last_text = " ".join(str(_last_msg.get('content') or "").split())
+                    _already_checkpointed = _last_text == _pending_text
+                    break
         _recovered_ts = int(time.time())
         if isinstance(session.pending_started_at, (int, float)) and session.pending_started_at > 0:
             _recovered_ts = int(session.pending_started_at)
+        _stream_id = stream_id_for_recheck or session.active_stream_id
+        _pending_started_at = session.pending_started_at
+        if _run_journal_terminal_state(session, _stream_id) == 'completed':
+            if not _already_checkpointed:
+                _append_recovered_pending_turn(session, timestamp=_recovered_ts)
+            _append_journaled_partial_output(
+                session,
+                _stream_id,
+                dedupe_existing=True,
+            )
+            session.active_stream_id = None
+            session.pending_user_message = None
+            session.pending_attachments = []
+            session.pending_started_at = None
+            session.save(touch_updated_at=touch_updated_at)
+            logger.info(
+                "Session %s: cleared stale pending state for completed stream %s without error marker",
+                sid,
+                _stream_id,
+            )
+            return True
         if not _already_checkpointed:
             _append_recovered_pending_turn(session, timestamp=_recovered_ts)
         else:
@@ -1709,10 +1744,8 @@ def _apply_core_sync_or_error_marker(
             _append_recovered_turn_to_context(session, recovered)
         recovered_output = _append_journaled_partial_output(
             session,
-            stream_id_for_recheck or session.active_stream_id,
+            _stream_id,
         )
-        _stream_id = stream_id_for_recheck or session.active_stream_id
-        _pending_started_at = session.pending_started_at
         session.active_stream_id = None
         session.pending_user_message = None
         session.pending_attachments = []
