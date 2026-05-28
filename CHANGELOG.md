@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Local `MEDIA:` image tokens in chat history now include the current session id and can render exact image paths already present in that session transcript, so agent-generated artifacts outside the active workspace no longer show as broken thumbnails while arbitrary local paths remain blocked.
+
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
 
 ### Added
