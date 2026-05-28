@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.147] — 2026-05-28 — Release DS (stage-batch29 — single-PR streaming ownership-cleanup follow-up)
+
+### Fixed
+
+- Settled stream cleanup helpers (`_restoreSettledSession`, `_handleStreamError`, `_deferStreamErrorIfPageHidden`, `_reattachOrRestoreAfterDeferredStreamError`) now thread the owning `EventSource` instance through every async deferred path, so a late error or settle callback from an older source can no longer tear down a newer reconnect source. Completes the ownership-aware cleanup pattern introduced by `closeLiveStream(sessionId, streamId, source)`. (#2930, #3010)
+
 ## [v0.51.146] — 2026-05-28 — Release DR (stage-batch28 — 6-PR low-risk safety+contrast batch)
 
 ### Fixed
