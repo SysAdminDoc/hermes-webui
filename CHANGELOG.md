@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Browser chat start and queued-turn payloads now fall back to the selected/persisted provider only when it belongs to the same model being sent, preventing fresh sessions from sending a dropdown-selected model with `model_provider=null`.
+
 ## [v0.51.153] — 2026-05-28 — Release DY (stage-batch35 — 11-PR low-risk cleanup: title-language + clarify SSE + upload filename + discoverability + SSE reconnect + gateway image + docker docs)
 
 ### Changed
