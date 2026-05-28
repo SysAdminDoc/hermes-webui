@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.157] — 2026-05-28 — Release EC (stage-batch39 — 5-PR mixed-risk cleanup: gateway prefill forward + prefill budget + compressed-continuation sidebar + browser-transcript memory guidance + reasoning max parity)
+
 ### Added
 
 - The reasoning-effort selector now offers a `max` level, matching the agent's `hermes_constants.VALID_REASONING_EFFORTS`. This restores parity with the underlying set (the WebUI mirror previously stopped at `xhigh`) so providers such as Anthropic that support the `max` thinking level are selectable from the composer dropdown and the `/reasoning` command.
