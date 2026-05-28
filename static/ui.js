@@ -7754,8 +7754,25 @@ function renderMermaidBlocks(container){
 let _katexLoading=false;
 let _katexReady=false;
 
-function renderKatexBlocks(container){
+function _isStreamingEquationPending(el,root){
+  const tagName=(el&&el.tagName||'').toLowerCase();
+  if(tagName!=='equation-block'&&tagName!=='equation-inline') return false;
+  // streaming-markdown fills custom equation elements while the parser owns the
+  // open node. If the equation is currently the last descendant of the live
+  // assistant body, we cannot tell whether more TeX is still coming. Skip it
+  // during live debounce passes so a partial source is not permanently marked
+  // data-rendered before the final parser_end flush.
+  let node=el;
+  while(node&&node!==root){
+    if(node.nextSibling) return false;
+    node=node.parentNode;
+  }
+  return Boolean(node===root);
+}
+
+function renderKatexBlocks(container,options){
   const root=container||document;
+  const streaming=Boolean(options&&options.streaming);
   const blocks=root.querySelectorAll(
     '.katex-block:not([data-rendered]),.katex-inline:not([data-rendered]),'+
     'equation-block:not([data-rendered]),equation-inline:not([data-rendered])'
@@ -7779,6 +7796,7 @@ function renderKatexBlocks(container){
     return;
   }
   blocks.forEach(el=>{
+    if(streaming&&_isStreamingEquationPending(el,root)) return;
     el.dataset.rendered='true';
     const src=el.textContent||'';
     const tagName=(el.tagName||'').toLowerCase();

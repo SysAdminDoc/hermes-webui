@@ -26,6 +26,9 @@
 
 - The third-party notes drawer’s “Recently used by AI” list now follows the provider-neutral WebUI-specific `HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT` / `webui_prefill_messages_script` hook when configured, including argv-style hooks such as `[python3, /path/to/recall.py]` and command strings such as `python3 /path/to/recall.py`, before falling back to the legacy generic `prefill_messages_script`. Configured third-party notes sources such as Joplin, Obsidian, Notion, and llm-wiki remain visible even before runtime tool inventory hydrates.
 
+
+- Streaming KaTeX render passes now skip parser-owned equation placeholders that may still be receiving text, preventing long equations from being marked rendered before the final parser flush completes. (#2976)
+
 ### Documentation
 
 - Clarify two Docker onboarding traps: `sudo docker compose` can mount `/root/.hermes` instead of the user's Hermes home on Linux, and Linux Docker Engine users should use a `host-gateway` alias such as `api.local` for host-local model servers instead of configuring `localhost` inside the container. (#3006, #3012)
