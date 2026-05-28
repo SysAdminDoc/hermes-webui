@@ -14,6 +14,8 @@
 
 - Messaging/session display merges now preserve sidecar transcript order when the sidecar already contains at least as many rows as the mirrored state store, avoiding role/content fallback sorting when timestamp precision collapses.
 
+- Gateway-backed turns and compacted/reconciled message batches now keep subsecond timestamp ordering instead of assigning the same integer-second timestamp to multiple transcript rows.
+
 ## [v0.51.153] — 2026-05-28 — Release DY (stage-batch35 — 11-PR low-risk cleanup: title-language + clarify SSE + upload filename + discoverability + SSE reconnect + gateway image + docker docs)
 
 ### Changed
