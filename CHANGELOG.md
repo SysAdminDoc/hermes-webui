@@ -29,6 +29,9 @@
 
 - Streaming KaTeX render passes now skip parser-owned equation placeholders that may still be receiving text, preventing long equations from being marked rendered before the final parser flush completes. (#2976)
 
+
+- Cron sessions assigned to the dedicated Cron Jobs project now remain hidden from the default sidebar while still appearing when that project chip is selected.
+
 ### Documentation
 
 - Clarify two Docker onboarding traps: `sudo docker compose` can mount `/root/.hermes` instead of the user's Hermes home on Linux, and Linux Docker Engine users should use a `host-gateway` alias such as `api.local` for host-local model servers instead of configuring `localhost` inside the container. (#3006, #3012)
