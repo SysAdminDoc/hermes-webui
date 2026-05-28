@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Streaming KaTeX render passes now skip parser-owned equation placeholders that may still be receiving text, preventing long equations from being marked rendered before the final parser flush completes. (#2976)
+
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
 
 ### Added

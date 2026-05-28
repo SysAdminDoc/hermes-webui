@@ -1067,7 +1067,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     if(_streamingKatexTimer) return;
     _streamingKatexTimer=setTimeout(()=>{
       _streamingKatexTimer=null;
-      if(assistantBody&&typeof renderKatexBlocks==='function') renderKatexBlocks(assistantBody);
+      if(assistantBody&&typeof renderKatexBlocks==='function') renderKatexBlocks(assistantBody,{streaming:true});
     },150);
   }
   // Helper: feed new displayText delta to the smd parser.
