@@ -3,10 +3,19 @@
 
 ## [Unreleased]
 
+## [v0.51.146] — 2026-05-28 — Release DR (stage-batch28 — 6-PR low-risk safety+contrast batch)
+
 ### Fixed
 
-- Dark-mode panel header save buttons now use a theme-aware foreground token, keeping workspace and other detail-pane check icons visible on the default gold accent. (#2998)
-- Custom provider `/v1/models` discovery now uses a short per-endpoint timeout and gracefully skips slow or unreachable providers, reducing cold `/api/models` cache rebuild latency. (#3024)
+- Dark-mode panel header save buttons now use a theme-aware foreground token, keeping workspace and other detail-pane check icons visible on the default gold accent. (#2998, #3022)
+- Custom provider `/v1/models` discovery now uses a short per-endpoint timeout and gracefully skips slow or unreachable providers, reducing cold `/api/models` cache rebuild latency. (#3024, #3025)
+- Messaging (Telegram-resumed) sessions: the `?messages=0` metadata fast path now routes through the same display merge as the full-message path, so `message_count` and `last_message_at` match the rendered transcript and stop triggering refresh-loops that reset scroll and close open dropdowns. (#3003)
+- WebUI sessions mirrored into `state.db` for long-history retention now stay in the WebUI sidebar tab instead of being misclassified as CLI rows. Adds regression coverage for both directions of the WebUI vs CLI source-tab invariant. (#3027)
+- Sidebar projection now keeps at least one messageful representative visible per non-background conversation when normal filters would otherwise hide every row, rescuing discoverability for sessions with stale snapshot/lineage metadata. Rescued rows are marked `discoverability_warning: rescued_messageful_hidden_session` for auditability; intentional background/cron sessions stay hidden. (#3028)
+
+### Added
+
+- New read-only `api.session_discoverability` audit module cross-checks JSON sidecars, `_index.json`, `state.db`, and the live sidebar response to classify messageful sessions without a visible representative, stale WebUI-as-CLI source flags, missing sidecars, and lineage segments without a visible tip. Diagnostic surface only; does not repair, restart, or mutate any state. (#3029)
 
 ## [v0.51.145] — 2026-05-26 — Release DQ (stage-batch27 — sidebar running-state preservation)
 
