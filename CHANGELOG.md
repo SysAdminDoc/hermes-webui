@@ -3,15 +3,21 @@
 
 ## [Unreleased]
 
-## [v0.51.154] — 2026-05-28 — Release DZ (stage-batch36 — 9-PR medium-risk cleanup: cron project chip + KaTeX streaming + recovery + .env keys + discoverability repair + media MEDIA tokens + gateway 401 + notes prefill + cron filter)
-
 ### Added
 
 - Session discoverability audit now has a default-dry-run `--repair-safe` routine for deterministic cleanup: stale persisted WebUI-as-CLI flags can be cleared from sidecars/index entries, and messageful WebUI rows present only in `state.db` can be materialized into sidecars/index entries when `--apply --backup-dir <dir>` is explicitly provided.
 
+
+- Browser chat can now opt into a default-off `HERMES_WEBUI_CHAT_BACKEND=gateway` bridge that routes new WebUI turns through a running Hermes Gateway API server while preserving the existing WebUI chat start/stream contract. Strict enable: only the literal values `gateway`, `api_server`, or `api-server` activate the bridge — generic truthy strings like `1` or `true` keep the legacy in-process WebUI runtime. Configurable via `HERMES_WEBUI_GATEWAY_BASE_URL` (default `http://127.0.0.1:8642`) and `HERMES_WEBUI_GATEWAY_API_KEY` (falls back to `API_SERVER_KEY`). New `api/gateway_chat.py` module isolates the bridge logic; existing direct WebUI chat path unchanged when the env/config is not set. (#3021)
+
 ### Changed
 
 - The third-party notes drawer's "Recently used by AI" list now follows the provider-neutral WebUI-specific `HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT` / `webui_prefill_messages_script` hook when configured, including argv-style hooks such as `[python3, /path/to/recall.py]` and command strings such as `python3 /path/to/recall.py`, before falling back to the legacy generic `prefill_messages_script`. Configured third-party notes sources such as Joplin, Obsidian, Notion, and llm-wiki remain visible even before runtime tool inventory hydrates.
+
+
+- Local fallback title generation no longer has a German-only `Session Bilder` special case; it now uses the same generic topic extraction path as other fallback titles. (Refs #3040)
+- Title-generation prompts now use the same language-neutral "match the user language" instruction for every locale instead of adding German-only exemplars. (Refs #3040)
+- Session discoverability audit findings for stale persisted WebUI-as-CLI flags now report whether an API-visible lineage representative already covers the hidden snapshot, including the representative session id in JSON and Markdown output.
 
 ### Fixed
 
@@ -25,13 +31,6 @@
 
 ## [v0.51.153] — 2026-05-28 — Release DY (stage-batch35 — 11-PR low-risk cleanup: title-language + clarify SSE + upload filename + discoverability + SSE reconnect + gateway image + docker docs)
 
-### Changed
-
-- Local fallback title generation no longer has a German-only `Session Bilder` special case; it now uses the same generic topic extraction path as other fallback titles. (Refs #3040)
-- Title-generation prompts now use the same language-neutral "match the user language" instruction for every locale instead of adding German-only exemplars. (Refs #3040)
-- Session discoverability audit findings for stale persisted WebUI-as-CLI flags now report whether an API-visible lineage representative already covers the hidden snapshot, including the representative session id in JSON and Markdown output.
-
-### Fixed
 
 - Title-language detection no longer treats common English tech/jargon text such as "session die" or DAS/DER references as German just because of shared tokens. (Refs #3040)
 - Clarify prompt SSE fallback polling now preserves its owner session id, matching approval polling behavior so terminal events from another session cannot stop the active clarify fallback poller.
@@ -41,15 +40,14 @@
 - New chat sessions reset `_messagesTruncated` / `_oldestIdx` so a fresh conversation never displays the stale "Scroll up or click to load older messages" indicator inherited from a previously-paginated session.
 - `openai-codex` reasoning-effort resolution now lets the existing `models.dev` metadata pass set the supported levels (including `xhigh`) instead of being silently clipped through the Copilot model heuristic.
 
+
+- Passive background refreshes such as sidebar/project polling, health checks, cron-status watches, and client-event logging no longer surface generic timeout toasts; explicit user actions still show timeout errors. (Related to #3024)
+
 ### Documentation
 
 - Clarify two Docker onboarding traps: `sudo docker compose` can mount `/root/.hermes` instead of the user's Hermes home on Linux, and Linux Docker Engine users should use a `host-gateway` alias such as `api.local` for host-local model servers instead of configuring `localhost` inside the container. (#3006, #3012)
 
 ## [v0.51.152] — 2026-05-28 — Release DX (stage-batch34 — single-PR optional gateway-backed browser chat)
-
-### Added
-
-- Browser chat can now opt into a default-off `HERMES_WEBUI_CHAT_BACKEND=gateway` bridge that routes new WebUI turns through a running Hermes Gateway API server while preserving the existing WebUI chat start/stream contract. Strict enable: only the literal values `gateway`, `api_server`, or `api-server` activate the bridge — generic truthy strings like `1` or `true` keep the legacy in-process WebUI runtime. Configurable via `HERMES_WEBUI_GATEWAY_BASE_URL` (default `http://127.0.0.1:8642`) and `HERMES_WEBUI_GATEWAY_API_KEY` (falls back to `API_SERVER_KEY`). New `api/gateway_chat.py` module isolates the bridge logic; existing direct WebUI chat path unchanged when the env/config is not set. (#3021)
 
 ## [v0.51.151] — 2026-05-28 — Release DW (stage-batch33 — 3-PR mid-risk batch: SSE reattach + title-lang + composer cap)
 
