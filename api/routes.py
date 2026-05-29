@@ -3852,8 +3852,39 @@ def _serve_shell_unavailable(handler, exc: Exception) -> bool:
     return True
 
 
+_SHUTDOWN_LOG_VALUE_RE = re.compile(r"[\x00-\x1f\x7f]+")
+
+
+def _shutdown_log_value(value, *, default: str = "unknown", max_len: int = 160) -> str:
+    """Return a bounded single-line value safe for shutdown diagnostics."""
+    if value is None:
+        return default
+    try:
+        text = str(value)
+    except Exception:
+        return default
+    text = _SHUTDOWN_LOG_VALUE_RE.sub("?", text).strip()
+    if not text:
+        return default
+    if len(text) > max_len:
+        text = f"{text[:max_len]}…"
+    return text
+
+
 def _handle_shutdown(handler) -> bool:
     """Shut down the WebUI server process."""
+    headers = getattr(handler, "headers", {})
+    ua = headers.get("User-Agent", "no-ua") if hasattr(headers, "get") else "no-ua"
+    remote = "unknown"
+    if getattr(handler, "client_address", None):
+        remote = getattr(handler, "client_address", ("unknown",))[0]
+    logger.info(
+        "[shutdown-request] remote=%s method=%s path=%s ua=%s",
+        _shutdown_log_value(remote),
+        _shutdown_log_value(getattr(handler, "command", None)),
+        _shutdown_log_value(getattr(handler, "path", None), max_len=240),
+        _shutdown_log_value(ua, default="no-ua", max_len=240),
+    )
     j(handler, {"status": "shutting_down"})
     import signal
     import threading
@@ -9648,7 +9679,13 @@ def _handle_chat_sync(handler, body):
                 "[Workspace::v1: ...] tag as your default working directory for ALL file operations: "
                 "write_file, read_file, search_files, terminal workdir, and patch. "
                 "Never fall back to a hardcoded path when this tag is present.\n\n"
-                f"{_WEBUI_PROGRESS_PROMPT}"
+                f"{_WEBUI_PROGRESS_PROMPT}\n\n"
+                "WebUI external-notes/durable-memory policy: Do not copy or dump this browser transcript "
+                "into external notes or durable memory by default. Write or update durable "
+                "notes only for explicit captures, durable preferences, decisions, blockers/open "
+                "issues, runbook-worthy workflows, or other clearly reusable signals; otherwise "
+                "leave external notes and durable memory unchanged. When you do write or update a durable note, briefly tell "
+                "the user what note or section changed so the write is reviewable."
             )
 
             _previous_messages = list(s.messages or [])
