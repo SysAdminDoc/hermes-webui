@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- WebUI chat instructions now explicitly prevent terse scratchpad/planning fragments from appearing in visible assistant replies, while still allowing clear user-facing progress updates during tool-heavy work.
+
 ### Fixed
 
 - Joplin notes search now keeps the `Authorization` header and adds a query-token compatibility shim only for Web Clipper `/search` calls, covering clipper builds that return HTTP 403 for header-only search auth while keeping other Joplin API URLs token-free.

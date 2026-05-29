@@ -9628,6 +9628,7 @@ def _handle_chat_sync(handler, body):
                 session_id=s.session_id,
             )
             from api.streaming import (
+                _WEBUI_PROGRESS_PROMPT,
                 _dedupe_replayed_context_messages,
                 _merge_display_messages_after_agent_result,
                 _restore_display_reasoning_metadata,
@@ -9646,7 +9647,8 @@ def _handle_chat_sync(handler, body):
                 "prompt, memory, or conversation history. Always use the value from the most recent "
                 "[Workspace::v1: ...] tag as your default working directory for ALL file operations: "
                 "write_file, read_file, search_files, terminal workdir, and patch. "
-                "Never fall back to a hardcoded path when this tag is present."
+                "Never fall back to a hardcoded path when this tag is present.\n\n"
+                f"{_WEBUI_PROGRESS_PROMPT}"
             )
 
             _previous_messages = list(s.messages or [])
