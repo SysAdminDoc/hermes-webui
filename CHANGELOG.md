@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Detect a shared `OPENCODE_API_KEY` as enabling both OpenCode Zen and OpenCode Go provider groups, matching Hermes Agent bridge environments that expose one OpenCode credential.
+
 ## [v0.51.159] — 2026-05-29 — Release EE (stage-batch41 — 5-PR low-risk cleanup: Gateway tool-progress forwarding + shutdown diagnostics + CLI snippet-limit parity + numpad-Enter submit + sync-chat notes guardrail)
 
 ### Changed
