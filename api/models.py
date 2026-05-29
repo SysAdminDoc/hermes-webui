@@ -818,9 +818,12 @@ class Session:
             index_message_count = None
             if sidecar_message_count is None:
                 index_message_count = _lookup_index_message_count(sid)
-            # The sidebar index is a cache and can lag behind external sidecar
-            # appends/backfills. Prefer the largest known count so metadata-only
-            # active-session polls do not miss real remote updates.
+            # Modern sidecars carry an accurate message_count, so it is the
+            # source of truth and we skip the per-row _index.json read in the
+            # common case. The sidebar index is only a cache (it can lag behind
+            # external sidecar appends/backfills), so consult it solely as a
+            # fallback when the sidecar has no count. When both are present we
+            # still take the largest known count as a defensive measure.
             known_counts = [
                 count for count in (index_message_count, sidecar_message_count)
                 if count is not None
