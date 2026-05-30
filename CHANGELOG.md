@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.176] — 2026-05-30 — Release EV (stage-batch58 — sidebar attention indicators)
+
+### Added
+
+- Sidebar session rows now surface pending approval and clarify work with a color-coded status dot (red for approvals, amber for clarifies) plus a matching left rail and tinted background, so inactive conversations that need a permission decision or an answer are easy to spot at a glance. A distinct two-tone attention sound also plays for approval/clarify prompts, separate from the completion sound (#3190).
+
 ## [v0.51.175] — 2026-05-30 — Release EU (stage-batch57 — internal conversation links)
 
 ### Added
