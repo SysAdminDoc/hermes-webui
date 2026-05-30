@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Docker docs now explain host-localhost URLs (`host.docker.internal` / `host.containers.internal`) and the `sudo docker compose` `$HOME=/root` bind-mount pitfall for users whose WebUI cannot reach host APIs or see `~/.hermes` (#3012, #3006).
+- Skills panel disabled/enabled state and toggle writes now resolve `config.yaml` from the active WebUI profile instead of the process default Hermes home or startup config override (#3066).
+- Update checks no longer advertise a newer release tag when a main-tracking checkout already contains that tag; the banner now falls through to the branch comparison path instead of offering an update that cannot fast-forward (#3140).
+
 ## [v0.51.168] — 2026-05-30 — Release EN (stage-batch50 — hotfix: mobile "Failed to load conversation messages")
 
 ### Fixed
