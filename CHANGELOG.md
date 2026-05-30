@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Restored the legacy compact tool-call card chrome by removing the persistent "Tool output" badge and returning the left rail to the muted border treatment. This keeps tool activity visually quieter while preserving the existing collapsible tool details.
+
 ## [v0.51.171] — 2026-05-30 — Release EQ (stage-batch53 — tool-output card badge + Neon opt-in skin)
 
 ### Added
