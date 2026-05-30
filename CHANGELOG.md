@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.162] — 2026-05-30 — Release EH (stage-batch44 — conversation-filter clear button + code-only title-language regression coverage)
+
 ### Added
 
 - Conversation filtering now shows a clear button inside the search field whenever text is present, letting users clear the filter with one click.
