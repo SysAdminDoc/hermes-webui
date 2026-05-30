@@ -31,4 +31,26 @@ def test_sidebar_status_badges_have_explanatory_tooltips():
     assert "branchInd.title=_sessionForkTooltip(parentLabel);" in js
     assert "segmentCountEl.title=_sessionLineageBadgeTooltip(segmentLabel,canExpandLineageSegments);" in js
     assert "childCountEl.title=_sessionChildBadgeTooltip(childLabel);" in js
-    assert "state.title=_sessionStateTooltip({isStreaming,hasUnread});" in js
+    assert "_sessionStateTooltip({isStreaming,hasUnread})" in js
+
+
+def test_state_tooltip_does_not_clobber_attention_title():
+    """The generic running/unread state tooltip must NOT overwrite a more
+    specific, localized attention tooltip (pending approval/clarify).
+
+    Regression: the first cut of this feature set ``state.title`` to the
+    state tooltip *unconditionally*, two lines after assigning the localized
+    ``attention.title`` — which both clobbered the attention tooltip and, for a
+    needs-attention session that was not currently streaming, blanked it to ''
+    (``_sessionStateTooltip`` returns '' when neither streaming nor unread).
+    The attention title must take precedence, and the state tooltip must only
+    apply when it is non-empty.
+    """
+    js = _sessions_js()
+    # The attention title still wins.
+    assert "if(attention&&attention.title) state.title=attention.title;" in js
+    # The state tooltip is applied via an else-if guarded on non-empty, never
+    # as an unconditional assignment that could blank the attention title.
+    assert "else if(_stateTip) state.title=_stateTip;" in js
+    # The old unconditional-clobber line must be gone.
+    assert "state.title=_sessionStateTooltip({isStreaming,hasUnread});" not in js
