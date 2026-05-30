@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+from types import SimpleNamespace
 import urllib.error
 import urllib.request
 
@@ -65,6 +66,35 @@ def test_session_pin_endpoint_caps_pinned_sessions_at_three():
     finally:
         for sid in created:
             post("/api/session/delete", {"session_id": sid})
+
+
+def test_hidden_pre_compression_snapshot_does_not_count_toward_pin_quota():
+    from api.routes import _session_counts_toward_pin_quota
+
+    assert _session_counts_toward_pin_quota({
+        "session_id": "hidden-snapshot",
+        "pinned": True,
+        "archived": False,
+        "pre_compression_snapshot": True,
+    }) is False
+    assert _session_counts_toward_pin_quota({
+        "session_id": "visible-session",
+        "pinned": True,
+        "archived": False,
+        "pre_compression_snapshot": False,
+    }) is True
+
+
+def test_hidden_in_memory_snapshot_does_not_count_toward_pin_quota():
+    from api.routes import _session_counts_toward_pin_quota
+
+    snapshot = SimpleNamespace(
+        session_id="hidden-memory-snapshot",
+        pinned=True,
+        archived=False,
+        pre_compression_snapshot=True,
+    )
+    assert _session_counts_toward_pin_quota(snapshot) is False
 
 
 def test_session_pin_cap_has_backend_and_frontend_guards():
