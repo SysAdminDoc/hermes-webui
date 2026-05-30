@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Agent-side cron sessions imported from state.db now remain available to their assigned project chip as `default_hidden` rows instead of being filtered out before project reveal logic can see them (#3134).
+
 ## [v0.51.165] — 2026-05-30 — Release EK (stage-batch47 — stop EventSource reconnect storm on long-lived SSE streams)
 
 ### Fixed
