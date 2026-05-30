@@ -1310,7 +1310,7 @@ let _messagesTruncated = false;
 // Older messages are loaded on-demand via _loadOlderMessages().
 const _INITIAL_MSG_LIMIT = 30;
 
-function _syncToolCallsForLoadedMessages(messages, sessionToolCalls, windowOffset=0){
+function _syncToolCallsForLoadedMessages(messages, sessionToolCalls){
   const msgs=Array.isArray(messages)?messages:[];
   const hasMessageToolMetadata=msgs.some(m=>{
     if(!m) return false;
@@ -1319,15 +1319,7 @@ function _syncToolCallsForLoadedMessages(messages, sessionToolCalls, windowOffse
     return hasTc||hasTu;
   });
   if(!hasMessageToolMetadata&&Array.isArray(sessionToolCalls)&&sessionToolCalls.length){
-    const offset=Number.isFinite(Number(windowOffset))?Number(windowOffset):0;
-    S.toolCalls=sessionToolCalls.map(tc=>{
-      const copy={...tc,done:true};
-      const idx=copy.assistant_msg_idx;
-      if(Number.isInteger(idx)&&idx>=offset&&idx<offset+msgs.length){
-        copy.assistant_msg_idx=idx-offset;
-      }
-      return copy;
-    });
+    S.toolCalls=sessionToolCalls.map(tc=>({...tc,done:true}));
   }else{
     S.toolCalls=[];
   }
@@ -1350,7 +1342,7 @@ async function _ensureMessagesLoaded(sid) {
   // toast on every mobile message (SSE/visibility events trigger this reload path
   // more aggressively on mobile).
   let msgs = (data.session.messages || []).filter(m => m && m.role);
-  _syncToolCallsForLoadedMessages(msgs, data.session.tool_calls, data.session._messages_offset||0);
+  _syncToolCallsForLoadedMessages(msgs, data.session.tool_calls);
   clearLiveToolCards();
   // #3018: preserve client-side ephemeral turn fields (_turnUsage, _turnDuration,
   // _turnTps, _gatewayRouting, _statusCard) across the loadSession replace.
@@ -1513,7 +1505,7 @@ async function _loadOlderMessages() {
     const container = $('messages');
     const prevScrollH = container ? container.scrollHeight : 0;
     S.messages = nextMessages;
-    _syncToolCallsForLoadedMessages(nextMessages, responseSession.tool_calls, responseSession._messages_offset||0);
+    _syncToolCallsForLoadedMessages(nextMessages, responseSession.tool_calls);
     // renderMessages() windows long transcripts from the end. If we do not
     // expand that window before rendering, the newly prepended page stays
     // hidden and the "hidden" counter rises while the viewport appears stuck.
@@ -1598,7 +1590,7 @@ async function _ensureAllMessagesLoaded() {
     S.messages = msgs;
     _messagesTruncated = false;
     _oldestIdx = 0;
-    _syncToolCallsForLoadedMessages(msgs, data.session.tool_calls, data.session._messages_offset||0);
+    _syncToolCallsForLoadedMessages(msgs, data.session.tool_calls);
     if (S.session && S.session.session_id === sid) {
       S.session.message_count = Number(data.session.message_count || msgs.length);
     }
