@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Guard session and agent caches against compression/continuation id drift so a stale cached object cannot make `/api/session?session_id=<tip>` return an older transcript segment.
+
 ## [v0.51.171] — 2026-05-30 — Release EQ (stage-batch53 — tool-output card badge + Neon opt-in skin)
 
 ### Added
