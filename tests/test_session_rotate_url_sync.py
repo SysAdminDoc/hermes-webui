@@ -7,9 +7,9 @@ MESSAGES_JS = (REPO_ROOT / "static" / "messages.js").read_text(encoding="utf-8")
 
 def test_stream_completion_syncs_rotated_session_id_to_tab_state():
     """When compact/restore returns a new session id, the tab anchor follows it."""
-    completion_marker = "S.session=d.session;S.messages=d.session.messages||[]"
-    # #3018 split the single-line settled assignment to insert the
-    # carry-forward of ephemeral per-turn fields; match the new shape.
+    # #3018 inserted a carry-forward of ephemeral per-turn fields into both the
+    # completion (_finishDone) and settled-restore assignments; match the new shapes.
+    completion_marker = "S.session=d.session;S.messages=_carryForwardEphemeralTurnFields(S.messages||[], d.session.messages||[]);"
     settled_marker = "S.session=session;\n        const _nextMsgs3018=(session.messages||[]).filter(m=>m&&m.role);"
 
     completion_pos = MESSAGES_JS.find(completion_marker)
