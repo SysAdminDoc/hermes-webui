@@ -3348,7 +3348,11 @@ function _sessionFullTitleTooltip(rawTitle, cleanTitle){
 
 function _sessionForkTooltip(parentLabel){
   const parent=String(parentLabel||'').trim()||'unknown parent';
-  return `Forked conversation — parent: ${parent}`;
+  // Preserve the localized "Forked from" base (the catalog key exists in all
+  // locales) rather than hardcoding English — the only regression risk in the
+  // tooltip rework was dropping t('forked_from') here.
+  const prefix=(typeof t==='function'?t('forked_from'):'Forked from');
+  return `${prefix}: ${parent}`;
 }
 
 function _sessionLineageBadgeTooltip(label, canExpand){

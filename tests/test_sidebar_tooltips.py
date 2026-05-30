@@ -54,3 +54,16 @@ def test_state_tooltip_does_not_clobber_attention_title():
     assert "else if(_stateTip) state.title=_stateTip;" in js
     # The old unconditional-clobber line must be gone.
     assert "state.title=_sessionStateTooltip({isStreaming,hasUnread});" not in js
+
+
+def test_fork_tooltip_preserves_localized_base():
+    """The fork tooltip must keep using the localized ``forked_from`` catalog
+    key rather than hardcoding an English string — dropping ``t('forked_from')``
+    was the one genuine i18n regression in the tooltip rework.
+    """
+    js = _sessions_js()
+    assert "function _sessionForkTooltip" in js
+    # Helper resolves the localized key with the usual typeof-t guard.
+    assert "t('forked_from')" in js
+    # The hardcoded English sentence from the first cut must be gone.
+    assert "Forked conversation — parent:" not in js
