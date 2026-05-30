@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.163] — 2026-05-30 — Release EI (stage-batch45 — session duplicate/branch field propagation)
+
+### Fixed
+
+- Duplicating or branching a session now carries over the fields that were previously dropped, so the copy behaves identically to the original until further edits: `truncation_watermark`, model-facing `context_messages` (deep-copied for independence), gateway routing + routing history, context-engine state, cache-token counters, composer draft, LLM-title flag, and per-session settings (model provider, project, personality, toolsets, context length, threshold). Compression anchors and last-prompt-token counts are intentionally not carried so the copy re-derives them. Prevents data-loss scenarios where, e.g., editing a message in a duplicated session would drop messages during state.db merge.
+
 ## [v0.51.162] — 2026-05-30 — Release EH (stage-batch44 — conversation-filter clear button + code-only title-language regression coverage)
 
 ### Added
