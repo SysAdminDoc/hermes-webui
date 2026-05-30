@@ -28,7 +28,7 @@ from api.config import (
     STREAM_REASONING_TEXT, STREAM_LIVE_TOOL_CALLS,
     STREAM_GOAL_RELATED, PENDING_GOAL_CONTINUATION,
     STREAM_LAST_EVENT_ID,
-    LOCK, SESSIONS, SESSION_DIR,
+    LOCK, SESSIONS, SESSIONS_MAX, SESSION_DIR,
     _get_session_agent_lock, _set_thread_env, _clear_thread_env,
     register_active_run, update_active_run, unregister_active_run,
     SESSION_AGENT_LOCKS, SESSION_AGENT_LOCKS_LOCK,
@@ -2163,7 +2163,9 @@ def _run_background_title_update(session_id: str, user_text: str, assistant_text
         if next_title:
             with _get_session_agent_lock(session_id):
                 with LOCK:
-                    s = SESSIONS.get(session_id, s)
+                    cached_session = SESSIONS.get(session_id)
+                    if cached_session is not None and getattr(cached_session, 'session_id', None) == session_id:
+                        s = cached_session
                     effective_title = str(s.title or '').strip()
                     invalid_existing_now = _looks_invalid_generated_title(s.title)
                     still_auto = (
@@ -2238,7 +2240,9 @@ def _run_background_title_refresh(session_id: str, user_text: str, assistant_tex
             return
         with _get_session_agent_lock(session_id):
             with LOCK:
-                s = SESSIONS.get(session_id, s)
+                cached_session = SESSIONS.get(session_id)
+                if cached_session is not None and getattr(cached_session, 'session_id', None) == session_id:
+                    s = cached_session
                 # Re-check: user may have renamed while we were generating
                 if str(s.title or '').strip() != current_title:
                     _put_title_status(put_event, session_id, 'skipped', 'manual_title', str(s.title or '').strip())
@@ -3752,6 +3756,33 @@ def _refresh_cached_agent_runtime(agent, agent_kwargs: dict) -> bool:
         return False
 
 
+def _cached_agent_session_identity(agent) -> str | None:
+    """Best-effort session id carried by a cached AIAgent.
+
+    The cache key is only safe when it agrees with the object's own session
+    identity. Some old/fake agents may not expose an identity; keep those
+    backwards-compatible and treat them as unverifiable rather than mismatched.
+    """
+    if agent is None:
+        return None
+    for attr in ('session_id', '_session_id'):
+        value = getattr(agent, attr, None)
+        if isinstance(value, str) and value:
+            return value
+    session_db = getattr(agent, '_session_db', None)
+    if session_db is not None:
+        for attr in ('session_id', '_session_id'):
+            value = getattr(session_db, attr, None)
+            if isinstance(value, str) and value:
+                return value
+    return None
+
+
+def _cached_agent_matches_session(agent, session_id: str) -> bool:
+    identity = _cached_agent_session_identity(agent)
+    return identity is None or identity == str(session_id)
+
+
 def _refresh_cached_agent_primary_runtime_snapshot(agent) -> None:
     """Keep AIAgent's primary-runtime snapshot aligned with refreshed creds.
 
@@ -4859,9 +4890,19 @@ def _run_agent_streaming(
                 with SESSION_AGENT_CACHE_LOCK:
                     _cached = SESSION_AGENT_CACHE.get(session_id)
                     if _cached and _cached[1] == _agent_sig:
-                        agent = _cached[0]
-                        SESSION_AGENT_CACHE.move_to_end(session_id)  # LRU: mark as recently used
-                        logger.debug('[webui] Reusing cached agent for session %s', session_id)
+                        _cached_agent = _cached[0]
+                        if _cached_agent_matches_session(_cached_agent, session_id):
+                            agent = _cached_agent
+                            SESSION_AGENT_CACHE.move_to_end(session_id)  # LRU: mark as recently used
+                            logger.debug('[webui] Reusing cached agent for session %s', session_id)
+                        else:
+                            SESSION_AGENT_CACHE.pop(session_id, None)
+                            logger.warning(
+                                '[webui] Evicted cached agent with mismatched session identity: cache_key=%s agent_session_id=%s',
+                                session_id,
+                                _cached_agent_session_identity(_cached_agent),
+                            )
+                    if agent is not None:
                         # Reopened/cache-hit sessions must register the agent
                         # so later lifecycle commits can find it.
                         try:
@@ -5498,8 +5539,22 @@ def _run_agent_streaming(
                     # parent, losing access to the recoverable history in old_sid.json.
                     s.parent_session_id = old_sid
                     with LOCK:
-                        if old_sid in SESSIONS:
-                            SESSIONS[new_sid] = SESSIONS.pop(old_sid)
+                        cached_old_session = SESSIONS.pop(old_sid, None)
+                        if cached_old_session is not None and cached_old_session is not s:
+                            cached_old_sid = str(getattr(cached_old_session, 'session_id', '') or '')
+                            if cached_old_sid == str(old_sid):
+                                SESSIONS[old_sid] = cached_old_session
+                            else:
+                                logger.warning(
+                                    "compression cache migration skipped stale object: old_sid=%s new_sid=%s cached_session_id=%s",
+                                    old_sid,
+                                    new_sid,
+                                    cached_old_sid or None,
+                                )
+                        SESSIONS[new_sid] = s
+                        SESSIONS.move_to_end(new_sid)
+                        while len(SESSIONS) > SESSIONS_MAX:
+                            SESSIONS.popitem(last=False)
                     # Migrate the per-session lock: alias new_sid to the held
                     # _agent_lock reference directly (not via old_sid lookup),
                     # then remove the old_sid entry to prevent a leak.
@@ -5512,7 +5567,16 @@ def _run_agent_streaming(
                     with SESSION_AGENT_CACHE_LOCK:
                         _cached_entry = SESSION_AGENT_CACHE.pop(old_sid, None)
                         if _cached_entry:
-                            SESSION_AGENT_CACHE[new_sid] = _cached_entry
+                            _cached_agent = _cached_entry[0]
+                            if _cached_agent_matches_session(_cached_agent, new_sid):
+                                SESSION_AGENT_CACHE[new_sid] = _cached_entry
+                            else:
+                                logger.warning(
+                                    '[webui] Skipped cached agent migration with mismatched session identity: old_sid=%s new_sid=%s agent_session_id=%s',
+                                    old_sid,
+                                    new_sid,
+                                    _cached_agent_session_identity(_cached_agent),
+                                )
                     _compressed = True
                 # Also detect compression via the result dict or compressor state
                 if not _compressed:
@@ -6388,6 +6452,16 @@ def _handle_chat_steer(handler, body: dict) -> bool:
 
     with _cfg.SESSION_AGENT_CACHE_LOCK:
         cached = _cfg.SESSION_AGENT_CACHE.get(sid)
+        if cached:
+            agent = cached[0]
+            if not _cached_agent_matches_session(agent, sid):
+                _cfg.SESSION_AGENT_CACHE.pop(sid, None)
+                logger.warning(
+                    '[webui] Evicted cached agent before steer due to mismatched session identity: cache_key=%s agent_session_id=%s',
+                    sid,
+                    _cached_agent_session_identity(agent),
+                )
+                cached = None
     if not cached:
         # No active agent for this session — caller falls back to interrupt
         return j(handler, {"accepted": False, "fallback": "no_cached_agent",

@@ -3,6 +3,13 @@
 
 ## [Unreleased]
 
+## [v0.51.180] — 2026-05-30 — Release EZ (stage-batch62 — session/agent cache ownership hardening)
+
+### Fixed
+
+- Guard session and agent caches against compression/continuation id drift: `GET /api/session` now evicts a cached `Session` whose own `session_id` no longer matches the requested key (instead of trusting the LRU), the background title-update/refresh paths only adopt a cached session when its identity matches, and the compression checkpoint migration no longer re-stores a stale object under the old lineage id. Prevents a stale cached object from making `/api/session?session_id=<tip>` return an older transcript segment, which looked like a disappeared session (#3191).
+- Evicted cached agents are now torn down cleanly at the WebUI session boundary: pending session memory is committed first, and only if the lifecycle entry is clean afterward does the agent get unregistered and its memory provider shut down via `shutdown_memory_provider(messages)` (closing provider-owned clients such as Hindsight's aiohttp session) before the session DB is closed — instead of leaking those resources until garbage collection (#3166).
+
 ## [v0.51.179] — 2026-05-30 — Release EY (stage-batch61 — custom-provider reasoning efforts + clearer sidebar tooltips)
 
 ### Fixed
