@@ -2,6 +2,8 @@ from pathlib import Path
 
 import yaml
 
+from tests.conftest import requires_agent_modules
+
 
 def _write_skill(root: Path, name: str):
     skill_dir = root / "skills" / name
@@ -24,6 +26,7 @@ def _load_config(home: Path):
     return yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}
 
 
+@requires_agent_modules
 def test_skills_list_reads_disabled_state_from_active_profile(monkeypatch, tmp_path):
     """#3066: the skill directory and disabled toggle state must use the same profile."""
     from api import profiles, routes
@@ -45,6 +48,7 @@ def test_skills_list_reads_disabled_state_from_active_profile(monkeypatch, tmp_p
     assert by_name["beta"]["disabled"] is True
 
 
+@requires_agent_modules
 def test_skill_toggle_writes_active_profile_config_not_default(monkeypatch, tmp_path):
     """#3066: WebUI toggle writes the active profile config, not default HERMES_HOME."""
     from api import profiles, routes
