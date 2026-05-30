@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Sidebar session row tooltips now explain fork, prior-turn, child-session, and status badges, and hovering the truncated chat title now shows the full title instead of the old rename hint.
+
 ## [v0.51.173] — 2026-05-30 — Release ES (stage-batch55 — Windows path/journal safety + pin-quota snapshot fix + tool-card paging anchor + sidebar dedupe + quieter tool cards)
 
 ### Fixed
