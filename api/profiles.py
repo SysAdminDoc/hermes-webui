@@ -158,8 +158,9 @@ def _resolve_base_hermes_home() -> Path:
     try:
         from api.config import _platform_default_hermes_home
         return _platform_default_hermes_home()
-    except Exception:
+    except ImportError:
         # Defensive: never let a config import problem break profile resolution.
+        # Scoped to ImportError so a real bug inside the helper still surfaces.
         if os.name == 'nt':
             local_app_data = os.getenv('LOCALAPPDATA', '').strip()
             if local_app_data:

@@ -87,16 +87,33 @@ def test_stale_running_with_empty_identity_map_is_configured(monkeypatch):
     assert data["running"] is False
 
 
-def test_gateway_state_detail_alone_marks_configured(monkeypatch):
-    """Any alive=None payload carrying a gateway_state detail is configured,
-    even if the reason string is something else."""
+def test_gateway_state_running_detail_marks_configured(monkeypatch):
+    """An alive=None payload whose details report gateway_state == 'running'
+    is configured, even if the reason string differs — the running metadata
+    is the signal."""
+    payload = {
+        "alive": None,
+        "details": {"state": "unknown", "reason": "cross_container_freshness",
+                    "gateway_state": "running"},
+    }
+    data = _call_gateway_status(monkeypatch, health_payload=payload, identity_map={})
+    assert data["configured"] is True
+
+
+def test_stale_stopped_with_empty_identity_map_not_configured(monkeypatch):
+    """No-regression for #1944: a stale-STOPPED gateway must NOT report
+    configured when there's no traffic. agent_health emits
+    gateway_stale_stopped_state precisely so a stopped service the user isn't
+    running reads like 'no root gateway configured' rather than nagging.
+    Only stale-RUNNING metadata flips configured=True (#3194)."""
     payload = {
         "alive": None,
         "details": {"state": "unknown", "reason": "gateway_stale_stopped_state",
                     "gateway_state": "stopped"},
     }
     data = _call_gateway_status(monkeypatch, health_payload=payload, identity_map={})
-    assert data["configured"] is True
+    assert data["configured"] is False
+    assert data["running"] is False
 
 
 def test_truly_unconfigured_stays_unconfigured(monkeypatch):

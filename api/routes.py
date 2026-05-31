@@ -5250,20 +5250,25 @@ def handle_get(handler, parsed) -> bool:
         else:  # alive is None
             # `alive is None` conflates two very different states:
             #   (a) no gateway metadata at all → genuinely not configured
-            #   (b) gateway metadata EXISTS but is stale/inconclusive (e.g. a
-            #       freshly-started gateway that hasn't ticked yet, or a
-            #       cross-container gateway whose running-state went stale).
-            # Case (b) still proves a gateway is *configured* — the banner
-            # must not report "Gateway not configured" just because no
-            # conversation has happened yet and identity_map is empty (#3194).
+            #   (b) gateway metadata EXISTS but is stale/inconclusive.
+            # A stale-but-RUNNING gateway (freshly started, hasn't ticked
+            # `updated_at` yet, or cross-container) still proves the gateway is
+            # *configured* — the banner must not report "Gateway not configured"
+            # just because no conversation has happened yet and identity_map is
+            # empty (#3194).
+            #
+            # A stale-STOPPED gateway is deliberately NOT treated as configured:
+            # agent_health emits `gateway_stale_stopped_state` precisely so a
+            # stopped service the user isn't running reads like "no root gateway
+            # configured" rather than nagging (#1944). So stale-stopped falls
+            # through to the identity_map signal like the genuinely-unconfigured
+            # case.
             details = health.get("details") or {}
-            has_gateway_metadata = bool(details.get("gateway_state")) or (
-                details.get("reason") in {
-                    "gateway_stale_running_state",
-                    "gateway_stale_stopped_state",
-                }
+            gateway_running_metadata = (
+                details.get("reason") == "gateway_stale_running_state"
+                or details.get("gateway_state") == "running"
             )
-            configured = True if has_gateway_metadata else bool(identity_map)
+            configured = True if gateway_running_metadata else bool(identity_map)
             running = bool(identity_map)
 
         platforms_set: set[str] = set()

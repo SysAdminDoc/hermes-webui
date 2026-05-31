@@ -32,13 +32,21 @@ REPO_ROOT = Path(__file__).parent.parent.resolve()
 
 
 def _hermes_home_has_webui_state(base: Path) -> bool:
-    """Return True when *base* looks like a populated Hermes home with WebUI state.
+    """Return True when *base* holds real WebUI state under its ``webui/`` dir.
 
     Used only on Windows to detect a pre-v0.51.134 install at the legacy
     ``%USERPROFILE%\\.hermes`` location so we don't strand the user's existing
     sessions/pins/settings when the default moved to ``%LOCALAPPDATA%\\hermes``
-    (#2905).  We treat the home as "real" if any of the durable WebUI/agent
-    artifacts exist under it.  Cheap stat-only checks; never raises.
+    (#2905).
+
+    We intentionally check ONLY WebUI-owned artifacts (the ``webui/`` subtree),
+    NOT agent-owned files like ``config.yaml`` / ``auth.json``.  The agent has
+    defaulted to ``%LOCALAPPDATA%\\hermes`` on Windows since before #2897, so a
+    long-time agent user who never ran WebUI at the legacy location would have a
+    stray ``auth.json`` there — keying on that would wrongly divert a *fresh*
+    WebUI install to the legacy dir.  Only ``webui/`` state is what actually
+    gets stranded by the move, so it is the correct and narrow signal.
+    Cheap stat-only checks; never raises.
     """
     try:
         if not base.is_dir():
@@ -47,8 +55,6 @@ def _hermes_home_has_webui_state(base: Path) -> bool:
             base / "webui" / "sessions",        # WebUI session store
             base / "webui" / "settings.json",   # WebUI UI settings + pins
             base / "webui",                     # WebUI state dir at all
-            base / "config.yaml",               # agent config
-            base / "auth.json",                 # agent credentials
         )
         return any(m.exists() for m in markers)
     except OSError:

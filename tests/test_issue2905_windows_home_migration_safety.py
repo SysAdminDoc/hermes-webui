@@ -174,13 +174,22 @@ class TestHermesHomeHasWebuiState:
         (tmp_path / "webui" / "sessions").mkdir(parents=True)
         assert config._hermes_home_has_webui_state(tmp_path) is True
 
-    def test_config_yaml_marker_counts(self, tmp_path):
-        (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+    def test_webui_settings_marker_counts(self, tmp_path):
+        (tmp_path / "webui").mkdir()
+        (tmp_path / "webui" / "settings.json").write_text("{}", encoding="utf-8")
         assert config._hermes_home_has_webui_state(tmp_path) is True
 
-    def test_auth_json_marker_counts(self, tmp_path):
-        (tmp_path / "auth.json").write_text("{}", encoding="utf-8")
+    def test_webui_dir_alone_counts(self, tmp_path):
+        (tmp_path / "webui").mkdir()
         assert config._hermes_home_has_webui_state(tmp_path) is True
+
+    def test_agent_only_artifacts_do_not_count(self, tmp_path):
+        """A home with ONLY agent files (config.yaml / auth.json) and no webui/
+        dir is NOT treated as WebUI state — otherwise a long-time agent user
+        installing WebUI fresh would be wrongly diverted to the legacy dir."""
+        (tmp_path / "config.yaml").write_text("model: x\n", encoding="utf-8")
+        (tmp_path / "auth.json").write_text("{}", encoding="utf-8")
+        assert config._hermes_home_has_webui_state(tmp_path) is False
 
 
 def test_profiles_base_home_delegates_to_config(monkeypatch, tmp_path):
