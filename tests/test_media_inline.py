@@ -19,6 +19,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from tests._pytest_port import BASE, TEST_STATE_DIR
@@ -289,6 +290,51 @@ class TestMediaEndpointUnit(unittest.TestCase):
             child.parent.mkdir()
             child.write_bytes(b"png")
             self.assertTrue(routes._path_is_within_root(child.resolve(), root))
+
+    def test_active_workspace_carveout_gated_against_hermes_roots(self):
+        """#3234: the active-workspace carve-out must NOT re-open the disclosure
+        when the active workspace is pathologically set to a broad/internal root
+        ($HOME, ~/.hermes, a profile root, etc.). A state.db sitting under such a
+        workspace must still be denied (403), not served.
+        """
+        from api import routes
+
+        class _Handler:
+            def __init__(self):
+                self.status = None
+                self._buf = []
+            def send_response(self, code):
+                self.status = code
+            def send_header(self, *a, **k):
+                pass
+            def end_headers(self):
+                pass
+            class _W:
+                def write(self_inner, b):
+                    pass
+            wfile = _W()
+
+        with tempfile.TemporaryDirectory() as home:
+            hermes_home = pathlib.Path(home) / ".hermes"
+            hermes_home.mkdir(parents=True)
+            secret = hermes_home / "state.db"
+            secret.write_bytes(b"secret-state")
+            target = secret.resolve()
+
+            handler = _Handler()
+            parsed = SimpleNamespace(
+                query=f"path={urllib.parse.quote(str(target))}", path="/api/media"
+            )
+            with mock.patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}), \
+                 mock.patch.object(routes, "get_last_workspace", lambda: str(hermes_home)), \
+                 mock.patch("api.auth.is_auth_enabled", lambda: False):
+                routes._handle_media(handler, parsed)
+
+            self.assertEqual(
+                handler.status, 403,
+                "state.db must stay denied even when the active workspace IS the "
+                "Hermes home (carve-out must be gated against internal roots)",
+            )
 
     def test_media_endpoints_advertise_byte_range_support(self):
         routes_src = (REPO_ROOT / "api" / "routes.py").read_text(encoding="utf-8")

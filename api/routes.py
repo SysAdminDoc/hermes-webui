@@ -8137,6 +8137,12 @@ def _handle_media(handler, parsed):
 
     # Active-workspace carve-out: a file inside the active workspace is the
     # user's own content, not Hermes internal state — never deny it here.
+    # BUT the carve-out is only safe for a genuine PROJECT workspace. If the
+    # active workspace is pathologically set to a broad/internal root ($HOME,
+    # any Hermes root, an ancestor of a Hermes root, STATE_DIR, a */profiles
+    # dir, a named profile root, or an internal state subdir), honoring it would
+    # re-open the disclosure (e.g. workspace=~/.hermes → state.db served). In
+    # that case we DISABLE the carve-out so the deny rules below still fire.
     _active_workspace = None
     try:
         from api.workspace import get_last_workspace
@@ -8145,8 +8151,28 @@ def _handle_media(handler, parsed):
             _active_workspace = _aw
     except Exception:
         _active_workspace = None
+
+    def _workspace_is_safe_carveout(ws):
+        if ws is None:
+            return False
+        # Never trust a workspace that IS, CONTAINS, or is CONTAINED BY a Hermes
+        # root, or that is $HOME / a profiles dir / a state subdir.
+        if ws == _HOME.resolve():
+            return False
+        for _root in _hermes_roots:
+            # ws == root, ws inside root, or ws an ancestor of root → unsafe.
+            if ws == _root or _path_is_within_root(ws, _root) or _path_is_within_root(_root, ws):
+                return False
+        # A */profiles dir or a named-profile root (…/profiles/<name>).
+        if ws.name == "profiles" or (ws.parent.name == "profiles"):
+            return False
+        if ws.name in _DENY_SUBDIRS:
+            return False
+        return True
+
     _in_active_workspace = (
         _active_workspace is not None
+        and _workspace_is_safe_carveout(_active_workspace)
         and _path_is_within_root(target, _active_workspace)
     )
 
