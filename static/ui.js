@@ -3091,17 +3091,6 @@ function renderMd(raw){
     return lead+'\x00P'+(_preBlock_stash.length-1)+'\x00';
   });
   s=s.replace(/`([^`\n]+)`/g,(_,c)=>{fence_stash.push('<code>'+esc(c)+'</code>');return '\x00F'+(fence_stash.length-1)+'\x00';});
-  // Bare file:// artifact links → media. Some gateway/tool surfaces emit bare
-  // file:// links for local artifacts instead of MEDIA: tokens; browser clients
-  // cannot open the server filesystem directly, so route them through /api/media.
-  // This runs AFTER fenced-block (\x00P) and inline-code (\x00F) stashing so a
-  // file:// inside a code block / backtick span stays literal text (#3219/#3234).
-  // Only bare URLs (line-start or whitespace-delimited) are matched, so normal
-  // [label](file://...) markdown anchors keep the link path below.
-  s=s.replace(/(^|\s)(file:\/\/[^\s<>"')\]]+)/g,(_,lead,raw_ref)=>{
-    media_stash.push(raw_ref);
-    return lead+'\x00D'+(media_stash.length-1)+'\x00';
-  });
   // Math stash: protect $$..$$ and $..$ from markdown processing
   // Runs AFTER fence_stash so backtick code spans protect their dollar-sign contents
   const math_stash=[];
@@ -3121,6 +3110,17 @@ function renderMd(raw){
   // backticks for multiline code and break subsequent code-box rendering.
   const rawPreStash=[];
   s=s.replace(/(<pre\b[^>]*>[\s\S]*?<\/pre>)/gi,m=>{rawPreStash.push(m);return `\x00R${rawPreStash.length-1}\x00`;});
+  // Bare file:// artifact links → media. Some gateway/tool surfaces emit bare
+  // file:// links for local artifacts instead of MEDIA: tokens; browser clients
+  // cannot open the server filesystem directly, so route them through /api/media.
+  // Runs AFTER fenced-block (\x00P), inline-code (\x00F), AND raw-<pre> (\x00R)
+  // stashing so a file:// inside any code/preformatted region stays literal text
+  // (#3219/#3234). Only bare URLs (line-start or whitespace-delimited) match, so
+  // normal [label](file://...) markdown anchors keep the link path below.
+  s=s.replace(/(^|\s)(file:\/\/[^\s<>"')\]]+)/g,(_,lead,raw_ref)=>{
+    media_stash.push(raw_ref);
+    return lead+'\x00D'+(media_stash.length-1)+'\x00';
+  });
   s=s.replace(/<strong>([\s\S]*?)<\/strong>/gi,(_,t)=>'**'+t+'**');
   s=s.replace(/<b>([\s\S]*?)<\/b>/gi,(_,t)=>'**'+t+'**');
   s=s.replace(/<em>([\s\S]*?)<\/em>/gi,(_,t)=>'*'+t+'*');

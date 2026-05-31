@@ -8135,14 +8135,42 @@ def _handle_media(handler, parsed):
         if _r is not None and _r not in _hermes_roots:
             _hermes_roots.append(_r)
 
-    # Active-workspace carve-out: a file inside the active workspace is the
-    # user's own content, not Hermes internal state — never deny it here.
-    # BUT the carve-out is only safe for a genuine PROJECT workspace. If the
-    # active workspace is pathologically set to a broad/internal root ($HOME,
-    # any Hermes root, an ancestor of a Hermes root, STATE_DIR, a */profiles
-    # dir, a named profile root, or an internal state subdir), honoring it would
-    # re-open the disclosure (e.g. workspace=~/.hermes → state.db served). In
-    # that case we DISABLE the carve-out so the deny rules below still fire.
+    # Case-insensitive path helpers so STATE.DB / Sessions/ casing variants
+    # cannot bypass the deny on macOS/Windows filesystems (Codex review #3234).
+    def _norm(p):
+        return os.path.normcase(str(Path(p).resolve())).casefold()
+    def _within_ci(child, root):
+        try:
+            c, r = _norm(child), _norm(root)
+            return os.path.commonpath([c, r]) == r
+        except (ValueError, OSError):
+            return False
+    def _equal_ci(a, b):
+        try:
+            return _norm(a) == _norm(b)
+        except (ValueError, OSError):
+            return False
+
+    # State-subdir deny set: each DENY_SUBDIR directly under any Hermes root,
+    # plus STATE_DIR itself (sensitive in its entirety). These ALWAYS apply —
+    # even to a file that lives under the active workspace — so a workspace
+    # pointed at (or overlapping) a state dir cannot expose sessions/memories/etc.
+    _deny_dirs = []
+    if _state_dir is not None:
+        _deny_dirs.append(_state_dir)
+    for _root in _hermes_roots:
+        for _sub in _DENY_SUBDIRS:
+            _deny_dirs.append((_root / _sub).resolve())
+    _deny_names_ci = {n.casefold() for n in _DENY_FILENAMES}
+
+    # Active-workspace carve-out: a file inside a genuine PROJECT workspace is
+    # the user's own content, so the secret/config FILENAME denies are relaxed
+    # for it. The carve-out is DISABLED when the workspace is a broad/internal
+    # location ($HOME, a Hermes root itself, an ANCESTOR of a Hermes root, a
+    # */profiles dir, a named-profile root, or a state subdir) — honoring those
+    # would re-open the disclosure. A workspace that is a proper DESCENDANT of a
+    # Hermes root (e.g. STATE_DIR/workspace) is still a legit project workspace
+    # and keeps the carve-out. The dir-based denies above are NOT relaxed.
     _active_workspace = None
     try:
         from api.workspace import get_last_workspace
@@ -8155,16 +8183,14 @@ def _handle_media(handler, parsed):
     def _workspace_is_safe_carveout(ws):
         if ws is None:
             return False
-        # Never trust a workspace that IS, CONTAINS, or is CONTAINED BY a Hermes
-        # root, or that is $HOME / a profiles dir / a state subdir.
-        if ws == _HOME.resolve():
+        if _equal_ci(ws, _HOME):
             return False
         for _root in _hermes_roots:
-            # ws == root, ws inside root, or ws an ancestor of root → unsafe.
-            if ws == _root or _path_is_within_root(ws, _root) or _path_is_within_root(_root, ws):
+            # ws IS a root, or ws is an ANCESTOR of a root → unsafe. (A proper
+            # descendant of a root is fine — that's a normal project workspace.)
+            if _equal_ci(ws, _root) or _within_ci(_root, ws):
                 return False
-        # A */profiles dir or a named-profile root (…/profiles/<name>).
-        if ws.name == "profiles" or (ws.parent.name == "profiles"):
+        if ws.name == "profiles" or ws.parent.name == "profiles":
             return False
         if ws.name in _DENY_SUBDIRS:
             return False
@@ -8173,36 +8199,17 @@ def _handle_media(handler, parsed):
     _in_active_workspace = (
         _active_workspace is not None
         and _workspace_is_safe_carveout(_active_workspace)
-        and _path_is_within_root(target, _active_workspace)
+        and _within_ci(target, _active_workspace)
     )
 
+    # Dir-based denies always fire (even inside the active workspace).
+    if any(_within_ci(target, d) for d in _deny_dirs):
+        return bad(handler, "Path not in allowed location", 403)
+    # Filename-based denies fire for files under a Hermes root, UNLESS the file
+    # is inside a genuine project workspace (carve-out).
     if not _in_active_workspace:
-        # Case-insensitive containment + basename compare so STATE.DB / Sessions/
-        # cannot bypass the deny on macOS/Windows filesystems (Codex review #3234).
-        def _within_ci(child, root):
-            try:
-                c = os.path.normcase(str(Path(child).resolve()))
-                r = os.path.normcase(str(Path(root).resolve()))
-                return os.path.commonpath([c, r]) == r
-            except (ValueError, OSError):
-                return False
-        _deny_names_ci = {n.casefold() for n in _DENY_FILENAMES}
-        _under_hermes_root = any(
-            _within_ci(target, _root) for _root in _hermes_roots
-        )
-        # State-subdir deny: any DENY_SUBDIR directly under a Hermes root, and
-        # the STATE_DIR itself (sensitive in its entirety).
-        _deny_dirs = []
-        if _state_dir is not None:
-            _deny_dirs.append(_state_dir)
-        for _root in _hermes_roots:
-            for _sub in _DENY_SUBDIRS:
-                _deny_dirs.append((_root / _sub).resolve())
-        _denied = (
-            (_under_hermes_root and target.name.casefold() in _deny_names_ci)
-            or any(_within_ci(target, d) for d in _deny_dirs)
-        )
-        if _denied:
+        _under_hermes_root = any(_within_ci(target, _root) for _root in _hermes_roots)
+        if _under_hermes_root and target.name.casefold() in _deny_names_ci:
             return bad(handler, "Path not in allowed location", 403)
     # ── end #3234 deny ───────────────────────────────────────────────────────
 
