@@ -170,6 +170,12 @@ function _normalizeArtifactPath(path){
   if(!path) return '';
   path = String(path).trim().replace(/[\`"'<>),.;:]+$/g,'').replace(/^[\`"'(<]+/g,'');
   if(!path || path.length > 240 || path.includes('://')) return '';
+  // Canonicalize workspace-relative prefixes so a file-tree open ("foo.md") and a
+  // tool arg recorded as "./foo.md" or "~/foo.md" compare equal for mutation
+  // tracking; otherwise an agent edit via a ./-prefixed path leaves the open
+  // preview stale (#3262 / pre-release regression-gate finding).
+  path = path.replace(/^~\//,'').replace(/^(?:\.\/)+/,'');
+  if(!path) return '';
   if(ARTIFACT_IGNORE_RE.test(path)) return '';
   if(!/[./]/.test(path)) return '';
   return path;
