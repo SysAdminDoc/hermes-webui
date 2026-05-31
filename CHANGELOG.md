@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+### Added
+- **Forward-looking Python lint gate (ruff).** A curated `[tool.ruff]` ruleset (E9 syntax/runtime + F pyflakes + B bugbear — high-signal correctness rules, no style/formatting families) now gates **new and changed Python code** in CI (`tests.yml` `lint` job) and as part of the maintainer pre-release pre-gate. It is the Python twin of the existing ESLint runtime guard for `static/*.js`. Crucially it is **line-scoped** (`scripts/ruff_lint.py --diff`): it flags violations only on lines a change adds or modifies, so it keeps incoming code clean **without** reformatting the existing tree's cosmetic backlog (a separate, deferred, maintainer-run decision). `tests/test_ruff_forward_lint.py` additionally holds the whole tree free of E9 errors and skips cleanly when ruff isn't installed. See TESTING.md > "Python lint gate (ruff)". Closes #3273.
+
+
 ## [v0.51.188] — 2026-05-31 — Release FH (stage-batchH — configured runner-client boundary, default-off)
 
 ### Added
