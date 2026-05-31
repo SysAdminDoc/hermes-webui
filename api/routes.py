@@ -8177,8 +8177,18 @@ def _handle_media(handler, parsed):
     )
 
     if not _in_active_workspace:
+        # Case-insensitive containment + basename compare so STATE.DB / Sessions/
+        # cannot bypass the deny on macOS/Windows filesystems (Codex review #3234).
+        def _within_ci(child, root):
+            try:
+                c = os.path.normcase(str(Path(child).resolve()))
+                r = os.path.normcase(str(Path(root).resolve()))
+                return os.path.commonpath([c, r]) == r
+            except (ValueError, OSError):
+                return False
+        _deny_names_ci = {n.casefold() for n in _DENY_FILENAMES}
         _under_hermes_root = any(
-            _path_is_within_root(target, _root) for _root in _hermes_roots
+            _within_ci(target, _root) for _root in _hermes_roots
         )
         # State-subdir deny: any DENY_SUBDIR directly under a Hermes root, and
         # the STATE_DIR itself (sensitive in its entirety).
@@ -8189,8 +8199,8 @@ def _handle_media(handler, parsed):
             for _sub in _DENY_SUBDIRS:
                 _deny_dirs.append((_root / _sub).resolve())
         _denied = (
-            (_under_hermes_root and target.name in _DENY_FILENAMES)
-            or any(_path_is_within_root(target, d) for d in _deny_dirs)
+            (_under_hermes_root and target.name.casefold() in _deny_names_ci)
+            or any(_within_ci(target, d) for d in _deny_dirs)
         )
         if _denied:
             return bad(handler, "Path not in allowed location", 403)
