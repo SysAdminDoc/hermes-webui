@@ -36,6 +36,7 @@ function extractFunc(name) {
   return src.slice(start, i);
 }
 eval(extractFunc('_toolArgPreviewValue'));
+eval(extractFunc('_toolArgPreviewKeyIsHidden'));
 eval(extractFunc('_formatToolArgPreview'));
 eval(extractFunc('_toolCardPreviewText'));
 let buf = '';
@@ -103,3 +104,41 @@ def test_explicit_progress_preview_still_wins(driver_path):
         "stdout",
     )
     assert preview == "Running command"
+
+
+@pytest.mark.parametrize(
+    "secret_key",
+    [
+        "api_key", "apiKey", "API_KEY", "x-api-key",
+        "token", "access_token", "refresh_token", "auth_token", "bearer_token",
+        "authorization", "Authorization",
+        "secret", "secret_key", "client_secret", "clientSecret",
+        "password", "passwd",
+        "private_key", "credential", "cookie", "cookies",
+    ],
+)
+def test_collapsed_preview_never_exposes_secret_shaped_arg_keys(driver_path, secret_key):
+    """Regression: the collapsed-preview arg summary must never surface a
+    secret-shaped argument key/value, including camelCase / variant spellings.
+
+    Codex regression gate found that exact-name hiding leaked apiKey /
+    access_token / clientSecret / Authorization etc. into the always-visible
+    collapsed header (v0.51.190). The normalized `_toolArgPreviewKeyIsHidden`
+    predicate closes this; this test pins it so it can't silently regress.
+    """
+    preview = _preview(
+        driver_path,
+        {"name": "mcp_tool", "args": {secret_key: "SUPER-SECRET-VALUE-xyz", "path": "/visible/ok"}, "done": True},
+    )
+    assert "SUPER-SECRET-VALUE-xyz" not in preview, f"{secret_key} value leaked into preview: {preview!r}"
+    # the legit, non-secret key is still allowed to render
+    assert "/visible/ok" in preview
+
+
+def test_collapsed_preview_still_shows_legit_keys(driver_path):
+    """The secret guard must not over-block ordinary tool args."""
+    preview = _preview(
+        driver_path,
+        {"name": "search_files", "args": {"target": "content", "pattern": "foo", "workdir": "/repo"}, "done": True},
+    )
+    assert "target=" in preview and "pattern=" in preview

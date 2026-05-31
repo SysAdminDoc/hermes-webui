@@ -7030,17 +7030,30 @@ function _toolArgPreviewValue(value){
   if(typeof value==='object') return 'object';
   return String(value).replace(/\s+/g,' ').trim();
 }
+// Secret/sensitive-arg guard for collapsed tool-card previews. Exact-name hiding
+// alone misses camelCase / variant spellings (apiKey, access_token, clientSecret,
+// Authorization, …), so a normalized substring check runs first so secret-shaped
+// argument names are never surfaced in the always-visible collapsed header (#3267).
+function _toolArgPreviewKeyIsHidden(key){
+  const k=String(key||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  // verbose-but-not-secret bodies we keep out of the compact preview
+  const verbose=['content','filecontent','newstring','oldstring','patch','text','message','prompt','code','script','cookies','headers'];
+  if(verbose.includes(k)) return true;
+  // secret-shaped substrings (covers api_key/apiKey, access_token/auth_token/bearer,
+  // client_secret, password, credential, private_key, authorization, etc.)
+  return /(apikey|token|secret|password|passwd|credential|authorization|\bauth\b|auth$|^auth|bearer|privatekey|accesskey|sessionkey|signingkey|cookie)/.test(k)
+    || k==='auth' || k==='key' || k==='pat';
+}
 function _formatToolArgPreview(args){
   if(!args||typeof args!=='object') return '';
   const preferred=['path','file_path','target','pattern','query','url','urls','name','ref','command','action','mode','schedule','workdir'];
-  const hidden=new Set(['content','file_content','new_string','old_string','patch','text','message','prompt','code','script','cookies','headers','auth','api_key','password','token','secret']);
   const keys=[];
   for(const key of preferred){
-    if(Object.prototype.hasOwnProperty.call(args,key)&&!hidden.has(key)) keys.push(key);
+    if(Object.prototype.hasOwnProperty.call(args,key)&&!_toolArgPreviewKeyIsHidden(key)) keys.push(key);
   }
   for(const key of Object.keys(args)){
     if(keys.length>=3) break;
-    if(keys.includes(key)||hidden.has(key)) continue;
+    if(keys.includes(key)||_toolArgPreviewKeyIsHidden(key)) continue;
     keys.push(key);
   }
   const parts=[];

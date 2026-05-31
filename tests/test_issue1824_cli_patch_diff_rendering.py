@@ -109,6 +109,8 @@ def test_rendered_apply_patch_tool_card_html_contains_diff_lines():
         "_cliPatchSnippetFromArgs",
         "_cliToolCardSnippet",
         "_cliToolCardHasDiffSnippet",
+        "_toolArgPreviewValue",
+        "_toolArgPreviewKeyIsHidden",
         "_formatToolArgPreview",
         "_toolCardPreviewText",
         "buildToolCard",
