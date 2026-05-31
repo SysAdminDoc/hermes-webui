@@ -8097,26 +8097,49 @@ def _handle_media(handler, parsed):
         ".signing_key", ".pbkdf2_key", ".sessions.json",
         "google_token.json", "google_client_secret.json",
     }
-    # Roots whose contents are sensitive in their entirety.
+    # Roots whose contents are sensitive in their entirety. Cover EVERY Hermes
+    # state root that the allowlist accepts — not just the active-profile
+    # HERMES_HOME. Under a named profile the process HERMES_HOME is
+    # ~/.hermes/profiles/<name>, but the allowlist (above) also grants the base
+    # ~/.hermes, so without including the base root an attacker-influenced link
+    # could still fetch ~/.hermes/state.db or a SIBLING profile's secrets
+    # (~/.hermes/profiles/other/auth.json). (Codex review #3234.)
     _state_dir = None
     try:
         from api.config import STATE_DIR as _STATE_DIR
         _state_dir = Path(_STATE_DIR).resolve()
     except Exception:
         _state_dir = None
-    _hermes_home_resolved = _HERMES_HOME.resolve()
-    _deny_dirs = [d for d in (
+    _base_hermes_home = None
+    try:
+        from api.profiles import _DEFAULT_HERMES_HOME as _BASE_HH
+        _base_hermes_home = Path(_BASE_HH).resolve()
+    except Exception:
+        _base_hermes_home = None
+    # All Hermes state roots: active-profile HERMES_HOME, base ~/.hermes,
+    # api.profiles default home, and the WebUI STATE_DIR.
+    _hermes_roots = []
+    for _r in (
+        _HERMES_HOME.resolve(),
+        (_HOME / ".hermes").resolve(),
+        _base_hermes_home,
         _state_dir,
-        (_HERMES_HOME / "sessions").resolve(),
-        (_HERMES_HOME / "memories").resolve(),
-        (_HERMES_HOME / "profiles").resolve(),
-    ) if d is not None]
+    ):
+        if _r is not None and _r not in _hermes_roots:
+            _hermes_roots.append(_r)
+    # Dir-based denies: the named state subdirs under every Hermes root, plus
+    # the STATE_DIR itself (sensitive in its entirety).
+    _deny_dirs = []
+    if _state_dir is not None:
+        _deny_dirs.append(_state_dir)
+    for _root in _hermes_roots:
+        for _sub in ("sessions", "memories", "profiles"):
+            _deny_dirs.append((_root / _sub).resolve())
     # Filename-based denies only apply to files living under a Hermes/WebUI state
     # root — so a legitimate workspace or /tmp media artifact that happens to be
     # named settings.json / config.yaml is NOT blocked (Codex review #3234).
-    _under_state_root = (
-        _path_is_within_root(target, _hermes_home_resolved)
-        or (_state_dir is not None and _path_is_within_root(target, _state_dir))
+    _under_state_root = any(
+        _path_is_within_root(target, _root) for _root in _hermes_roots
     )
     _denied = (
         (_under_state_root and target.name in _DENY_FILENAMES)
