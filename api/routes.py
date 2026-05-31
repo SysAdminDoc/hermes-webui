@@ -8092,24 +8092,34 @@ def _handle_media(handler, parsed):
     # allow/serve decision so it covers every entry path (bare file:// URLs,
     # markdown anchors, MEDIA: tokens, and session-token grants). See #3234.
     _DENY_FILENAMES = {
-        "settings.json", "state.db", "auth.json", "auth.lock",
-        "config.yaml", "config.yml", ".env", ".signing_key",
-        ".pbkdf2_key", ".sessions.json",
+        "settings.json", "state.db", "state.db-wal", "state.db-shm",
+        "auth.json", "auth.lock", "config.yaml", "config.yml", ".env",
+        ".signing_key", ".pbkdf2_key", ".sessions.json",
+        "google_token.json", "google_client_secret.json",
     }
+    # Roots whose contents are sensitive in their entirety.
     _state_dir = None
     try:
         from api.config import STATE_DIR as _STATE_DIR
         _state_dir = Path(_STATE_DIR).resolve()
     except Exception:
         _state_dir = None
+    _hermes_home_resolved = _HERMES_HOME.resolve()
     _deny_dirs = [d for d in (
         _state_dir,
         (_HERMES_HOME / "sessions").resolve(),
         (_HERMES_HOME / "memories").resolve(),
         (_HERMES_HOME / "profiles").resolve(),
     ) if d is not None]
+    # Filename-based denies only apply to files living under a Hermes/WebUI state
+    # root — so a legitimate workspace or /tmp media artifact that happens to be
+    # named settings.json / config.yaml is NOT blocked (Codex review #3234).
+    _under_state_root = (
+        _path_is_within_root(target, _hermes_home_resolved)
+        or (_state_dir is not None and _path_is_within_root(target, _state_dir))
+    )
     _denied = (
-        target.name in _DENY_FILENAMES
+        (_under_state_root and target.name in _DENY_FILENAMES)
         or any(_path_is_within_root(target, d) for d in _deny_dirs)
     )
     if _denied:
