@@ -8151,13 +8151,15 @@ def _handle_media(handler, parsed):
         except (ValueError, OSError):
             return False
 
-    # State-subdir deny set: each DENY_SUBDIR directly under any Hermes root,
-    # plus STATE_DIR itself (sensitive in its entirety). These ALWAYS apply —
-    # even to a file that lives under the active workspace — so a workspace
-    # pointed at (or overlapping) a state dir cannot expose sessions/memories/etc.
+    # State-subdir deny set: each DENY_SUBDIR directly under any Hermes root
+    # (which includes STATE_DIR — so STATE_DIR/sessions, STATE_DIR/memories,
+    # etc. are covered). These ALWAYS apply — even to a file under the active
+    # workspace — so a workspace pointed at (or overlapping) a state dir cannot
+    # expose sessions/memories/profiles/etc. We do NOT deny STATE_DIR itself
+    # wholesale: the default workspace lives at STATE_DIR/workspace, and that is
+    # legitimate user media — direct sensitive files there are still caught by
+    # the filename denies below. (Codex review #3234.)
     _deny_dirs = []
-    if _state_dir is not None:
-        _deny_dirs.append(_state_dir)
     for _root in _hermes_roots:
         for _sub in _DENY_SUBDIRS:
             _deny_dirs.append((_root / _sub).resolve())

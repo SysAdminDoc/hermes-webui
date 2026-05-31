@@ -336,6 +336,74 @@ class TestMediaEndpointUnit(unittest.TestCase):
                 "Hermes home (carve-out must be gated against internal roots)",
             )
 
+    def test_active_workspace_under_state_dir_serves_but_sessions_denied(self):
+        """#3234: a workspace at STATE_DIR/workspace is legitimate user media —
+        STATE_DIR/workspace/shot.png must serve (not 403), while a sibling
+        STATE_DIR/sessions/<sid>.json (internal state) must stay denied (403).
+
+        Regression for the over-block where STATE_DIR was denied wholesale.
+        """
+        from api import routes
+
+        class _Handler:
+            def __init__(self):
+                self.status = None
+                self.headers = {}
+            def send_response(self, code):
+                self.status = code
+            def send_header(self, *a, **k):
+                pass
+            def end_headers(self):
+                pass
+            class _W:
+                def write(self_inner, b):
+                    pass
+                def flush(self_inner):
+                    pass
+            wfile = _W()
+
+        png_bytes = (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+            b'\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00'
+            b'\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+        )
+        with tempfile.TemporaryDirectory() as home:
+            hermes_home = pathlib.Path(home) / ".hermes"
+            state_dir = hermes_home / "webui-state"
+            ws = state_dir / "workspace"
+            sessions = state_dir / "sessions"
+            ws.mkdir(parents=True)
+            sessions.mkdir(parents=True)
+            shot = ws / "shot.png"
+            shot.write_bytes(png_bytes)
+            sess_file = sessions / "abc.json"
+            sess_file.write_text('{"messages":[]}', encoding="utf-8")
+
+            env = {
+                "HERMES_HOME": str(hermes_home),
+                "HERMES_WEBUI_STATE_DIR": str(state_dir),
+            }
+            with mock.patch.dict(os.environ, env), \
+                 mock.patch.object(routes, "get_last_workspace", lambda: str(ws)), \
+                 mock.patch("api.auth.is_auth_enabled", lambda: False), \
+                 mock.patch("api.config.STATE_DIR", state_dir):
+                # workspace media → not blocked by the #3234 deny
+                h1 = _Handler()
+                routes._handle_media(h1, SimpleNamespace(
+                    query=f"path={urllib.parse.quote(str(shot.resolve()))}&inline=1",
+                    path="/api/media"))
+                self.assertNotEqual(
+                    h1.status, 403,
+                    "STATE_DIR/workspace/shot.png must NOT be blocked (legit media)")
+                # sessions state → still denied
+                h2 = _Handler()
+                routes._handle_media(h2, SimpleNamespace(
+                    query=f"path={urllib.parse.quote(str(sess_file.resolve()))}",
+                    path="/api/media"))
+                self.assertEqual(
+                    h2.status, 403,
+                    "STATE_DIR/sessions/abc.json must stay denied (internal state)")
+
     def test_media_endpoints_advertise_byte_range_support(self):
         routes_src = (REPO_ROOT / "api" / "routes.py").read_text(encoding="utf-8")
         self.assertIn("Accept-Ranges", routes_src)
