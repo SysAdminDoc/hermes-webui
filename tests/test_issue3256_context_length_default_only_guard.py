@@ -13,7 +13,6 @@ the real agent metadata catalog.
 """
 import sys
 import types
-import importlib
 
 
 def _install_fake_get_model_context_length(monkeypatch, recorder):
