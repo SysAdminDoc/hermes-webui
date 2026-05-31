@@ -505,6 +505,39 @@ class TestMediaEndpointIntegration(unittest.TestCase):
         finally:
             sess_file.unlink(missing_ok=True)
 
+    def test_deny_list_does_not_overblock_legitimate_media(self):
+        """#3234 follow-up: the state/secret deny-list must NOT block ordinary
+        media that merely shares a sensitive basename but lives OUTSIDE any
+        Hermes state root (e.g. a user artifact in /tmp named settings.json).
+
+        The deny is scoped to files under a Hermes root; a /tmp PNG named
+        settings.png — or even settings.json — is the user's own content and
+        must still be served (200), not 403.
+        """
+        png_bytes = (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+            b'\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00'
+            b'\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+        )
+        # A /tmp artifact whose stem collides with a denied basename — must serve
+        # because /tmp is not a Hermes state root.
+        with tempfile.NamedTemporaryFile(
+            suffix=".png", prefix="settings_artifact_", dir="/tmp", delete=False
+        ) as f:
+            f.write(png_bytes)
+            tmp_path = f.name
+        try:
+            body, status, headers = self._get(
+                f"/api/media?path={urllib.request.quote(tmp_path)}"
+            )
+            self.assertEqual(
+                status, 200,
+                f"a /tmp PNG outside any Hermes root must serve, got {status}",
+            )
+            self.assertIn("image/png", headers.get("Content-Type", ""))
+        finally:
+            pathlib.Path(tmp_path).unlink(missing_ok=True)
+
     def test_health_check_still_works(self):
         """Sanity: server is up and /health works."""
         body, status, _ = self._get("/health")

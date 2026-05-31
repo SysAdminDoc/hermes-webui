@@ -8084,26 +8084,35 @@ def _handle_media(handler, parsed):
         _INLINE_IMAGE_TYPES,
     )
 
-    # Hard deny WebUI state + secret/config files even when they fall under an
-    # allowed root (the whole Hermes home is allowed, and the state dir lives
-    # inside it). Without this, an authenticated session rendering attacker-
-    # influenced agent output that emits a file:// / MEDIA: link to one of these
-    # paths could fetch it through /api/media. This guard runs BEFORE the
-    # allow/serve decision so it covers every entry path (bare file:// URLs,
-    # markdown anchors, MEDIA: tokens, and session-token grants). See #3234.
+    # ── #3234: hard-deny Hermes's own state + secret/config files ────────────
+    # The allowlist above grants the whole Hermes home (and base ~/.hermes), so
+    # an authenticated session rendering attacker-influenced agent output that
+    # emits a file:// / MEDIA: link to a state/secret file could fetch it
+    # through /api/media. This guard runs BEFORE the allow/serve decision so it
+    # covers every entry path (bare file:// URLs, markdown anchors, MEDIA:
+    # tokens, and session-token grants).
+    #
+    # Model: the ACTIVE WORKSPACE is a legitimate-media carve-out — the user is
+    # entitled to their own workspace files (that is also how the workspace file
+    # browser reaches them), even when a workspace happens to live under a
+    # Hermes root. The deny rules target Hermes's OWN internal state, which lives
+    # OUTSIDE any workspace. So: if the target is inside the active workspace, it
+    # is never denied here; otherwise we deny known secret/config basenames and
+    # the internal state subdirectories across every Hermes root the allowlist
+    # accepts (active-profile HERMES_HOME, base ~/.hermes, the api.profiles
+    # default home, and STATE_DIR — which also defends sibling profiles).
     _DENY_FILENAMES = {
         "settings.json", "state.db", "state.db-wal", "state.db-shm",
         "auth.json", "auth.lock", "config.yaml", "config.yml", ".env",
         ".signing_key", ".pbkdf2_key", ".sessions.json",
         "google_token.json", "google_client_secret.json",
+        "gateway_state.json", "channel_directory.json", "jobs.json",
     }
-    # Roots whose contents are sensitive in their entirety. Cover EVERY Hermes
-    # state root that the allowlist accepts — not just the active-profile
-    # HERMES_HOME. Under a named profile the process HERMES_HOME is
-    # ~/.hermes/profiles/<name>, but the allowlist (above) also grants the base
-    # ~/.hermes, so without including the base root an attacker-influenced link
-    # could still fetch ~/.hermes/state.db or a SIBLING profile's secrets
-    # (~/.hermes/profiles/other/auth.json). (Codex review #3234.)
+    # Internal state subdirs that are sensitive in their entirety.
+    _DENY_SUBDIRS = (
+        "sessions", "memories", "profiles", "cron", "logs",
+        "checkpoints", "backups",
+    )
     _state_dir = None
     try:
         from api.config import STATE_DIR as _STATE_DIR
@@ -8116,8 +8125,6 @@ def _handle_media(handler, parsed):
         _base_hermes_home = Path(_BASE_HH).resolve()
     except Exception:
         _base_hermes_home = None
-    # All Hermes state roots: active-profile HERMES_HOME, base ~/.hermes,
-    # api.profiles default home, and the WebUI STATE_DIR.
     _hermes_roots = []
     for _r in (
         _HERMES_HOME.resolve(),
@@ -8127,26 +8134,41 @@ def _handle_media(handler, parsed):
     ):
         if _r is not None and _r not in _hermes_roots:
             _hermes_roots.append(_r)
-    # Dir-based denies: the named state subdirs under every Hermes root, plus
-    # the STATE_DIR itself (sensitive in its entirety).
-    _deny_dirs = []
-    if _state_dir is not None:
-        _deny_dirs.append(_state_dir)
-    for _root in _hermes_roots:
-        for _sub in ("sessions", "memories", "profiles"):
-            _deny_dirs.append((_root / _sub).resolve())
-    # Filename-based denies only apply to files living under a Hermes/WebUI state
-    # root — so a legitimate workspace or /tmp media artifact that happens to be
-    # named settings.json / config.yaml is NOT blocked (Codex review #3234).
-    _under_state_root = any(
-        _path_is_within_root(target, _root) for _root in _hermes_roots
+
+    # Active-workspace carve-out: a file inside the active workspace is the
+    # user's own content, not Hermes internal state — never deny it here.
+    _active_workspace = None
+    try:
+        from api.workspace import get_last_workspace
+        _aw = Path(get_last_workspace()).resolve()
+        if _aw.is_dir():
+            _active_workspace = _aw
+    except Exception:
+        _active_workspace = None
+    _in_active_workspace = (
+        _active_workspace is not None
+        and _path_is_within_root(target, _active_workspace)
     )
-    _denied = (
-        (_under_state_root and target.name in _DENY_FILENAMES)
-        or any(_path_is_within_root(target, d) for d in _deny_dirs)
-    )
-    if _denied:
-        return bad(handler, "Path not in allowed location", 403)
+
+    if not _in_active_workspace:
+        _under_hermes_root = any(
+            _path_is_within_root(target, _root) for _root in _hermes_roots
+        )
+        # State-subdir deny: any DENY_SUBDIR directly under a Hermes root, and
+        # the STATE_DIR itself (sensitive in its entirety).
+        _deny_dirs = []
+        if _state_dir is not None:
+            _deny_dirs.append(_state_dir)
+        for _root in _hermes_roots:
+            for _sub in _DENY_SUBDIRS:
+                _deny_dirs.append((_root / _sub).resolve())
+        _denied = (
+            (_under_hermes_root and target.name in _DENY_FILENAMES)
+            or any(_path_is_within_root(target, d) for d in _deny_dirs)
+        )
+        if _denied:
+            return bad(handler, "Path not in allowed location", 403)
+    # ── end #3234 deny ───────────────────────────────────────────────────────
 
     if not within_allowed and not session_media_allowed:
         return bad(handler, "Path not in allowed location", 403)
