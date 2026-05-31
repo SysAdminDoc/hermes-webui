@@ -472,6 +472,18 @@ class TestMediaEndpointUnit(unittest.TestCase):
                     query=f"path={urllib.parse.quote(str(other_secret.resolve()))}",
                     path="/api/media"))
                 self.assertEqual(h3.status, 403, "sibling profile auth.json must be denied")
+                # per-profile webui_state/sessions → denied (not a direct child of root)
+                ws_sess = active / "webui_state" / "sessions"
+                ws_sess.mkdir(parents=True, exist_ok=True)
+                ws_sess_file = ws_sess / "s1.json"
+                ws_sess_file.write_text('{"messages":[]}', encoding="utf-8")
+                h4 = _Handler()
+                routes._handle_media(h4, SimpleNamespace(
+                    query=f"path={urllib.parse.quote(str(ws_sess_file.resolve()))}",
+                    path="/api/media"))
+                self.assertEqual(
+                    h4.status, 403,
+                    "profile webui_state/sessions/*.json must be denied")
 
     def test_media_endpoints_advertise_byte_range_support(self):
         routes_src = (REPO_ROOT / "api" / "routes.py").read_text(encoding="utf-8")

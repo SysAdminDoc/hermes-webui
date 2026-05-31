@@ -8186,6 +8186,12 @@ def _handle_media(handler, parsed):
     for _root in _hermes_roots:
         for _sub in _DENY_SUBDIRS:
             _deny_dirs.append((_root / _sub).resolve())
+        # Per-profile WebUI state lives at <root>/webui_state (api/workspace.py),
+        # so its state subdirs (<root>/webui_state/sessions, etc.) must be denied
+        # too — they are NOT direct children of <root>. (Codex review #3234.)
+        _ws_state = (_root / "webui_state")
+        for _sub in _DENY_SUBDIRS:
+            _deny_dirs.append((_ws_state / _sub).resolve())
     _deny_names_ci = {n.casefold() for n in _DENY_FILENAMES}
 
     # Active-workspace carve-out: a file inside a genuine PROJECT workspace is
