@@ -45,6 +45,20 @@ This gives you nearly **1:1 parity with Hermes CLI from a convenient web UI** wh
 
 ---
 
+## Contents
+
+- [Why Hermes](#why-hermes) — what it is and how it compares
+- [Quick start](#quick-start) — clone + `bootstrap.py` / `start.sh` / `ctl.sh`
+- [Docker](#docker) — single- and multi-container deploys
+- [Configuration & access](#what-startsh-discovers-automatically) — auto-discovery, overrides, remote/Tailscale/phone, manual launch
+- [Running tests](#running-tests)
+- [Features](#features) — chat, sessions, workspace, voice, profiles, security, themes, panels, mobile
+- [Architecture](#architecture) — backend/frontend layout, state dir
+- [Docs](#docs) — the full documentation index
+- [Contributors](#contributors)
+
+---
+
 ## Why Hermes
 
 Most AI tools reset every session. They don't know who you are, what you worked on, or what
@@ -480,7 +494,8 @@ Or using the agent venv explicitly:
 
 Tests run against an isolated server with a separate state directory.
 Production data and real cron jobs are never touched. Current snapshot:
-**5303 tests collected** across **488 test files**.
+**~7,150 tests collected** across **~700 test files**, run in CI on Python 3.11,
+3.12, and 3.13 (3 parallel shards each).
 
 ---
 
@@ -607,69 +622,100 @@ Production data and real cron jobs are never touched. Current snapshot:
 
 ## Architecture
 
+No build step, no framework, no bundler — a Python standard-library HTTP server
+and vanilla JS. The backend lives in `api/`, the frontend in `static/`.
+
+**Backend (`api/`)**
+
 ```
-server.py               HTTP routing shell + auth middleware (~446 lines)
+server.py         HTTP routing shell + auth middleware
 api/
-  auth.py               Optional password authentication, signed cookies (~366 lines)
-  config.py             Discovery, globals, model detection, reloadable config (~4139 lines)
-  helpers.py            HTTP helpers, security headers (~302 lines)
-  models.py             Session model + CRUD + CLI bridge (~1927 lines)
-  onboarding.py         First-run onboarding wizard, OAuth provider support (~1002 lines)
-  profiles.py           Profile state management, hermes_cli wrapper (~1056 lines)
-  routes.py             All GET + POST route handlers (~9772 lines)
-  state_sync.py         /insights sync — message_count to state.db (~118 lines)
-  streaming.py          SSE engine, run_agent, cancel support (~4420 lines)
-  updates.py            Self-update check and release notes (~545 lines)
-  upload.py             Multipart parser, file upload handler (~284 lines)
-  workspace.py          File ops, workspace helpers, git detection (~810 lines)
-static/
-  index.html            HTML template (~1323 lines)
-  style.css             All CSS incl. mobile responsive, themes (~3767 lines)
-  ui.js                 DOM helpers, renderMd, tool cards, context indicator (~7216 lines)
-  workspace.js          File preview, file ops, git badge (~369 lines)
-  sessions.js           Session CRUD, collapsible groups, search, reload recovery (~3517 lines)
-  messages.js           send(), SSE handlers, live streaming, session recovery (~2301 lines)
-  panels.js             Cron, skills, memory, profiles, settings (~6480 lines)
-  commands.js           Slash command autocomplete (~1302 lines)
-  boot.js               Mobile nav, voice input, boot IIFE (~1607 lines)
-tests/
-  conftest.py           Isolated test server/state fixtures
-  488 test files         5303 tests collected
-Dockerfile              python:3.12-slim container image
-docker-compose.yml      Compose with named volume and optional auth
-.github/workflows/      CI: multi-arch Docker build + GitHub Release on tag
+  auth.py         Optional password authentication, signed cookies, passkeys
+  config.py       Discovery, globals, model detection, reloadable config
+  helpers.py      HTTP helpers, security headers
+  models.py       Session model + CRUD + CLI/state.db bridge
+  onboarding.py   First-run onboarding wizard, OAuth provider support
+  profiles.py     Profile state management, hermes_cli wrapper
+  routes.py       All GET + POST route handlers (if/elif dispatch, no decorators)
+  state_sync.py   /insights sync — message_count to state.db
+  streaming.py    SSE engine, run_agent, cancellation, compression
+  updates.py      Self-update check and release notes
+  upload.py       Multipart parser, file upload handler
+  workspace.py    File ops, workspace helpers, git detection
+```
+
+**Frontend (`static/`)**
+
+```
+index.html        HTML template
+style.css         All CSS incl. mobile responsive, themes + skins
+ui.js             DOM helpers, renderMd, tool cards, context indicator
+workspace.js      File preview, file ops, git badge, central api() fetch wrapper
+sessions.js       Session CRUD, collapsible groups, search, reload recovery
+messages.js       send(), SSE handlers, live streaming, session recovery
+panels.js         Cron, skills, memory, profiles, settings (Control Center)
+commands.js       Slash command autocomplete
+boot.js           Mobile nav, voice input, theme/skin boot, bfcache handler
+```
+
+**Tests + packaging**
+
+```
+tests/            Pytest suite (~7,150 tests; isolated server/state fixtures)
+pyproject.toml    Tooling config (ruff lint gate) — not a packaged distribution
+Dockerfile        python:3.12-slim container image
+docker-compose.yml  Compose with named volume and optional auth
+.github/workflows/  CI: ruff + sharded pytest, browser smoke, Docker smoke,
+                    multi-arch Docker build + GitHub Release on tag
 ```
 
 State lives outside the repo at `~/.hermes/webui/` by default
 (sessions, workspaces, settings, projects, last_workspace). Override with `HERMES_WEBUI_STATE_DIR`.
+Full design notes and the endpoint catalog are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
 ## Docs
 
-- `docs/why-hermes.md` -- why Hermes, mental model, and detailed comparison to Claude Code / Codex / OpenCode / Cursor
-- `ROADMAP.md` -- feature roadmap and sprint history
-- `ARCHITECTURE.md` -- system design, all API endpoints, implementation notes
-- `TESTING.md` -- manual browser test plan and automated coverage reference
-- `CHANGELOG.md` -- release notes per sprint
-- `SPRINTS.md` -- forward sprint plan with CLI + Claude parity targets
-- `THEMES.md` -- theme system documentation, custom theme guide
-- `docs/CONTRACTS.md` -- project contract/RFC/design index for contributors and agents
-- `docs/UIUX-GUIDE.md` -- UI/UX principles sourced from existing design docs and visual inventories
-- `docs/docker.md` -- Docker compose setup, common failures, and bind-mount migration
-- `docs/supervisor.md` -- launchd, systemd, supervisord, runit, and s6 process-supervisor setup
-- `docs/onboarding.md` -- first-run wizard, provider setup, local model server Base URLs, and safe re-runs
-- `docs/onboarding-agent-checklist.md` -- safety rules, evidence commands, and pass/fail checks for assistant-led install or reinstall support
-- `docs/troubleshooting.md` -- diagnostic flows for common failures (e.g. "AIAgent not available")
-- `docs/wsl-autostart.md` -- WSL2 auto-start at Windows login
-- `docs/EXTENSIONS.md` -- administrator-controlled WebUI extension injection
-- `docs/rfcs/README.md` -- RFC index for larger architecture and durability proposals
+**Start here**
+- [`docs/why-hermes.md`](docs/why-hermes.md) — why Hermes, the mental model, and a detailed comparison to Claude Code / Codex / OpenCode / Cursor
+- [`docs/onboarding.md`](docs/onboarding.md) — first-run wizard, provider setup, local model server Base URLs, and safe re-runs
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — diagnostic flows for common failures (e.g. "AIAgent not available")
+
+**Using & customizing**
+- [`THEMES.md`](THEMES.md) — theme + skin system, custom theme guide
+- [`docs/workspace-git.md`](docs/workspace-git.md) — the workspace Git controls
+- [`docs/EXTENSIONS.md`](docs/EXTENSIONS.md) — administrator-controlled WebUI extension injection
+
+**Deploying & operating**
+- [`docs/docker.md`](docs/docker.md) — Docker compose setup, common failures, and bind-mount migration
+- [`docs/supervisor.md`](docs/supervisor.md) — launchd, systemd, supervisord, runit, and s6 process-supervisor setup
+- [`docs/wsl-autostart.md`](docs/wsl-autostart.md) — WSL2 auto-start at Windows login
+- [`docs/onboarding-agent-checklist.md`](docs/onboarding-agent-checklist.md) — safety rules and pass/fail checks for assistant-led install/reinstall support
+
+**Contributing & design**
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution style, PR expectations, and local verification
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — system design, all API endpoints, implementation notes
+- [`TESTING.md`](TESTING.md) — manual browser test plan and automated coverage reference
+- [`DESIGN.md`](DESIGN.md) — design tokens and the calm-console direction
+- [`docs/UIUX-GUIDE.md`](docs/UIUX-GUIDE.md) — UI/UX principles sourced from the design docs and visual inventories
+- [`docs/CONTRACTS.md`](docs/CONTRACTS.md) — project contract/RFC/design index for contributors and agents
+- [`docs/rfcs/README.md`](docs/rfcs/README.md) — RFC index for larger architecture and durability proposals
+
+**Release history & plan**
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes per version
+- [`ROADMAP.md`](ROADMAP.md) — feature roadmap and sprint history
+- [`SPRINTS.md`](SPRINTS.md) — forward sprint plan with CLI + Claude parity targets
+- [`CONTRIBUTORS.md`](CONTRIBUTORS.md) — the full community credit roll
 
 ## Contributors
 
 Hermes WebUI is built with help from the open-source community. Every PR — whether merged directly, absorbed into a batch release, or salvaged from a larger proposal — shapes the project, and we're grateful to everyone who has taken the time to contribute.
 
-**137 contributors have shipped code that landed in a release tag** as of v0.51.58. The full credit roll lives in [`CONTRIBUTORS.md`](CONTRIBUTORS.md). The highlights:
+Over **137 contributors** have shipped code that landed in a release tag. The full,
+continuously-updated credit roll — including everyone with one or two PRs and the
+special-thanks roll for design and architectural work — lives in
+[`CONTRIBUTORS.md`](CONTRIBUTORS.md). A snapshot of the most prolific contributors:
 
 ### Top contributors (by PR count, including absorbed/batch-released work)
 

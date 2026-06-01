@@ -2,7 +2,7 @@
 
 > Web companion to the Hermes Agent CLI. Same workflows, browser-native.
 >
-> Last updated: v0.51.31 (May 9, 2026) — 5028 tests collected — Release H 12-PR contributor batch (image-mode fix + race fixes + composer drafts + locale parity + custom-provider dedup + TTL config + heartbeat polish)
+> Last updated: v0.51.192 (May 31, 2026) — ~7,150 tests collected. Recent themes: forward-looking ruff lint gate (#3273), Windows upgrade state-stranding hotfix (#2905), per-model context_length default-only guard (#3256), gateway-configured banner + tooltip i18n, and an ongoing concentric PR-triage cadence.
 > Test source: `pytest tests/ --collect-only -q`
 > Per-version detail: see [CHANGELOG.md](./CHANGELOG.md)
 
