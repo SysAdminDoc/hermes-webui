@@ -49,10 +49,10 @@ This gives you nearly **1:1 parity with Hermes CLI from a convenient web UI** wh
 
 - [Why Hermes](#why-hermes) — what it is and how it compares
 - [Quick start](#quick-start) — clone + `bootstrap.py` / `start.sh` / `ctl.sh`
-- [Docker](#docker) — single- and multi-container deploys
-- [Configuration & access](#what-startsh-discovers-automatically) — auto-discovery, overrides, remote/Tailscale/phone, manual launch
-- [Running tests](#running-tests)
 - [Features](#features) — chat, sessions, workspace, voice, profiles, security, themes, panels, mobile
+- [Configuration & access](#configuration--access) — auto-discovery, overrides, remote/Tailscale/phone, manual launch
+- [Docker](#docker) — single- and multi-container deploys
+- [Running tests](#running-tests)
 - [Architecture](#architecture) — backend/frontend layout, state dir
 - [Docs](#docs) — the full documentation index
 - [Contributors](#contributors)
@@ -135,85 +135,9 @@ For self-hosted VM or homelab installs, `ctl.sh` wraps the common daemon lifecyc
 
 `ctl.sh start` runs the bootstrap in foreground/no-browser mode behind the daemon wrapper, writes logs to `~/.hermes/webui.log`, and respects `.env` plus inline overrides such as `HERMES_WEBUI_HOST=0.0.0.0 ./ctl.sh start`.
 
-### Optional session recall prefill
+### Advanced: dynamic recall prefill & Gateway-backed chat
 
-WebUI can attach ephemeral prefill messages to new browser-originated
-agent turns. This is useful when a deployment already has a local recall or
-router script for Joplin, Obsidian, Notion, llm-wiki, or another third-party
-notes source and wants browser chat to know where durable context lives.
-
-Prefer a compact router-style prefill (for example, "Joplin has the durable
-project context; use the available notes/search tools before answering
-detail-dependent questions") instead of dumping the full note corpus into every
-new browser session. The prefill should point the agent toward retrieval; the
-notes/search tools should provide the specific facts on demand.
-
-Static JSON remains supported through `prefill_messages_file` or
-`HERMES_PREFILL_MESSAGES_FILE`. For dynamic recall, opt in explicitly with a
-WebUI-specific script hook:
-
-```yaml
-webui_prefill_messages_script:
-  - python3
-  - /path/to/notes_recall.py
-webui_prefill_messages_script_timeout: 5
-```
-
-or:
-
-```bash
-HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT="python3 /path/to/notes_recall.py" \
-HERMES_WEBUI_PREFILL_MESSAGES_SCRIPT_TIMEOUT=5 \
-./ctl.sh restart
-```
-
-The script may print either an OpenAI-style JSON message list, a JSON object with
-a `messages` list, or plain text; plain text is wrapped as one `user` prefill
-message so dynamic recall text becomes ordinary context instead of an extra
-system instruction. If the hook must provide system-level guidance, emit JSON
-messages with an explicit `role: "system"` entry instead. Script output is capped
-at 256 KiB before parsing. Parsed prefill context is then bounded by
-`webui_prefill_context_max_chars` or `HERMES_WEBUI_PREFILL_CONTEXT_MAX_CHARS`
-(default: 12,000 characters; set to `0` to disable). When a dynamic script
-exceeds the budget and a compact static prefill file is configured, WebUI falls
-back to that file. If no compact fallback is available, WebUI injects a short
-retrieval instruction instead of sending the oversized note/body payload with
-every new browser turn. The browser only receives a compact status event
-(`source`, `label`, message count, compaction metadata, and redacted errors),
-never the prefill message bodies.
-
-### Optional Gateway-backed browser chat
-
-By default, browser chat runs through WebUI's in-process legacy runtime. Advanced
-self-hosted deployments can opt into routing new browser turns through a running
-Hermes Gateway API server while preserving the existing WebUI `/api/chat/start`
-and `/api/chat/stream` browser contract:
-
-```bash
-HERMES_WEBUI_CHAT_BACKEND=gateway \
-HERMES_WEBUI_GATEWAY_BASE_URL=http://127.0.0.1:8642 \
-HERMES_WEBUI_GATEWAY_API_KEY=... \
-./ctl.sh restart
-```
-
-`HERMES_WEBUI_CHAT_BACKEND` is intentionally strict: only `gateway`,
-`api_server`, or `api-server` enable the bridge. Generic truthy values such as
-`1` or `true` are ignored so existing deployments do not change execution
-ownership accidentally. If `HERMES_WEBUI_GATEWAY_API_KEY` is omitted, WebUI falls
-back to `API_SERVER_KEY` when present. When Gateway returns HTTP 401, WebUI
-reports a `gateway_auth_error` that points at this WebUI↔Gateway key mismatch
-rather than showing the Gateway's generic provider-style "Invalid API key" body.
-`/api/health/agent` also includes a redacted `gateway_chat` block so operators can
-see whether gateway mode, base URL, and API-key presence are configured without
-exposing the key value. That `gateway_chat` field is an operator diagnostic
-payload only; it is not currently rendered as a user-facing health banner in the
-browser UI.
-
-The bridge is best used by operators who already run Hermes Gateway/API Server
-locally and want browser-originated chat to use the same runtime/tool path as
-messaging surfaces. Attachments, cancellation, approvals, and clarify prompts
-still follow WebUI's current compatibility path and may not match every messaging
-surface until the runtime-adapter migration is complete.
+Two optional, self-hosted-deployment features — attaching dynamic **session-recall prefill** to browser turns (Joplin/Obsidian/Notion/llm-wiki routers), and routing browser chat through a running **Hermes Gateway** — are documented in [`docs/advanced-chat-setup.md`](docs/advanced-chat-setup.md). Most users need neither.
 
 The bootstrap will:
 
@@ -237,265 +161,6 @@ A community-maintained native Windows setup is documented at [@markwang2658/herm
 If provider setup is still incomplete after install, the onboarding wizard will point you to finish it with `hermes model` instead of trying to replicate the full CLI setup in-browser.
 For a step-by-step walkthrough of the wizard, provider choices, local model server Base URLs, and safe re-runs, see [`docs/onboarding.md`](docs/onboarding.md).
 If an AI assistant is helping with install, reinstall, bootstrap, provider setup, or first-run support, have it read [`docs/onboarding-agent-checklist.md`](docs/onboarding-agent-checklist.md) before running commands or inspecting logs.
-
----
-
-## Docker
-
-**Pre-built images** (amd64 + arm64) are published to GHCR on every release.
-
-For a comprehensive setup guide covering all 3 compose files, common failure modes, and bind-mount migration, see [`docs/docker.md`](docs/docker.md). The README covers the 5-minute happy path.
-
-### 5-minute quickstart (single container)
-
-The simplest setup: one WebUI container that runs the agent in-process.
-
-```bash
-git clone https://github.com/nesquena/hermes-webui
-cd hermes-webui
-cp .env.docker.example .env
-# Edit .env if your host UID isn't 1000 (e.g. macOS where UIDs start at 501)
-docker compose up -d
-# Open http://localhost:8787
-```
-
-Run Compose as the user who owns your Hermes home. `sudo docker compose up -d` can make `${HOME}` expand to the root user's home, so Docker mounts the wrong `.hermes` directory instead of your real `~/.hermes` and the WebUI starts with `config.yaml (not found, using defaults)`. Prefer adding your user to the Docker group and running `docker compose up -d`; if you must use sudo, set absolute paths first, for example `HERMES_HOME=/home/you/.hermes HERMES_WORKSPACE=/home/you/workspace sudo -E docker compose up -d`, then verify with `docker compose config`.
-
-The container auto-detects your UID/GID from the mounted `~/.hermes` volume so files written by the agent stay readable by you on the host.
-
-To enable password protection (required if you expose the port outside `127.0.0.1`):
-
-```bash
-echo "HERMES_WEBUI_PASSWORD=change-me-to-something-strong" >> .env
-docker compose up -d --force-recreate
-```
-
-### Manual `docker run` (no compose)
-
-```bash
-docker pull ghcr.io/nesquena/hermes-webui:latest
-docker run -d \
-  -e WANTED_UID=$(id -u) -e WANTED_GID=$(id -g) \
-  -v ~/.hermes:/home/hermeswebui/.hermes \
-  -e HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui \
-  -v ~/workspace:/workspace \
-  -p 127.0.0.1:8787:8787 \
-  ghcr.io/nesquena/hermes-webui:latest
-```
-
-### Build locally
-
-```bash
-docker build -t hermes-webui .
-docker run -d \
-  -e WANTED_UID=$(id -u) -e WANTED_GID=$(id -g) \
-  -v ~/.hermes:/home/hermeswebui/.hermes \
-  -e HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui \
-  -v ~/workspace:/workspace \
-  -p 127.0.0.1:8787:8787 \
-  hermes-webui
-```
-
-### Multi-container setups
-
-If you want the agent and WebUI in separate containers (for isolation, or because you're already running an agent gateway elsewhere):
-
-```bash
-# Agent + WebUI
-docker compose -f docker-compose.two-container.yml up -d
-
-# Agent + Dashboard + WebUI
-docker compose -f docker-compose.three-container.yml up -d
-```
-
-Both compose files use **named Docker volumes** by default, which solves the UID/GID problem by construction. If you need bind mounts to share an existing host directory, see [`docs/docker.md`](docs/docker.md) for the full migration recipe.
-
-> **Known limitation (#681)**: in the two-container setup, tools triggered from the WebUI run in the **WebUI container**, not the agent container. If you need git/node/etc. on the WebUI's filesystem, either use the single-container setup, extend the WebUI Dockerfile, or use the community [all-in-one image](https://github.com/sunnysktsang/hermes-suite).
->
-> **Source boundary note (#2453)**: the multi-container setup mounts `hermes-agent-src` read-only into the WebUI by default. This prevents WebUI-side source rewrites but is still an implementation-coupling bridge, not a stable Agent API boundary. See [`docs/rfcs/agent-source-boundary.md`](docs/rfcs/agent-source-boundary.md) for the current source/API decoupling inventory.
-
-### Common failure modes
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `PermissionError` at startup | UID mismatch on bind mount | Set `UID=$(id -u)` in `.env` |
-| `.env: permission denied` (#1389) | `fix_credential_permissions()` enforced 0600 | Set `HERMES_SKIP_CHMOD=1` in `.env` |
-| Workspace appears empty | UID mismatch on `/workspace` mount | Set `UID=$(id -u)` in `.env` |
-| `git: command not found` in chat | Two-container architectural limit (#681) | Use single-container or extend Dockerfile |
-| WebUI can't find agent source | `hermes-agent-src` volume misconfigured | Use the named volumes from compose files as-is |
-| Podman shared `.hermes` fails | Podman 3.4 `keep-id` limitation | Use Podman 4+ or single-container |
-| Host API at `localhost` fails from WebUI | Container `localhost` means the container, not your host (#3012) | Use `http://host.docker.internal:<port>` on Docker Desktop, or `http://host.containers.internal:<port>` on Podman |
-| WebUI can't see `~/.hermes` after `sudo docker compose` | `${HOME}` expanded to the root user's home (#3006) | Run Compose as your user, or pass absolute `HERMES_HOME`/`HERMES_WORKSPACE` with `sudo -E` |
-
-For the deep dive on each of these, see [`docs/docker.md`](docs/docker.md).
-
-> **Note:** By default, Docker Compose binds to `127.0.0.1` (localhost only).
-> To expose on a network, change the port to `"8787:8787"` in `docker-compose.yml`
-> and set `HERMES_WEBUI_PASSWORD` to enable authentication.
-
----
-
-## What start.sh discovers automatically
-
-| Thing | How it finds it |
-|---|---|
-| Hermes agent dir | `HERMES_WEBUI_AGENT_DIR` env, then `$HERMES_HOME/hermes-agent` (Windows default `%LOCALAPPDATA%\hermes\hermes-agent`, POSIX default `~/.hermes/hermes-agent`), then sibling `../hermes-agent` |
-| Python executable | Agent venv first, then `.venv` in this repo, then system `python3` |
-| State directory | `HERMES_WEBUI_STATE_DIR` env, then `$HERMES_HOME/webui` (Windows default `%LOCALAPPDATA%\hermes\webui`, POSIX default `~/.hermes/webui`) |
-| Default workspace | `HERMES_WEBUI_DEFAULT_WORKSPACE` env, then `~/workspace`, then state dir |
-| Port | `HERMES_WEBUI_PORT` env or first argument, default `8787` |
-
-If discovery finds everything, nothing else is required.
-
----
-
-## Overrides (only needed if auto-detection misses)
-
-```bash
-export HERMES_WEBUI_AGENT_DIR=/path/to/hermes-agent
-export HERMES_WEBUI_PYTHON=/path/to/python
-export HERMES_WEBUI_PORT=9000
-export HERMES_WEBUI_AUTO_INSTALL=1  # enable auto-install of agent deps (disabled by default)
-./start.sh
-```
-
-Or inline:
-
-```bash
-HERMES_WEBUI_AGENT_DIR=/custom/path ./start.sh 9000
-```
-
-Full list of environment variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `HERMES_WEBUI_AGENT_DIR` | auto-discovered | Path to the hermes-agent checkout |
-| `HERMES_WEBUI_PYTHON` | auto-discovered | Python executable |
-| `HERMES_WEBUI_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for all IPv4, `::` for all IPv6, `::1` for IPv6 loopback) |
-| `HERMES_WEBUI_PORT` | `8787` | Port |
-| `HERMES_WEBUI_STATE_DIR` | `$HERMES_HOME/webui` (Windows default `%LOCALAPPDATA%\hermes\webui`, POSIX default `~/.hermes/webui`) | Where sessions and state are stored |
-| `HERMES_WEBUI_DEFAULT_WORKSPACE` | `~/workspace` | Default workspace |
-| `HERMES_WEBUI_DEFAULT_MODEL` | *(provider default)* | Optional model override; leave unset to use the active Hermes provider default |
-| `HERMES_WEBUI_PASSWORD` | *(unset)* | Set to enable password authentication |
-| `HERMES_WEBUI_CSP_CONNECT_EXTRA` | *(unset)* | Optional space-separated `http(s)://` or `ws(s)://` origins to append to the report-only CSP `connect-src` directive for reverse-proxy or tunnel deployments |
-| `HERMES_WEBUI_EXTENSION_DIR` | *(unset)* | Optional local directory served at `/extensions/`; must point to an existing directory before extension injection is enabled |
-| `HERMES_WEBUI_EXTENSION_SCRIPT_URLS` | *(unset)* | Optional comma-separated same-origin script URLs to inject; see [WebUI Extensions](docs/EXTENSIONS.md) |
-| `HERMES_WEBUI_EXTENSION_STYLESHEET_URLS` | *(unset)* | Optional comma-separated same-origin stylesheet URLs to inject; see [WebUI Extensions](docs/EXTENSIONS.md) |
-| `HERMES_HOME` | Windows: `%LOCALAPPDATA%\hermes`; POSIX: `~/.hermes` | Base directory for Hermes state (affects all paths) |
-| `HERMES_CONFIG_PATH` | `$HERMES_HOME/config.yaml` | Path to Hermes config file |
-
----
-
-## Accessing from a remote machine
-
-The server binds to `127.0.0.1` by default (loopback only). If you are running
-Hermes on a VPS or remote server, use an SSH tunnel from your local machine:
-
-```bash
-ssh -N -L <local-port>:127.0.0.1:<remote-port> <user>@<server-host>
-```
-
-Example:
-
-```bash
-ssh -N -L 8787:127.0.0.1:8787 user@your.server.com
-```
-
-Then open `http://localhost:8787` in your local browser.
-
-`start.sh` will print this command for you automatically when it detects you
-are running over SSH.
-
----
-
-## Accessing on your phone with Tailscale
-
-[Tailscale](https://tailscale.com) is a zero-config mesh VPN built on
-WireGuard. Install it on your server and your phone, and they join the same
-private network -- no port forwarding, no SSH tunnels, no public exposure.
-
-The Hermes Web UI is fully responsive with a mobile-optimized layout
-(hamburger sidebar, sidebar top tabs in the drawer, touch-friendly controls),
-so it works well as a daily-driver agent interface from your phone.
-
-**Setup:**
-
-1. Install [Tailscale](https://tailscale.com/download) on your server and
-   your iPhone/Android.
-2. Start the WebUI listening on all interfaces with password auth enabled:
-
-```bash
-HERMES_WEBUI_HOST=0.0.0.0 HERMES_WEBUI_PASSWORD=your-secret ./start.sh
-```
-
-3. Open `http://<server-tailscale-ip>:8787` in your phone's browser
-   (find your server's Tailscale IP in the Tailscale app or with
-   `tailscale ip -4` on the server).
-
-That's it. Traffic is encrypted end-to-end by WireGuard, and password auth
-protects the UI at the application level. You can add it to your home screen
-for an app-like experience.
-
-### Community field report: ARM64 Android via AVF
-
-A community report in [#2364](https://github.com/nesquena/hermes-webui/issues/2364)
-documents Hermes Agent + WebUI running on a mid-range ARM64 Android phone inside
-a Debian 12 VM via Android Virtualization Framework (AVF). The reported setup
-used a Xiaomi Redmi Note 13 Pro 4G, 3.8 GiB RAM allocated to the VM, 8 visible
-CPU cores, Chrome on Android at `localhost:8787`, and cloud-hosted inference.
-
-This is not an official support baseline or provider/model benchmark, but it is
-a useful compatibility signal for mobile ARM64 experiments: the WebUI rendered
-smoothly in Chrome, ARM64 Debian worked for the agent stack, and the total local
-footprint was about 1.7 GB. Practical caveats from the report: first install can
-take longer when dependencies compile from source, Android browser tabs may
-reload when switching apps, and disabling battery optimization for the terminal
-or VM host may be needed for longer-running sessions.
-
-> **Tip:** If using Docker, set `HERMES_WEBUI_HOST=0.0.0.0` in your
-> `docker-compose.yml` environment (already the default) and set
-> `HERMES_WEBUI_PASSWORD`.
-
----
-
-## Manual launch (without start.sh)
-
-If you prefer to launch the server directly:
-
-```bash
-cd /path/to/hermes-agent          # or wherever sys.path can find Hermes modules
-HERMES_WEBUI_PORT=8787 venv/bin/python /path/to/hermes-webui/server.py
-```
-
-Note: use the agent venv Python (or any Python environment that has the Hermes agent dependencies installed). System Python will be missing `openai`, `httpx`, and other required packages.
-
-Health check:
-
-```bash
-curl http://127.0.0.1:8787/health
-```
-
----
-
-## Running tests
-
-Tests discover the repo and the Hermes agent dynamically -- no hardcoded paths.
-
-```bash
-cd hermes-webui
-pytest tests/ -v --timeout=60
-```
-
-Or using the agent venv explicitly:
-
-```bash
-/path/to/hermes-agent/venv/bin/python -m pytest tests/ -v
-```
-
-Tests run against an isolated server with a separate state directory.
-Production data and real cron jobs are never touched. Current snapshot:
-**~7,150 tests collected** across **~700 test files**, run in CI on Python 3.11,
-3.12, and 3.13 (3 parallel shards each).
 
 ---
 
@@ -620,6 +285,201 @@ Production data and real cron jobs are never touched. Current snapshot:
 
 ---
 
+## Configuration & access
+
+`start.sh` auto-detects almost everything; the subsections below cover the knobs for when it can't, and how to reach the UI remotely.
+
+### What start.sh discovers automatically
+
+| Thing | How it finds it |
+|---|---|
+| Hermes agent dir | `HERMES_WEBUI_AGENT_DIR` env, then `$HERMES_HOME/hermes-agent` (Windows default `%LOCALAPPDATA%\hermes\hermes-agent`, POSIX default `~/.hermes/hermes-agent`), then sibling `../hermes-agent` |
+| Python executable | Agent venv first, then `.venv` in this repo, then system `python3` |
+| State directory | `HERMES_WEBUI_STATE_DIR` env, then `$HERMES_HOME/webui` (Windows default `%LOCALAPPDATA%\hermes\webui`, POSIX default `~/.hermes/webui`) |
+| Default workspace | `HERMES_WEBUI_DEFAULT_WORKSPACE` env, then `~/workspace`, then state dir |
+| Port | `HERMES_WEBUI_PORT` env or first argument, default `8787` |
+
+If discovery finds everything, nothing else is required.
+
+---
+
+### Overrides (only needed if auto-detection misses)
+
+```bash
+export HERMES_WEBUI_AGENT_DIR=/path/to/hermes-agent
+export HERMES_WEBUI_PYTHON=/path/to/python
+export HERMES_WEBUI_PORT=9000
+export HERMES_WEBUI_AUTO_INSTALL=1  # enable auto-install of agent deps (disabled by default)
+./start.sh
+```
+
+Or inline:
+
+```bash
+HERMES_WEBUI_AGENT_DIR=/custom/path ./start.sh 9000
+```
+
+Full list of environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `HERMES_WEBUI_AGENT_DIR` | auto-discovered | Path to the hermes-agent checkout |
+| `HERMES_WEBUI_PYTHON` | auto-discovered | Python executable |
+| `HERMES_WEBUI_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for all IPv4, `::` for all IPv6, `::1` for IPv6 loopback) |
+| `HERMES_WEBUI_PORT` | `8787` | Port |
+| `HERMES_WEBUI_STATE_DIR` | `$HERMES_HOME/webui` (Windows default `%LOCALAPPDATA%\hermes\webui`, POSIX default `~/.hermes/webui`) | Where sessions and state are stored |
+| `HERMES_WEBUI_DEFAULT_WORKSPACE` | `~/workspace` | Default workspace |
+| `HERMES_WEBUI_DEFAULT_MODEL` | *(provider default)* | Optional model override; leave unset to use the active Hermes provider default |
+| `HERMES_WEBUI_PASSWORD` | *(unset)* | Set to enable password authentication |
+| `HERMES_WEBUI_CSP_CONNECT_EXTRA` | *(unset)* | Optional space-separated `http(s)://` or `ws(s)://` origins to append to the report-only CSP `connect-src` directive for reverse-proxy or tunnel deployments |
+| `HERMES_WEBUI_EXTENSION_DIR` | *(unset)* | Optional local directory served at `/extensions/`; must point to an existing directory before extension injection is enabled |
+| `HERMES_WEBUI_EXTENSION_SCRIPT_URLS` | *(unset)* | Optional comma-separated same-origin script URLs to inject; see [WebUI Extensions](docs/EXTENSIONS.md) |
+| `HERMES_WEBUI_EXTENSION_STYLESHEET_URLS` | *(unset)* | Optional comma-separated same-origin stylesheet URLs to inject; see [WebUI Extensions](docs/EXTENSIONS.md) |
+| `HERMES_HOME` | Windows: `%LOCALAPPDATA%\hermes`; POSIX: `~/.hermes` | Base directory for Hermes state (affects all paths) |
+| `HERMES_CONFIG_PATH` | `$HERMES_HOME/config.yaml` | Path to Hermes config file |
+
+---
+
+### Remote access (SSH tunnel, Tailscale, phone)
+
+The server binds to `127.0.0.1` by default. To reach it from another machine use an SSH tunnel (`ssh -N -L 8787:127.0.0.1:8787 user@host`, which `start.sh` prints for you over SSH), or join your server and phone to a [Tailscale](https://tailscale.com) network and browse to `http://<server-tailscale-ip>:8787` with `HERMES_WEBUI_HOST=0.0.0.0` + `HERMES_WEBUI_PASSWORD` set. Full walkthrough (incl. a community ARM64-Android field report): [`docs/remote-access.md`](docs/remote-access.md).
+
+### Manual launch (without start.sh)
+
+If you prefer to launch the server directly:
+
+```bash
+cd /path/to/hermes-agent          # or wherever sys.path can find Hermes modules
+HERMES_WEBUI_PORT=8787 venv/bin/python /path/to/hermes-webui/server.py
+```
+
+Note: use the agent venv Python (or any Python environment that has the Hermes agent dependencies installed). System Python will be missing `openai`, `httpx`, and other required packages.
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8787/health
+```
+
+---
+
+## Docker
+
+**Pre-built images** (amd64 + arm64) are published to GHCR on every release.
+
+For a comprehensive setup guide covering all 3 compose files, common failure modes, and bind-mount migration, see [`docs/docker.md`](docs/docker.md). The README covers the 5-minute happy path.
+
+### 5-minute quickstart (single container)
+
+The simplest setup: one WebUI container that runs the agent in-process.
+
+```bash
+git clone https://github.com/nesquena/hermes-webui
+cd hermes-webui
+cp .env.docker.example .env
+# Edit .env if your host UID isn't 1000 (e.g. macOS where UIDs start at 501)
+docker compose up -d
+# Open http://localhost:8787
+```
+
+Run Compose as the user who owns your Hermes home. `sudo docker compose up -d` can make `${HOME}` expand to the root user's home, so Docker mounts the wrong `.hermes` directory instead of your real `~/.hermes` and the WebUI starts with `config.yaml (not found, using defaults)`. Prefer adding your user to the Docker group and running `docker compose up -d`; if you must use sudo, set absolute paths first, for example `HERMES_HOME=/home/you/.hermes HERMES_WORKSPACE=/home/you/workspace sudo -E docker compose up -d`, then verify with `docker compose config`.
+
+The container auto-detects your UID/GID from the mounted `~/.hermes` volume so files written by the agent stay readable by you on the host.
+
+To enable password protection (required if you expose the port outside `127.0.0.1`):
+
+```bash
+echo "HERMES_WEBUI_PASSWORD=change-me-to-something-strong" >> .env
+docker compose up -d --force-recreate
+```
+
+### Manual `docker run` (no compose)
+
+```bash
+docker pull ghcr.io/nesquena/hermes-webui:latest
+docker run -d \
+  -e WANTED_UID=$(id -u) -e WANTED_GID=$(id -g) \
+  -v ~/.hermes:/home/hermeswebui/.hermes \
+  -e HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui \
+  -v ~/workspace:/workspace \
+  -p 127.0.0.1:8787:8787 \
+  ghcr.io/nesquena/hermes-webui:latest
+```
+
+### Build locally
+
+```bash
+docker build -t hermes-webui .
+docker run -d \
+  -e WANTED_UID=$(id -u) -e WANTED_GID=$(id -g) \
+  -v ~/.hermes:/home/hermeswebui/.hermes \
+  -e HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui \
+  -v ~/workspace:/workspace \
+  -p 127.0.0.1:8787:8787 \
+  hermes-webui
+```
+
+### Multi-container setups
+
+If you want the agent and WebUI in separate containers (for isolation, or because you're already running an agent gateway elsewhere):
+
+```bash
+# Agent + WebUI
+docker compose -f docker-compose.two-container.yml up -d
+
+# Agent + Dashboard + WebUI
+docker compose -f docker-compose.three-container.yml up -d
+```
+
+Both compose files use **named Docker volumes** by default, which solves the UID/GID problem by construction. If you need bind mounts to share an existing host directory, see [`docs/docker.md`](docs/docker.md) for the full migration recipe.
+
+> **Known limitation (#681)**: in the two-container setup, tools triggered from the WebUI run in the **WebUI container**, not the agent container. If you need git/node/etc. on the WebUI's filesystem, either use the single-container setup, extend the WebUI Dockerfile, or use the community [all-in-one image](https://github.com/sunnysktsang/hermes-suite).
+>
+> **Source boundary note (#2453)**: the multi-container setup mounts `hermes-agent-src` read-only into the WebUI by default. This prevents WebUI-side source rewrites but is still an implementation-coupling bridge, not a stable Agent API boundary. See [`docs/rfcs/agent-source-boundary.md`](docs/rfcs/agent-source-boundary.md) for the current source/API decoupling inventory.
+
+### Common failure modes
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `PermissionError` at startup | UID mismatch on bind mount | Set `UID=$(id -u)` in `.env` |
+| `.env: permission denied` (#1389) | `fix_credential_permissions()` enforced 0600 | Set `HERMES_SKIP_CHMOD=1` in `.env` |
+| Workspace appears empty | UID mismatch on `/workspace` mount | Set `UID=$(id -u)` in `.env` |
+| `git: command not found` in chat | Two-container architectural limit (#681) | Use single-container or extend Dockerfile |
+| WebUI can't find agent source | `hermes-agent-src` volume misconfigured | Use the named volumes from compose files as-is |
+| Podman shared `.hermes` fails | Podman 3.4 `keep-id` limitation | Use Podman 4+ or single-container |
+| Host API at `localhost` fails from WebUI | Container `localhost` means the container, not your host (#3012) | Use `http://host.docker.internal:<port>` on Docker Desktop, or `http://host.containers.internal:<port>` on Podman |
+| WebUI can't see `~/.hermes` after `sudo docker compose` | `${HOME}` expanded to the root user's home (#3006) | Run Compose as your user, or pass absolute `HERMES_HOME`/`HERMES_WORKSPACE` with `sudo -E` |
+
+For the deep dive on each of these, see [`docs/docker.md`](docs/docker.md).
+
+> **Note:** By default, Docker Compose binds to `127.0.0.1` (localhost only).
+> To expose on a network, change the port to `"8787:8787"` in `docker-compose.yml`
+> and set `HERMES_WEBUI_PASSWORD` to enable authentication.
+
+---
+
+## Running tests
+
+Tests discover the repo and the Hermes agent dynamically -- no hardcoded paths.
+
+```bash
+cd hermes-webui
+pytest tests/ -v --timeout=60
+```
+
+Or using the agent venv explicitly:
+
+```bash
+/path/to/hermes-agent/venv/bin/python -m pytest tests/ -v
+```
+
+Tests run against an isolated server with a separate state directory.
+Production data and real cron jobs are never touched. Current snapshot:
+**~7,150 tests collected** across **~700 test files**, run in CI on Python 3.11,
+3.12, and 3.13 (3 parallel shards each).
+
+---
+
 ## Architecture
 
 No build step, no framework, no bundler — a Python standard-library HTTP server
@@ -688,6 +548,8 @@ Full design notes and the endpoint catalog are in [`ARCHITECTURE.md`](ARCHITECTU
 - [`docs/EXTENSIONS.md`](docs/EXTENSIONS.md) — administrator-controlled WebUI extension injection
 
 **Deploying & operating**
+- [`docs/remote-access.md`](docs/remote-access.md) — SSH tunnel, Tailscale, and phone access (incl. a community ARM64-Android field report)
+- [`docs/advanced-chat-setup.md`](docs/advanced-chat-setup.md) — optional dynamic recall-prefill and Gateway-backed browser chat for self-hosted deployments
 - [`docs/docker.md`](docs/docker.md) — Docker compose setup, common failures, and bind-mount migration
 - [`docs/supervisor.md`](docs/supervisor.md) — launchd, systemd, supervisord, runit, and s6 process-supervisor setup
 - [`docs/wsl-autostart.md`](docs/wsl-autostart.md) — WSL2 auto-start at Windows login
@@ -707,6 +569,8 @@ Full design notes and the endpoint catalog are in [`ARCHITECTURE.md`](ARCHITECTU
 - [`ROADMAP.md`](ROADMAP.md) — feature roadmap and sprint history
 - [`SPRINTS.md`](SPRINTS.md) — forward sprint plan with CLI + Claude parity targets
 - [`CONTRIBUTORS.md`](CONTRIBUTORS.md) — the full community credit roll
+
+---
 
 ## Contributors
 
@@ -831,6 +695,8 @@ A comprehensive CSRF / SSRF / XSS / env-race-condition audit that shipped in v0.
 
 **[@TaraTheStar](https://github.com/TaraTheStar)** — Bot name + thinking blocks + login refactor (PRs #132, #176, #181)
 Configurable assistant display name, thinking/reasoning block display, and a login page refactor.
+
+---
 
 ## Repo
 
