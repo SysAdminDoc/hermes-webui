@@ -18,7 +18,7 @@
 | **Sessions + projects + search** | ✅ CRUD, content search, projects, tags, archive, fork, import |
 | **Mobile + Docker + auth** | ✅ Hamburger nav, slide-overs, password auth, GHCR images |
 | **Auxiliary surfaces** | ✅ Workspace tree + edit, cron CRUD, skills CRUD, memory write, MCP server UI |
-| **Visual polish** | ✅ 8 themes (incl. light/system/OLED/Sienna), Mermaid, KaTeX, syntax highlighting |
+| **Visual polish** | ✅ Light/dark/system themes × 11 skins (default, ares, mono, slate, poseidon, sisyphus, charizard, sienna, catppuccin, nous, geist-contrast), Mermaid, KaTeX, syntax highlighting |
 | **Native distribution** | ✅ macOS desktop app (universal arm64+x86_64 DMG, signed) — separate repo |
 
 Remaining gaps and forward work live in [Forward Work](#forward-work) below.
@@ -29,14 +29,16 @@ Remaining gaps and forward work live in [Forward Work](#forward-work) below.
 
 | Layer | Files | Status |
 |---|---|---|
-| Python server | `server.py` (~165 lines) + `api/` modules (~20k lines) | Thin shell + auth middleware + business logic |
-| HTML template | `static/index.html` (~600 lines) | Served from disk |
-| CSS | `static/style.css` (~3k lines) | Themes, mobile responsive, KaTeX, table styles |
-| JavaScript | `static/{ui,sessions,messages,workspace,panels,boot,commands,icons,i18n,login,onboarding}.js` (~26k lines) | 11 modules served as static files |
+| Python server | `server.py` + `api/` modules | Thin HTTP shell + auth middleware over the `api/` business logic (config, sessions, streaming, profiles, routes, onboarding, workspace, updates, upload) |
+| HTML template | `static/index.html` | Served from disk |
+| CSS | `static/style.css` | Themes + skins, mobile responsive, KaTeX, table styles |
+| JavaScript | `static/{ui,sessions,messages,workspace,panels,boot,commands,icons,i18n,login,onboarding}.js` | Vanilla-JS modules served as static files — no bundler |
 | Service worker | `static/sw.js` | Offline shell cache, version-pinned assets |
 | Docker | `Dockerfile`, `docker-compose.yml` | `python:3.12-slim`, multi-arch (amd64+arm64), HEALTHCHECK |
-| CI/CD | `.github/workflows/release.yml` | Auto-release + GHCR publish on tag push |
+| CI/CD | `.github/workflows/` | ruff lint + sharded pytest + browser smoke + Docker smoke on every PR; auto-release + GHCR publish on tag push |
 | Test isolation | `tests/_pytest_port.py` | Per-worktree port + state-dir derivation, no collisions |
+
+> Per-file line counts drift every release; see `ARCHITECTURE.md` for the current module map and `git ls-files` for exact sizes.
 
 ---
 
