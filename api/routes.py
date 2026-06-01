@@ -1750,6 +1750,50 @@ def _split_provider_qualified_model(model: str) -> tuple[str, str | None]:
     return model, None
 
 
+def _model_matches_configured_default(
+    session_model: str | None,
+    cfg_default: str | None,
+    provider: str | None = None,
+) -> bool:
+    """Return True when ``session_model`` refers to the configured ``model.default``.
+
+    The global ``model.context_length`` cap applies ONLY to the default model
+    (#3256/#3263). An exact string compare is not enough because ``model.default``
+    and the session model can be stored in different but equivalent shapes:
+      - bare:            ``claude-opus-4.8``
+      - slash-prefixed:  ``anthropic/claude-opus-4.8``  (OpenRouter-style)
+      - @provider:model: ``@anthropic:claude-opus-4.8``
+    Treat any of these as a match so a provider-prefixed default config still
+    receives its cap (and a bare default still matches a prefixed session model).
+    Empty default → no match (caller falls back to applying the cap broadly only
+    when no default is configured at all).
+    """
+    sess = str(session_model or "").strip()
+    default = str(cfg_default or "").strip()
+    if not sess or not default:
+        return False
+    if sess == default:
+        return True
+    # Normalize both to their bare model name, stripping a leading
+    # ``@provider:`` qualifier or a single ``provider/`` slash prefix.
+    def _bare(value: str, prov: str | None = None) -> set[str]:
+        forms = {value}
+        unq, _q = _split_provider_qualified_model(value)
+        if unq:
+            forms.add(unq)
+        # Strip a single leading "provider/" segment (OpenRouter-style).
+        if "/" in unq:
+            forms.add(unq.split("/", 1)[1].strip())
+        # Also consider a provider-prefixed form when an explicit provider is known.
+        if prov:
+            p = str(prov).strip().lower()
+            if p and "/" not in unq and not unq.startswith("@"):
+                forms.add(f"{p}/{unq}")
+        return {f for f in forms if f}
+    return bool(_bare(sess, provider) & _bare(default))
+
+
+
 def _should_attach_codex_provider_context(model: str, raw_active_provider: str, catalog: dict) -> bool:
     """Return True when a bare Codex model needs separate provider context.
 
@@ -2053,7 +2097,7 @@ def _resolve_context_length_for_session_model(
                 _raw_cfg_ctx_load = _model_cfg_load.get('context_length')
                 if _raw_cfg_ctx_load is not None and (
                     not _cfg_default_model
-                    or _cfg_default_model == model_for_lookup
+                    or _model_matches_configured_default(model_for_lookup, _cfg_default_model, provider)
                 ):
                     try:
                         _parsed_load = int(_raw_cfg_ctx_load)

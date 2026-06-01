@@ -4021,12 +4021,13 @@ def _run_agent_streaming(
                                 except (TypeError, ValueError):
                                     _cl_u = 0
                                 _sm_u = str(getattr(_agent, 'model', '') or '').strip()
+                                from api.routes import _model_matches_configured_default as _mmcd_u
                                 if (
                                     _cl_u > 0
                                     and _cc_cl_u == _cl_u
                                     and _def_u
                                     and _sm_u
-                                    and _def_u != _sm_u
+                                    and not _mmcd_u(_sm_u, _def_u, getattr(_agent, 'provider', '') or '')
                                 ):
                                     # Recompute from real per-model metadata.
                                     try:
@@ -5894,12 +5895,13 @@ def _run_agent_streaming(
                             except (TypeError, ValueError):
                                 _cfg_cl_cc = 0
                             _sess_model_cc = str(getattr(agent, 'model', resolved_model or '') or '').strip()
+                            from api.routes import _model_matches_configured_default as _mmcd_cc
                             if (
                                 _cfg_cl_cc > 0
                                 and _cc_cl == _cfg_cl_cc
                                 and _cfg_default_cc
                                 and _sess_model_cc
-                                and _cfg_default_cc != _sess_model_cc
+                                and not _mmcd_cc(_sess_model_cc, _cfg_default_cc, resolved_provider or '')
                             ):
                                 _skip_cc_cl = True
                     except Exception:
@@ -5946,10 +5948,11 @@ def _run_agent_streaming(
                                 # silently shrinks other models' real metadata.
                                 _cfg_default_ctx = str(_model_cfg_for_ctx.get('default') or '').strip()
                                 _sess_model_ctx = str(getattr(agent, 'model', resolved_model or '') or '').strip()
+                                from api.routes import _model_matches_configured_default as _mmcd_ctx
                                 _apply_cfg_ctx = (
                                     not _cfg_default_ctx
                                     or not _sess_model_ctx
-                                    or _cfg_default_ctx == _sess_model_ctx
+                                    or _mmcd_ctx(_sess_model_ctx, _cfg_default_ctx, resolved_provider or '')
                                 )
                                 if _raw_cfg_ctx is not None and _apply_cfg_ctx:
                                     try:
@@ -6163,12 +6166,13 @@ def _run_agent_streaming(
                         except (TypeError, ValueError):
                             _cfg_cl_sse = 0
                         _sess_model_sse = str(getattr(agent, 'model', resolved_model or '') or '').strip()
+                        from api.routes import _model_matches_configured_default as _mmcd_sse
                         if (
                             _cfg_cl_sse > 0
                             and _cc_cl_sse == _cfg_cl_sse
                             and _cfg_default_sse
                             and _sess_model_sse
-                            and _cfg_default_sse != _sess_model_sse
+                            and not _mmcd_sse(_sess_model_sse, _cfg_default_sse, resolved_provider or '')
                         ):
                             _cc_cl_sse = 0
                             _dropped_stale_cap_sse = True
@@ -6203,10 +6207,11 @@ def _run_agent_streaming(
                             # metadata.
                             _cfg_default_ctx = str(_model_cfg_for_ctx.get('default') or '').strip()
                             _sess_model_ctx = str(getattr(agent, 'model', resolved_model or '') or '').strip()
+                            from api.routes import _model_matches_configured_default as _mmcd_sfb
                             _apply_cfg_ctx = (
                                 not _cfg_default_ctx
                                 or not _sess_model_ctx
-                                or _cfg_default_ctx == _sess_model_ctx
+                                or _mmcd_sfb(_sess_model_ctx, _cfg_default_ctx, resolved_provider or '')
                             )
                             if _raw_cfg_ctx is not None and _apply_cfg_ctx:
                                 try:

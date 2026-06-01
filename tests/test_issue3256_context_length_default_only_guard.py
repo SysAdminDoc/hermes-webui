@@ -96,6 +96,63 @@ def test_empty_model_returns_zero(monkeypatch):
     assert _resolver()(None) == 0
 
 
+# --- #3263 provider-aware default match (Codex final-gate finding, v0.51.192) ---
+# model.default and the session model can be stored in equivalent-but-different
+# shapes (bare / provider-prefixed / @provider:model). An exact string compare
+# wrongly treats the actual default model as non-default and drops its configured
+# context_length cap. _model_matches_configured_default() normalizes the shapes.
+
+def _matcher():
+    import api.routes as routes
+    return routes._model_matches_configured_default
+
+
+def test_default_match_exact():
+    assert _matcher()("claude-opus-4.8", "claude-opus-4.8") is True
+
+
+def test_default_match_bare_session_vs_prefixed_default():
+    # Config default is provider-prefixed; session model is bare — still the default.
+    assert _matcher()("claude-opus-4.8", "anthropic/claude-opus-4.8", "anthropic") is True
+
+
+def test_default_match_prefixed_session_vs_bare_default():
+    assert _matcher()("anthropic/claude-opus-4.8", "claude-opus-4.8", "anthropic") is True
+
+
+def test_default_match_at_qualified_session():
+    assert _matcher()("@anthropic:claude-opus-4.8", "claude-opus-4.8") is True
+
+
+def test_default_match_distinct_models_do_not_match():
+    assert _matcher()("claude-opus-4.7-1m", "claude-opus-4.8", "anthropic") is False
+    assert _matcher()("claude-opus-4.7-1m", "anthropic/claude-opus-4.8", "anthropic") is False
+    assert _matcher()("gpt-5.5", "claude-opus-4.8", "openai") is False
+
+
+def test_default_match_empty_inputs_are_false():
+    assert _matcher()("claude-opus-4.8", "") is False
+    assert _matcher()("", "claude-opus-4.8") is False
+
+
+def test_prefixed_default_still_receives_cap(monkeypatch):
+    """The actual default model, configured provider-prefixed, must still get
+    the global cap when the session stores it bare (the Codex final-gate bug)."""
+    import api.config as config
+    rec = {}
+    _install_fake_get_model_context_length(monkeypatch, rec)
+    monkeypatch.setattr(
+        config, "get_config",
+        lambda *a, **k: {"model": {"default": "anthropic/claude-opus-4.8", "context_length": 232000}},
+    )
+    # session model is the bare form of the prefixed default
+    result = _resolver()("claude-opus-4.8", "anthropic")
+    assert rec["config_context_length"] == 232000, (
+        "provider-prefixed default model must still receive its configured cap"
+    )
+    assert result == 232000
+
+
 # --- #3263 dual-gate MUST-FIX invariants (Codex regression gate, v0.51.192) ---
 # These pin the two consistency fixes applied after the gate found that the
 # default-only guard dropped the stale cap but didn't (a) recompute a persisted
