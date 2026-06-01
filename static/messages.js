@@ -765,9 +765,14 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
   function _streamRecoveryControlMessage(m){
     if(!m||m.role==='tool') return false;
     if(m.recovery_control===true) return true;
+    // Backward-compat ONLY for pre-marker persisted sessions: match the two
+    // fully-anchored synthetic recovery strings. Do NOT fall back to
+    // provider_details_label — a genuine "Response interrupted" card the user
+    // SHOULD see also carries the 'Interruption details' label, and filtering
+    // on it would drop a real interruption from the transcript (the inverse
+    // data-loss class flagged on the sibling #3300). Marker + strict text only.
     const text=String(typeof msgContent==='function'?msgContent(m):(m.content||''));
-    if(_streamRecoveryControlMessageText(text)) return true;
-    return !!(m.provider_details_label && String(m.provider_details_label).toLowerCase()==='interruption details');
+    return _streamRecoveryControlMessageText(text);
   }
   function _filterRecoveryControlMessages(messages){
     if(!Array.isArray(messages)) return [];

@@ -5440,8 +5440,10 @@ function _isRecoveryControlMessageText(text){
 function _isRecoveryControlMessage(m){
   if(!m||m.role==='tool') return false;
   if(m.recovery_control===true) return true;
-  if(_isRecoveryControlMessageText(msgContent(m)||String(m.content||''))) return true;
-  return !!(m.provider_details_label && String(m.provider_details_label).toLowerCase()==='interruption details');
+  // Backward-compat ONLY: strict fully-anchored text match for pre-marker
+  // persisted sessions. NOT provider_details_label — a real "Response
+  // interrupted" card carries 'Interruption details' and must stay visible.
+  return _isRecoveryControlMessageText(msgContent(m)||String(m.content||''));
 }
 function _assistantMessageHasVisibleContent(m){
   if(!m||m.role!=='assistant') return false;
