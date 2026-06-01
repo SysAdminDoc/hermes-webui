@@ -77,8 +77,10 @@ class TestSidebarCancelAction:
         """Session action menu should hide duplicate/delete for CLI-origin sessions."""
         # Window bumped 3600 → 4800 in #1764 (Rename action prepended), then
         # to 5200 in #2111 for response-aware archive toast handling, then
-        # to 6400 in #2294 for the "Hide from list" action on external sessions.
-        body = _function_body(SESSIONS_JS, "_openSessionActionMenu", 6400)
+        # to 6400 in #2294 for the "Hide from list" action on external sessions,
+        # then to 7200 in #3223 for the "Regenerate title" action (gated on
+        # !session.is_imported) added between Stop-response and the worktree/delete block.
+        body = _function_body(SESSIONS_JS, "_openSessionActionMenu", 7200)
         assert "const isCliSession = _isCliSession(session);" in body
         assert "const isExternalSession = isMessagingSession || isCliSession;" in body
         assert "if(!isExternalSession)" in body

@@ -692,8 +692,17 @@ async function openFile(path, opts={}){
       if(lang) codeEl.className='language-'+lang;
       const pre=$('previewCode');
       pre.textContent='';
+      // Prism.highlightElement() propagates the language-* class onto the
+      // parent <pre>, so a previously-previewed code file leaves e.g.
+      // "language-css" on #previewCode. A subsequent plain-text file builds a
+      // class-less <code>, and Prism walks up to that stale ancestor class and
+      // mis-highlights prose. Strip any inherited language-* token from the
+      // <pre> before each render so highlighting never leaks across files.
+      pre.className=pre.className.replace(/\blanguage-\S+/g,'').replace(/\s+/g,' ').trim();
       pre.appendChild(codeEl);
-      if(typeof Prism!=='undefined'&&typeof Prism.highlightElement==='function'){
+      // Only invoke Prism when we actually assigned a language; otherwise the
+      // class-less <code> would inherit any ancestor language-* class.
+      if(lang&&typeof Prism!=='undefined'&&typeof Prism.highlightElement==='function'){
         Prism.highlightElement(codeEl);
       }
     }catch(e){
