@@ -4,7 +4,7 @@
 ## [Unreleased]
 
 ### Added
-- Generated local image artifacts now render as compact chat cards with an inline preview, the filename, and localized **Open** / **Download** actions, all served through authenticated `/api/media` URLs (#3220, @AJV20).
+- Generated local image artifacts now render as a clean inline image (with click-to-zoom lightbox) plus a hover/focus-revealed **Download** action overlaid on the image, served through authenticated `/api/media` URLs — matching the common AI-chat pattern of letting the image be the hero rather than wrapping it in a permanent card (#3220, @AJV20).
 - The session action menu can regenerate conversation titles on demand from the saved transcript, updating the sidebar without touching conversation chronology and syncing the new title through to state.db when Insights sync is enabled. Closes #3106 (#3223, @AJV20).
 
 ## [v0.51.204] — 2026-06-01 — Release FX (stage-batch17 — project/session operations honor the session's own profile)

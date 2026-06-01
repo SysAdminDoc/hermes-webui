@@ -3508,7 +3508,13 @@ function renderMd(raw){
       const safeSrc=esc(src);
       const safeName=esc(name||'image');
       const tt=(typeof t==='function')?t:(key=>({media_open:'Open',media_download:'Download'}[key]||key));
-      return `<span class="msg-artifact-card msg-artifact-card--image"><img class="msg-media-img" src="${safeSrc}" alt="${safeName}" loading="lazy"><span class="msg-artifact-meta"><span class="msg-artifact-title">${safeName}</span><span class="msg-artifact-actions"><a class="msg-artifact-action" href="${safeSrc}" target="_blank" rel="noopener">${tt('media_open')}</a><a class="msg-artifact-action" href="${safeSrc}" download="${safeName}">${tt('media_download')}</a></span></span></span>`;
+      // Clean inline image (keeps the existing .msg-media-img lightbox-on-click
+      // behavior) with a hover/focus-revealed Download action overlaid top-right,
+      // matching the ChatGPT/Claude/Gemini pattern. The image stays the hero —
+      // no permanent card chrome. Download is the one affordance the lightbox
+      // (zoom-on-click) doesn't already provide.
+      const dlSvg='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+      return `<span class="msg-artifact-image"><img class="msg-media-img" src="${safeSrc}" alt="${safeName}" loading="lazy"><a class="msg-artifact-download" href="${safeSrc}" download="${safeName}" title="${tt('media_download')}" aria-label="${tt('media_download')}" onclick="event.stopPropagation()">${dlSvg}</a></span>`;
     };
     if(/^file:\/\//i.test(ref)){
       try{

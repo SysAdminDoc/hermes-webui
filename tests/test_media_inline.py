@@ -60,14 +60,20 @@ class TestMediaRenderMdStash(unittest.TestCase):
         self.assertIn("msg-media-link", UI_JS,
                       "restore pass must produce download link for non-image files")
 
-    def test_local_image_media_uses_artifact_card(self):
+    def test_local_image_media_uses_clean_image_with_hover_download(self):
+        # #3220 redesign: generated local images render as a clean inline image
+        # (keeping the lightbox-on-click) with a hover/focus-revealed Download
+        # overlay — matching the ChatGPT/Claude/Gemini pattern — instead of a
+        # permanent bordered card with always-visible Open/Download buttons.
         self.assertIn("localArtifactCard", UI_JS)
-        self.assertIn("msg-artifact-card msg-artifact-card--image", UI_JS)
-        self.assertIn("msg-artifact-actions", UI_JS)
+        self.assertIn("msg-artifact-image", UI_JS)
+        self.assertIn("msg-artifact-download", UI_JS)
+        self.assertIn("msg-media-img", UI_JS)
         self.assertIn("t('media_download')", UI_JS)
-        self.assertIn("t('media_open')", UI_JS)
-        self.assertIn("media_open:", I18N_JS)
         self.assertIn("media_download:", I18N_JS)
+        # The clean-image redesign drops the permanent card chrome.
+        self.assertNotIn("msg-artifact-card", UI_JS)
+        self.assertNotIn("msg-artifact-actions", UI_JS)
         self.assertNotIn("downloadUrl=src+(String(src).includes('?')?'&':'?')+'download=1'", UI_JS)
         self.assertNotIn("openUrl=src+(String(src).includes('?')?'&':'?')+'inline=1'", UI_JS)
 
@@ -143,15 +149,18 @@ class TestMediaCSS(unittest.TestCase):
             "Download link style must be defined for non-image media",
         )
 
-    def test_generated_artifact_card_css_defined(self):
+    def test_generated_artifact_image_css_defined(self):
+        # #3220 redesign: clean image + hover-revealed download overlay.
         for cls in [
-            ".msg-artifact-card",
-            ".msg-artifact-meta",
-            ".msg-artifact-title",
-            ".msg-artifact-actions",
-            ".msg-artifact-action",
+            ".msg-artifact-image",
+            ".msg-artifact-download",
         ]:
             self.assertIn(cls, self.CSS)
+        # Hover/focus reveals the download button (hidden by default).
+        self.assertIn(".msg-artifact-image:hover .msg-artifact-download", self.CSS)
+        # The old permanent-card classes are gone.
+        self.assertNotIn(".msg-artifact-card", self.CSS)
+        self.assertNotIn(".msg-artifact-action", self.CSS)
 
 
 

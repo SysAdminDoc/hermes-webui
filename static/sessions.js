@@ -2032,12 +2032,28 @@ function _positionSessionActionMenu(anchorEl){
   if(left+menuW>window.innerWidth-8) left=window.innerWidth-menuW-8;
   _sessionActionMenu.style.left=left+'px';
   _sessionActionMenu.style.top='8px';
+  // Reset any prior clamp so we measure the menu's natural height.
+  _sessionActionMenu.style.maxHeight='';
   const menuH=_sessionActionMenu.offsetHeight || 0;
+  const margin=8;
+  const maxAvail=window.innerHeight-margin*2;
   let top=rect.bottom+6;
-  if(top+menuH>window.innerHeight-8 && rect.top>menuH+12){
+  // Prefer flipping above the row when the menu would overflow the bottom and
+  // there's room above.
+  if(top+menuH>window.innerHeight-margin && rect.top>menuH+12){
     top=rect.top-menuH-6;
   }
-  if(top<8) top=8;
+  // If the menu is taller than the viewport, or still overflows after the flip
+  // attempt (e.g. a top-anchored row with a tall menu and no room above), cap
+  // its height to the viewport and let it scroll instead of clipping off-screen.
+  if(menuH>maxAvail){
+    _sessionActionMenu.style.maxHeight=maxAvail+'px';
+    top=margin;
+  } else {
+    // Clamp vertically so the whole menu stays on-screen at both edges.
+    if(top+menuH>window.innerHeight-margin) top=window.innerHeight-margin-menuH;
+    if(top<margin) top=margin;
+  }
   _sessionActionMenu.style.top=top+'px';
 }
 

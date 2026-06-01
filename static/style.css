@@ -1561,13 +1561,17 @@
   .img-lightbox-counter{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);color:#fff;font-size:14px;padding:4px 14px;border-radius:12px;pointer-events:none;}
   .msg-media-link{display:inline-flex;align-items:center;gap:5px;background:var(--accent-bg);border:1px solid var(--accent-bg-strong);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--accent-text);text-decoration:none;}
   .msg-media-link:hover{background:var(--accent-bg-strong);}
-  .msg-artifact-card{display:inline-flex;align-items:center;gap:10px;max-width:min(100%,360px);margin:6px 8px 6px 0;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;vertical-align:top;box-shadow:0 2px 10px rgba(0,0,0,.12);}
-  .msg-artifact-card .msg-media-img{margin:0;flex:0 0 auto;}
-  .msg-artifact-meta{display:flex;min-width:0;flex-direction:column;gap:6px;align-items:flex-start;}
-  .msg-artifact-title{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text);}
-  .msg-artifact-actions{display:flex;gap:6px;flex-wrap:wrap;}
-  .msg-artifact-action{display:inline-flex;align-items:center;border:1px solid var(--accent-bg-strong);border-radius:999px;padding:3px 9px;font-size:12px;color:var(--accent-text);text-decoration:none;background:var(--accent-bg);}
-  .msg-artifact-action:hover{background:var(--accent-bg-strong);}
+  /* Generated local image artifact (#3220): clean inline image with a
+     hover/focus-revealed Download button overlaid top-right. The image keeps
+     its .msg-media-img lightbox-on-click behavior; no permanent card chrome —
+     matches the ChatGPT/Claude/Gemini pattern of letting the image be the hero. */
+  .msg-artifact-image{position:relative;display:inline-block;vertical-align:bottom;margin:3px 4px 3px 0;}
+  .msg-artifact-image .msg-media-img{margin:0;display:block;}
+  .msg-artifact-download{position:absolute;top:6px;right:6px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;background:rgba(0,0,0,.55);color:#fff;text-decoration:none;opacity:0;transform:translateY(-2px);transition:opacity .12s,transform .12s,background .12s;pointer-events:none;}
+  .msg-artifact-image:hover .msg-artifact-download,.msg-artifact-image:focus-within .msg-artifact-download{opacity:1;transform:translateY(0);pointer-events:auto;}
+  .msg-artifact-download:hover{background:rgba(0,0,0,.78);}
+  .msg-artifact-download:focus-visible{opacity:1;pointer-events:auto;outline:2px solid var(--accent-bg-strong);outline-offset:1px;}
+  @media (hover:none){.msg-artifact-download{opacity:1;pointer-events:auto;transform:none;}}
 
   /* ── Inline SVG rendering ── */
   .msg-media-svg{display:block;max-width:100%;height:auto;border-radius:6px;margin:6px 0;border:1px solid var(--border);background:var(--surface);}
@@ -1964,7 +1968,14 @@
   .preview-area.visible{display:flex;opacity:1;}
   .preview-path{font-size:11px;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--border);flex-shrink:0;}
   .preview-code{font-family:"SF Mono","Fira Code",ui-monospace,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--pre-text);}
-  .preview-code code[class*="language-"]{background:var(--code-bg) !important;}
+  /* Workspace preview syntax highlighting (#3337): Prism's prism-tomorrow theme
+     styles BOTH pre[class*="language-"] and code[class*="language-"] with its own
+     gray background + padding. Prism propagates the language-* class onto the
+     <pre> (.preview-code), so without overriding the <pre> too you get a gray
+     prism frame around the navy var(--code-bg) <code> — a jarring two-tone block
+     on dark themes. Mirror the chat-code-block fix (.msg-body pre[class*=...]):
+     force BOTH surfaces to var(--code-bg) so the code panel reads as one tone. */
+  .preview-code[class*="language-"],.preview-code code[class*="language-"]{background:var(--code-bg) !important;}
   /* Image preview */
   .preview-img-wrap{display:flex;align-items:center;justify-content:center;flex:1;padding:8px 0;min-height:0;}
   .preview-img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.4);}
