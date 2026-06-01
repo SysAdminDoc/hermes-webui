@@ -2759,6 +2759,17 @@ function _setMessageScrollToBottom(){
   _nearBottomCount=2;
   _scrollPinned=true;
   requestAnimationFrame(()=>{
+    // Retry the bottom write on the next layout frame so a DOM rebuild that
+    // grows the transcript after the first write doesn't strand a pinned
+    // conversation mid-scroll (#3319). But by this frame the user may have
+    // scrolled up — re-check intent and DON'T snap them back or re-pin if so;
+    // only release the programmatic-scroll latch.
+    if(_messageUserUnpinned || !_scrollPinned
+       || (typeof _recentMessageUpwardIntent==='function' && _recentMessageUpwardIntent())
+       || _recentNonMessageScrollIntent()){
+      requestAnimationFrame(()=>{ setTimeout(()=>{_programmaticScroll=false;},0); });
+      return;
+    }
     el.scrollTop=el.scrollHeight;
     _lastScrollTop=el.scrollTop;
     _nearBottomCount=2;
