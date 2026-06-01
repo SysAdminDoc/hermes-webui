@@ -1763,10 +1763,20 @@ def _model_matches_configured_default(
       - bare:            ``claude-opus-4.8``
       - slash-prefixed:  ``anthropic/claude-opus-4.8``  (OpenRouter-style)
       - @provider:model: ``@anthropic:claude-opus-4.8``
-    Treat any of these as a match so a provider-prefixed default config still
-    receives its cap (and a bare default still matches a prefixed session model).
-    Empty default → no match (caller falls back to applying the cap broadly only
-    when no default is configured at all).
+
+    Matching rule (correct in both directions):
+      1. Identical strings → match.
+      2. Otherwise compare BARE model ids — BUT only after a provider-compatibility
+         check: if BOTH sides carry an identifiable provider (from a ``provider/``
+         prefix, an ``@provider:`` qualifier, or the explicit ``provider`` arg for
+         the session side) and those providers DIFFER, it is NOT a match. This
+         stops a non-default model on a different provider that happens to share a
+         bare name (``openai/gpt-4o`` vs default ``openrouter/gpt-4o``) from being
+         treated as the default and wrongly receiving its cap.
+      3. When a provider can't be identified on one side, fall through to the bare
+         comparison (lenient-when-unknown — a bare default config still matches a
+         bare/prefixed session model).
+    Empty default → no match.
     """
     sess = str(session_model or "").strip()
     default = str(cfg_default or "").strip()
@@ -1774,23 +1784,33 @@ def _model_matches_configured_default(
         return False
     if sess == default:
         return True
-    # Normalize both to their bare model name, stripping a leading
-    # ``@provider:`` qualifier or a single ``provider/`` slash prefix.
-    def _bare(value: str, prov: str | None = None) -> set[str]:
-        forms = {value}
-        unq, _q = _split_provider_qualified_model(value)
-        if unq:
-            forms.add(unq)
-        # Strip a single leading "provider/" segment (OpenRouter-style).
-        if "/" in unq:
-            forms.add(unq.split("/", 1)[1].strip())
-        # Also consider a provider-prefixed form when an explicit provider is known.
-        if prov:
-            p = str(prov).strip().lower()
-            if p and "/" not in unq and not unq.startswith("@"):
-                forms.add(f"{p}/{unq}")
-        return {f for f in forms if f}
-    return bool(_bare(sess, provider) & _bare(default))
+
+    def _split(value: str) -> tuple[str, str | None]:
+        """Return (bare_model, provider_or_None) for any of the 3 shapes."""
+        value = str(value or "").strip()
+        # @provider:model
+        unq, q_prov = _split_provider_qualified_model(value)
+        if q_prov:
+            return unq.strip(), str(q_prov).strip().lower()
+        # provider/model (single leading slash segment)
+        if "/" in value:
+            prefix, rest = value.split("/", 1)
+            return rest.strip(), prefix.strip().lower()
+        return value, None
+
+    sess_bare, sess_prov = _split(sess)
+    default_bare, default_prov = _split(default)
+    # The explicit provider arg is the session side's provider when the model
+    # string itself didn't carry one.
+    if not sess_prov and provider:
+        sess_prov = str(provider).strip().lower() or None
+
+    if not sess_bare or not default_bare or sess_bare != default_bare:
+        return False
+    # Bare ids match. Reject only when both sides name DIFFERENT providers.
+    if sess_prov and default_prov and sess_prov != default_prov:
+        return False
+    return True
 
 
 

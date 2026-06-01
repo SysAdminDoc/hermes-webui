@@ -130,6 +130,17 @@ def test_default_match_distinct_models_do_not_match():
     assert _matcher()("gpt-5.5", "claude-opus-4.8", "openai") is False
 
 
+def test_default_match_same_bare_different_provider_does_NOT_match():
+    """Same bare model id on a DIFFERENT provider is NOT the configured default
+    and must not receive its cap (Codex final-gate over-match finding)."""
+    assert _matcher()("openai/gpt-4o", "openrouter/gpt-4o", "openai") is False
+    assert _matcher()("@openai:gpt-4o", "@openrouter:gpt-4o") is False
+    assert _matcher()("gpt-4o", "openrouter/gpt-4o", "openai") is False
+    # but the SAME provider (or unknown session provider) still matches:
+    assert _matcher()("openrouter/gpt-4o", "openrouter/gpt-4o") is True
+    assert _matcher()("gpt-4o", "openrouter/gpt-4o", "openrouter") is True
+
+
 def test_default_match_empty_inputs_are_false():
     assert _matcher()("claude-opus-4.8", "") is False
     assert _matcher()("", "claude-opus-4.8") is False
