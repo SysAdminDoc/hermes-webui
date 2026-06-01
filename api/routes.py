@@ -6877,11 +6877,20 @@ def handle_post(handler, parsed) -> bool:
         if color and not _re.match(r"^#[0-9a-fA-F]{3,8}$", color):
             return bad(handler, "Invalid color format")
         projects = load_projects()
+        # #3331 follow-up (Codex+Opus gate): validate the optional client-supplied
+        # `profile` before stamping it, mirroring /api/profile/switch — otherwise a
+        # client could create a project tagged with an arbitrary/unknown profile,
+        # producing hidden cross-profile rows that can't be managed normally.
+        _requested_profile = str(body.get('profile') or "").strip()
+        if _requested_profile and _requested_profile != "default":
+            from api.profiles import _PROFILE_ID_RE
+            if not _PROFILE_ID_RE.fullmatch(_requested_profile):
+                return bad(handler, "invalid profile")
         proj = {
             "project_id": uuid.uuid4().hex[:12],
             "name": name,
             "color": color,
-            "profile": body.get('profile') or get_active_profile_name() or 'default',
+            "profile": _requested_profile or get_active_profile_name() or 'default',
             "created_at": time.time(),
         }
         projects.append(proj)

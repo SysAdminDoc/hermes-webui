@@ -4993,10 +4993,23 @@ function _showProjectPicker(session, anchorEl){
     }
   };
   picker.appendChild(none);
-  // Project options — only show projects matching the session's profile
+  // Project options — only show projects matching the session's profile.
+  // #3331 follow-up (Codex gate): mirror the server's root-alias tolerance —
+  // `_profiles_match` treats the literal 'default' and a renamed-root display
+  // name as equivalent, so a server-approved `profile:'default'` project must
+  // not be hidden for a session stamped with the renamed-root profile (and
+  // vice versa). Only hide when BOTH sides are explicit, distinct, AND neither
+  // is the 'default' alias; let the server's allowlist be authoritative for the
+  // default/renamed-root case.
   const sessionProfile = session ? (session.profile || undefined) : undefined;
+  const _profileHidesProject = (projProfile) => {
+    if(!sessionProfile || !projProfile) return false;
+    if(projProfile === sessionProfile) return false;
+    if(projProfile === 'default' || sessionProfile === 'default') return false;
+    return true;
+  };
   for(const p of _allProjects){
-    if (sessionProfile && p.profile && p.profile !== sessionProfile) continue;
+    if (_profileHidesProject(p.profile)) continue;
     const item=document.createElement('div');
     item.className='project-picker-item'+(session.project_id===p.project_id?' active':'');
     if(p.color){

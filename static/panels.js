@@ -5325,6 +5325,15 @@ async function switchToProfile(name) {
         S.session.profile = data.active || name;
       }
     }
+    // #3331 follow-up (Codex gate): retag the in-memory session's profile on
+    // ANY profile switch, even when the switched-to profile returns no
+    // default_model (empty session / model-less profile). Without this the
+    // profile chip + project-picker filter keep the stale profile after a
+    // switch to a model-less profile. Guarded by !sessionInProgress like the
+    // model patch above (don't touch a session about to be replaced).
+    if (S.session && !sessionInProgress) {
+      S.session.profile = data.active || name;
+    }
 
     // ── Apply workspace ────────────────────────────────────────────────────
     if (data.default_workspace) {
