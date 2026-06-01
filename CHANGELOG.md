@@ -3,6 +3,11 @@
 
 ## [Unreleased]
 
+## [v0.51.194] — 2026-06-01 — Release FN (stage-batch6 — profiles config-import-cycle fix)
+
+### Fixed
+- Profile startup now shares platform-default Hermes home resolution through a small `api/paths.py` helper instead of importing the full `api.config` module from `api.profiles`, so importing profiles before config no longer hits a latent circular-load that silently skipped active-profile initialization. Closes #3283 (#3303, @AJV20).
+
 ## [v0.51.193] — 2026-06-01 — Release FM (stage-batch5 — ctl dotenv opt-out + workspace inline-open + gateway reply polish)
 
 ### Fixed
