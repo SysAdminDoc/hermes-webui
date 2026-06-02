@@ -51,7 +51,7 @@ def parse_multipart(rfile, content_type, content_length) -> tuple:
     try:
         length = int(content_length)
     except (TypeError, ValueError):
-        raise ValueError('Invalid Content-Length')
+        raise ValueError('Invalid Content-Length') from None
     if length < 0:
         raise ValueError('Invalid Content-Length (negative)')
     if length > MAX_UPLOAD_BYTES:
