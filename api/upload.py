@@ -13,6 +13,28 @@ from api.helpers import j, bad
 from api.models import get_session
 from api.workspace import safe_resolve_ws, resolve_trusted_workspace
 
+
+def _max_extracted_bytes() -> int:
+    """Total-extracted-bytes cap for archive uploads (zip/tar-bomb guard).
+
+    Independently tunable from the upload size cap via
+    HERMES_WEBUI_MAX_EXTRACTED_MB; defaults to 10x the upload cap. Read at call
+    time (not import) so the value reflects the running process's environment
+    and is exercisable by tests against the out-of-process test server.
+    """
+    raw = os.getenv("HERMES_WEBUI_MAX_EXTRACTED_MB", "").strip()
+    if raw:
+        try:
+            mb = float(raw)
+            if mb > 0:
+                return int(mb * 1024 * 1024)
+        except ValueError:
+            pass
+    return 10 * MAX_UPLOAD_BYTES
+
+
+# Back-compat module constant (some call sites / tests reference it). The
+# authoritative value is _max_extracted_bytes(), read at extraction time.
 _MAX_EXTRACTED_BYTES = 10 * MAX_UPLOAD_BYTES
 
 
@@ -146,6 +168,7 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
     """
     import zipfile, tarfile, io, os, shutil
 
+    cap = _max_extracted_bytes()
     name = Path(filename).name
     stem = Path(filename).stem  # strip .zip / .tar.gz etc.
 
@@ -181,10 +204,10 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
                     if not member_path.is_relative_to(dest_dir.resolve()):
                         raise ValueError(f'Zip-slip blocked: {member.filename}')
                     # Zip-bomb protection: track actual extracted bytes (not declared file_size)
-                    if total_extracted > _MAX_EXTRACTED_BYTES:
+                    if total_extracted > cap:
                         raise ValueError(
                             f'Extraction too large ({total_extracted // (1024*1024)} MB > '
-                            f'{_MAX_EXTRACTED_BYTES // (1024*1024)} MB limit). '
+                            f'{cap // (1024*1024)} MB limit). '
                             f'Possible zip bomb.'
                         )
                     member_path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,10 +218,10 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
                             if not chunk:
                                 break
                             total_extracted += len(chunk)
-                            if total_extracted > _MAX_EXTRACTED_BYTES:
+                            if total_extracted > cap:
                                 raise ValueError(
                                     f'Extraction too large (> '
-                                    f'{_MAX_EXTRACTED_BYTES // (1024*1024)} MB limit). '
+                                    f'{cap // (1024*1024)} MB limit). '
                                     f'Possible zip bomb.'
                                 )
                             dst.write(chunk)
@@ -214,10 +237,10 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
                     if not member_path.is_relative_to(dest_dir.resolve()):
                         raise ValueError(f'Tar-slip blocked: {member.name}')
                     # Tar-bomb protection: track actual extracted bytes (not declared size)
-                    if total_extracted > _MAX_EXTRACTED_BYTES:
+                    if total_extracted > cap:
                         raise ValueError(
                             f'Extraction too large ({total_extracted // (1024*1024)} MB > '
-                            f'{_MAX_EXTRACTED_BYTES // (1024*1024)} MB limit). '
+                            f'{cap // (1024*1024)} MB limit). '
                             f'Possible zip bomb.'
                         )
                     member_path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,10 +253,10 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
                                 if not chunk:
                                     break
                                 total_extracted += len(chunk)
-                                if total_extracted > _MAX_EXTRACTED_BYTES:
+                                if total_extracted > cap:
                                     raise ValueError(
                                         f'Extraction too large (> '
-                                        f'{_MAX_EXTRACTED_BYTES // (1024*1024)} MB limit). '
+                                        f'{cap // (1024*1024)} MB limit). '
                                         f'Possible zip bomb.'
                                     )
                                 dst.write(chunk)
@@ -362,7 +385,7 @@ def handle_workspace_upload(handler):
         target_dir.mkdir(parents=True, exist_ok=True)
 
         results = []
-        for field_name, (filename, file_bytes) in files.items():
+        for _field_name, (filename, file_bytes) in files.items():
             if not filename:
                 continue
 
@@ -440,7 +463,7 @@ def handle_workspace_upload(handler):
                     continue
 
             results.append({
-                'filename': safe_name,
+                'filename': dest.name,
                 'path': str(dest),
                 'size': dest.stat().st_size,
                 'mime': mime,

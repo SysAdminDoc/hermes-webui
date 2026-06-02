@@ -12,7 +12,6 @@ Covers the POST /api/workspace/upload handler:
 
 import io
 import json
-import os
 import sys
 import uuid
 import urllib.request
@@ -368,20 +367,26 @@ class TestWorkspaceUploadArchive:
         # Corrupt archive file should be removed
         assert not (ws / "corrupt.zip").exists()
 
-    def test_zip_bomb_cap_trips(self, cleanup_test_sessions, monkeypatch):
-        """When extraction exceeds the cap, it should be rejected and cleaned up."""
-        from api import upload as upload_mod
+    def test_zip_bomb_cap_trips(self, cleanup_test_sessions):
+        """When extraction exceeds the cap, it should be rejected and cleaned up.
 
+        The test server runs with HERMES_WEBUI_MAX_EXTRACTED_MB=5 (set in
+        conftest), so a highly-compressible archive that extracts to >5MB trips
+        the byte-tracking zip-bomb guard. (Monkeypatching the cap in the pytest
+        process does nothing — extraction runs in the out-of-process server.)
+        """
         sid, ws = make_session_tracked(cleanup_test_sessions)
 
-        # Set a very small extraction cap (100 bytes)
-        monkeypatch.setattr(upload_mod, "_MAX_EXTRACTED_BYTES", 100)
+        from api.config import MAX_UPLOAD_BYTES
 
-        # Create a zip with enough content to exceed 100 bytes when extracted
+        # ~6.4MB of zeros across two members — compresses to a tiny zip but
+        # exceeds the 5MB extraction cap during the chunked write.
         zip_data = _make_zip({
-            "small.txt": b"x" * 80,    # 80 bytes — under cap
-            "medium.txt": b"y" * 80,   # +80 = 160 bytes — exceeds cap during extraction
+            "a.bin": b"\0" * (4 * 1024 * 1024),  # 4MB — under cap
+            "b.bin": b"\0" * (4 * 1024 * 1024),  # +4MB = 8MB — exceeds 5MB cap mid-extraction
         })
+        # Sanity: the compressed archive itself must stay under the upload cap.
+        assert len(zip_data) < MAX_UPLOAD_BYTES, f"test zip too big to upload: {len(zip_data)}"
 
         result, status = post_multipart(
             "/api/workspace/upload",
@@ -395,6 +400,5 @@ class TestWorkspaceUploadArchive:
 
         # Archive should be removed on failure
         assert not (ws / "bomb.zip").exists()
-
-        # Cleanup: restore the original cap
-        monkeypatch.undo()
+        # No partial extraction directory left behind
+        assert not (ws / "bomb").exists()
