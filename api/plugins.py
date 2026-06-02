@@ -15,9 +15,14 @@ Each plugin may have:
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Valid dashboard-plugin name: a safe slug (it becomes a URL path component and
+# a settings key). Lowercase alnum + - / _, 1-64 chars, must start with a letter.
+_VALID_PLUGIN_NAME = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 # plugin_name -> manifest dict (as loaded from manifest.json)
 PLUGIN_MANIFESTS: dict[str, dict] = {}
@@ -51,6 +56,13 @@ def load_plugins() -> None:
             continue
 
         name = manifest.get("name") or entry.name
+
+        # Validate the plugin name: it becomes a URL path component
+        # (/dashboard-plugins/<name>/...) and a settings key. Restrict to a safe
+        # slug so a manifest like name:"../foo" can't make the URL-space ambiguous.
+        if not _VALID_PLUGIN_NAME.match(str(name)):
+            logger.warning("Skipping plugin with invalid name %r (must match %s)", name, _VALID_PLUGIN_NAME.pattern)
+            continue
 
         tab = manifest.get("tab", {})
         tab_path = tab.get("path", f"/{name}")

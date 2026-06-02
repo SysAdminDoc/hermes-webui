@@ -5046,8 +5046,10 @@ def save_settings(settings: dict) -> dict:
             current_dash.update(_dashboard_plugins)
             current["dashboard_plugins"] = current_dash
     for k, v in settings.items():
+        # dashboard_plugins is deep-merged above (not a flat allowlisted scalar).
         if k == "dashboard_plugins":
             continue
+        if k in _SETTINGS_ALLOWED_KEYS:
             if k == "theme":
                 if isinstance(v, str) and v.strip():
                     pending_theme = v

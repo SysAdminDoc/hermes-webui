@@ -373,6 +373,52 @@ class TestPluginAssetIsolationHardening:
         assert "_dashboard_plugin_enabled" in page_seg
 
 
+class TestSettingsAllowlistGuard:
+    """The dashboard_plugins save path must not weaken the settings allowlist.
+
+    Regression for the #2622 hardening: an earlier revision replaced the
+    `if k in _SETTINGS_ALLOWED_KEYS` guard with `if k == "dashboard_plugins":
+    continue` and orphaned the validation body, which (a) broke saves for every
+    other key and (b) let any client-supplied key be written (e.g. password_hash).
+    """
+
+    def _isolated(self):
+        import tempfile
+        import api.config as cfg
+        cfg.SETTINGS_FILE = Path(tempfile.mkdtemp()) / "settings.json"
+        return cfg
+
+    def test_allowlisted_key_persists(self):
+        cfg = self._isolated()
+        r = cfg.save_settings({"language": "ru"})
+        assert r.get("language") == "ru"
+
+    def test_non_allowlisted_key_rejected(self):
+        cfg = self._isolated()
+        r = cfg.save_settings({"password_hash": "INJECTED", "signing_key_evil": "x"})
+        assert r.get("password_hash") != "INJECTED"
+        assert "signing_key_evil" not in r
+
+    def test_dashboard_plugins_deep_merges(self):
+        cfg = self._isolated()
+        cfg.save_settings({"dashboard_plugins": {"p1": True}})
+        r = cfg.save_settings({"dashboard_plugins": {"p2": True}})
+        dp = r.get("dashboard_plugins", {})
+        assert dp.get("p1") is True and dp.get("p2") is True
+
+
+class TestPluginNameValidation:
+    def test_invalid_plugin_name_rejected(self):
+        import api.plugins as plugins
+        assert plugins._VALID_PLUGIN_NAME.match("nic-branch-sync")
+        assert plugins._VALID_PLUGIN_NAME.match("demo_dashboard")
+        assert not plugins._VALID_PLUGIN_NAME.match("../foo")
+        assert not plugins._VALID_PLUGIN_NAME.match("/etc/passwd")
+        assert not plugins._VALID_PLUGIN_NAME.match("UPPER")
+        assert not plugins._VALID_PLUGIN_NAME.match("")
+        assert not plugins._VALID_PLUGIN_NAME.match("1leading-digit")
+
+
 class TestPluginCollisionDetection:
     """Tests for plugin name and tab.path collision detection."""
 
