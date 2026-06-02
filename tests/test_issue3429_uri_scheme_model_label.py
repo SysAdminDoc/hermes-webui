@@ -71,6 +71,23 @@ def test_uri_scheme_model_id_label_is_model_name_not_path_junk():
         assert "${" not in label, f"env-var placeholder leaked into label: {label!r}"
 
 
+def test_uri_label_edge_cases_never_return_authority_or_drop_digit_models():
+    """#3429 follow-up (Codex gate): a single path segment is kept even when it
+    looks version-like, a digit-leading model name (2026-model) is NOT mistaken
+    for a version tail, and the authority/folder is never returned as the label."""
+    out = _labels([
+        "gpt://folder123/v4",            # single path seg — keep it, don't fall back to authority
+        "gpt://folder123/latest",        # single path seg — keep it
+        "gpt://folder123/2026-model/latest",  # digit-leading real model name
+    ])
+    assert out["gpt://folder123/v4"] == "v4"
+    assert out["gpt://folder123/latest"] == "latest"
+    assert out["gpt://folder123/2026-model/latest"] == "2026-model"
+    # The authority/folder must never be promoted to the label.
+    for label in out.values():
+        assert label != "folder123", "authority/folder leaked into label"
+
+
 def test_uri_fix_does_not_regress_multi_slash_or_bare_ids():
     """#3360 multi-slash hierarchy + single-slash/bare ids stay correct."""
     out = _labels([

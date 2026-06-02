@@ -2903,23 +2903,36 @@ function getModelLabel(modelId){
   // URI-scheme ids (e.g. `gpt://${FOLDER}/deepseek-v4-flash/latest`, provider
   // `yandex:gpt`) must NOT be first-segment-stripped — `indexOf('/')` would
   // land inside the `://` and leave `/${FOLDER}/...` path junk (#3429). For a
-  // `scheme://` id, drop the scheme + authority and take the last meaningful
-  // path segment (ignoring a bare version tail like `latest`/`stable`).
+  // `scheme://authority/path...` id, drop the scheme AND the authority, then
+  // pick the model name from the PATH segments only. A version/channel tail
+  // (`latest`/`stable`/numeric) is skipped only when a real model segment
+  // precedes it — never promoting the authority or a container folder (#3429).
   let _last;
   const _uriMatch = /^[a-z][a-z0-9+.-]*:\/\/(.+)$/i.exec(modelId);
   if (_uriMatch) {
-    const _segs = _uriMatch[1].split('/').filter(Boolean);
-    const _isVersionTail = (s) => /^(latest|stable|current|default|v?\d[\w.-]*)$/i.test(s);
+    const _all = _uriMatch[1].split('/').filter(Boolean);
+    // _all[0] is the authority (folder/host); the model lives in the path tail.
+    const _path = _all.slice(1);
+    // A pure version/channel tail: named channels, or a bare version number
+    // (`v4`, `1.2`, `20231231`) — NOT a mixed model name that merely starts
+    // with a digit (`2026-model`, `4o-mini`), which must be kept as the label.
+    const _isVersionTail = (s) => /^(latest|stable|current|default|v\d[\d.]*|\d[\d.]*)$/i.test(s);
+    const _isPlaceholder = (s) => /\$\{[^}]*\}/.test(s);
+    // Walk path segments right-to-left; the model name is the LAST segment that
+    // is neither a version/channel tail (`latest`, `v4`, `1.2`) nor a `${...}`
+    // env-var placeholder. Fall back to the last non-placeholder segment, then
+    // the literal last segment. Never returns the authority (`_all[0]`).
     let _pick = '';
-    for (let _i = _segs.length - 1; _i >= 0; _i--) {
-      // Skip env-var placeholders (${...}) and bare version tails; prefer the
-      // last segment that actually looks like a model name.
-      if (/\$\{[^}]*\}/.test(_segs[_i])) continue;
-      if (_isVersionTail(_segs[_i]) && _pick) continue;
-      if (!_pick) _pick = _segs[_i];
-      if (!_isVersionTail(_segs[_i])) { _pick = _segs[_i]; break; }
+    let _lastUsable = '';
+    for (let _i = _path.length - 1; _i >= 0; _i--) {
+      const _seg = _path[_i];
+      if (_isPlaceholder(_seg)) continue;
+      if (!_lastUsable) _lastUsable = _seg;
+      if (!_isVersionTail(_seg)) { _pick = _seg; break; }
     }
-    _last = _pick || _segs[_segs.length - 1] || modelId;
+    // Fallbacks: last non-placeholder path segment, else the literal last path
+    // segment, else the authority, else the raw id. Never an env-var placeholder.
+    _last = _pick || _lastUsable || _path[_path.length - 1] || _all[0] || modelId;
   } else {
     _last = modelId.includes('/') ? (modelId.slice(modelId.indexOf('/')+1) || modelId) : modelId;
   }
