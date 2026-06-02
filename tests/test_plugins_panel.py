@@ -337,6 +337,42 @@ class TestPluginStaticServing:
         assert "html.escape(" in routes
 
 
+class TestPluginAssetIsolationHardening:
+    """Regression coverage for the v0.51.x #2622 hardening pass."""
+
+    def test_dashboard_plugin_disabled_by_default(self):
+        # Opt-in: an unknown/unconfigured plugin is NOT enabled.
+        import api.routes as routes
+        with patch("api.config.load_settings", return_value={}):
+            assert routes._dashboard_plugin_enabled("anything") is False
+
+    def test_dashboard_plugin_enable_gate_reads_settings(self):
+        import api.routes as routes
+        with patch("api.config.load_settings", return_value={"dashboard_plugins": {"foo": True, "bar": False}}):
+            assert routes._dashboard_plugin_enabled("foo") is True
+            assert routes._dashboard_plugin_enabled("bar") is False
+            assert routes._dashboard_plugin_enabled("missing") is False
+
+    def test_asset_route_sends_sandbox_csp_and_nosniff(self):
+        # Plugin-controlled assets are served same-origin; the response MUST carry
+        # the sandbox CSP (null origin) + nosniff so a plugin .html/.svg can't run
+        # privileged same-origin script on direct navigation.
+        routes = read("api/routes.py")
+        seg = routes[routes.find('"/dashboard-plugins/"'):routes.find("# ── Plugin pages")]
+        assert "Content-Security-Policy" in seg
+        assert "sandbox allow-scripts" in seg
+        assert "X-Content-Type-Options" in seg and "nosniff" in seg
+
+    def test_both_plugin_routes_enforce_enable_gate_server_side(self):
+        # Both the asset route and the page route must 404 a disabled plugin —
+        # "disabled" cannot be UI-only.
+        routes = read("api/routes.py")
+        asset_seg = routes[routes.find('"/dashboard-plugins/"'):routes.find("# ── Plugin pages")]
+        page_seg = routes[routes.find("# ── Plugin pages"):routes.find("# ── Plugin pages") + 2000]
+        assert "_dashboard_plugin_enabled" in asset_seg
+        assert "_dashboard_plugin_enabled" in page_seg
+
+
 class TestPluginCollisionDetection:
     """Tests for plugin name and tab.path collision detection."""
 
