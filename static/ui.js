@@ -268,12 +268,15 @@ let _messageRenderWindowSize=MESSAGE_RENDER_WINDOW_DEFAULT;
 // Cached visWithIdx array — invalidated when S.messages.length changes.
 let _visWithIdxCache=null;
 let _visWithIdxCacheLen=0;
+function clearVisibleMessageRowCache(){
+  _visWithIdxCache=null;
+  _visWithIdxCacheLen=0;
+}
 function _resetMessageRenderWindow(sid){
   _messageRenderWindowSid=sid||null;
   _messageRenderWindowSize=MESSAGE_RENDER_WINDOW_DEFAULT;
   _clearRenderCache();
-  _visWithIdxCache=null;
-  _visWithIdxCacheLen=0;
+  clearVisibleMessageRowCache();
 }
 
 // ── renderMd / _renderUserFencedBlocks cache ──────────────────────────────
@@ -6260,6 +6263,7 @@ let _sessionHtmlCacheSid=null; // session_id currently rendered in the DOM
 function clearMessageRenderCache(){
   _sessionHtmlCache.clear();
   _sessionHtmlCacheSid=null;
+  clearVisibleMessageRowCache();
 }
 
 function _messageRenderCacheSignature(){
