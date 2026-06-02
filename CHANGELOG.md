@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Added
+- WebUI dashboard plugins: plugins that ship a UI under `~/.hermes/plugins/<name>/dashboard/` (with a `manifest.json`) now appear as cards in Settings → Plugins with an **Open** button that renders the plugin page inside a sandboxed iframe (`sandbox="allow-scripts allow-forms allow-popups"` — no `allow-same-origin`, so plugin JS/CSS/modals stay fully isolated from the parent app). New `/plugins/` (shared assets) and `/dashboard-plugins/<name>/` (per-plugin assets) static routes serve plugin files with path-traversal protection. Display-only — no plugin backend/subprocess execution (#2622, @pix0127).
+
 ## [v0.51.208] — 2026-06-02 — Release GB (workspace upload hardening hotfix)
 
 ### Fixed
