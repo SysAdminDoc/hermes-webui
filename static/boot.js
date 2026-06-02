@@ -913,18 +913,26 @@ window._micPendingSend=window._micPendingSend||false;
       .then(blob => {
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        // Register with the shared handle (declared in ui.js, same global scope;
+        // both scripts are fully evaluated before any voice interaction) so
+        // stopTTS() — called from _deactivate() — can actually pause hands-free
+        // Edge playback. Without this the audio is local here and unstoppable.
+        _playingEdgeAudio=audio;
         audio.onended = () => {
           _ttsSpeaking=false;
+          if(_playingEdgeAudio===audio) _playingEdgeAudio=null;
           URL.revokeObjectURL(url);
           if(_voiceModeActive) setTimeout(()=>_startListening(),500);
         };
         audio.onerror = () => {
           _ttsSpeaking=false;
+          if(_playingEdgeAudio===audio) _playingEdgeAudio=null;
           URL.revokeObjectURL(url);
           if(_voiceModeActive) setTimeout(()=>_startListening(),1000);
         };
         audio.play().catch(e => {
           _ttsSpeaking=false;
+          if(_playingEdgeAudio===audio) _playingEdgeAudio=null;
           if(_voiceModeActive) setTimeout(()=>_startListening(),1000);
         });
       })

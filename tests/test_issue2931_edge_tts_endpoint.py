@@ -8,6 +8,8 @@ edge_tts import / Communicate call.
 import io
 import json
 
+import pytest
+
 import api.routes as routes
 
 
@@ -50,15 +52,23 @@ def _reset_limiter():
         del routes._handle_tts._tts_limiter
 
 
-def test_tts_requires_post():
+@pytest.fixture(autouse=True)
+def _fresh_tts_limiter():
+    # The limiter is a function-attribute singleton that persists across the
+    # whole test session; reset it before AND after every test in this module so
+    # neither prior suite state nor these tests leak rate-limit state.
     _reset_limiter()
+    yield
+    _reset_limiter()
+
+
+def test_tts_requires_post():
     h = _post({"text": "hello"}, command="GET")
     routes._handle_tts(h, None)
     assert h.status == 405
 
 
 def test_tts_requires_text():
-    _reset_limiter()
     h = _post({"text": "   "})
     routes._handle_tts(h, None)
     assert h.status == 400
@@ -66,32 +76,29 @@ def test_tts_requires_text():
 
 
 def test_tts_rejects_overlong_text():
-    _reset_limiter()
-    h = _post({"text": "x" * 5001})
+    h = _post({"text": "x" * 5001}, client="10.0.0.1")
     routes._handle_tts(h, None)
     assert h.status == 400
     assert "too long" in (h.payload() or {}).get("error", "")
 
 
 def test_tts_rejects_unknown_voice():
-    _reset_limiter()
-    h = _post({"text": "hello", "voice": "evil-voice-injection"}, client="5.6.7.8")
+    h = _post({"text": "hello", "voice": "evil-voice-injection"}, client="10.0.0.2")
     routes._handle_tts(h, None)
     assert h.status == 400
     assert "invalid voice" in (h.payload() or {}).get("error", "")
 
 
 def test_tts_rate_limits_second_immediate_request():
-    _reset_limiter()
     # The limiter runs (and records the client) BEFORE the voice allowlist and
     # before any edge-tts synthesis. Use an invalid voice so the first request
     # still registers with the limiter but returns at the allowlist (400) without
     # making a real network call; the second immediate request from the SAME
-    # client is then throttled (429).
-    h1 = _post({"text": "hello", "voice": "not-a-real-voice"}, client="9.9.9.9")
+    # client is then throttled (429). Unique client IP avoids any cross-test key
+    # collision (the autouse fixture also resets the limiter each test).
+    h1 = _post({"text": "hello", "voice": "not-a-real-voice"}, client="10.0.0.3")
     routes._handle_tts(h1, None)
     assert h1.status == 400  # rejected at allowlist, limiter recorded the client
-    h2 = _post({"text": "hello", "voice": "not-a-real-voice"}, client="9.9.9.9")
+    h2 = _post({"text": "hello", "voice": "not-a-real-voice"}, client="10.0.0.3")
     routes._handle_tts(h2, None)
     assert h2.status == 429
-    _reset_limiter()

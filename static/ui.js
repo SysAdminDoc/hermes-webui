@@ -4421,29 +4421,44 @@ function _playEdgeTts(text, btn){
   const voice=localStorage.getItem('hermes-tts-voice')||'zh-CN-XiaoxiaoNeural';
   const savedRate=parseFloat(localStorage.getItem('hermes-tts-rate'));
   const savedPitch=parseFloat(localStorage.getItem('hermes-tts-pitch'));
-  let rateParam='', pitchParam='';
-  if(!isNaN(savedRate)){
-    const pct=Math.round((savedRate-1)*100);
-    const sign=pct>=0?'+':'';
-    rateParam='&rate='+encodeURIComponent(sign+pct+'%');
-  }
-  if(!isNaN(savedPitch)){
-    const hz=Math.round((savedPitch-1)*50);
-    const sign=hz>=0?'+':'';
-    pitchParam='&pitch='+encodeURIComponent(sign+hz+'Hz');
-  }
-  const url='/api/tts?text='+encodeURIComponent(text)+'&voice='+encodeURIComponent(voice)+rateParam+pitchParam;
+  let rate='', pitch='';
+  if(!isNaN(savedRate)){const pct=Math.round((savedRate-1)*100);const sign=pct>=0?'+':'';rate=sign+pct+'%';}
+  if(!isNaN(savedPitch)){const hz=Math.round((savedPitch-1)*50);const sign=hz>=0?'+':'';pitch=sign+hz+'Hz';}
   if(btn) btn.dataset.speaking='1';
   _ttsSpeaking=true;
-  const audio=new Audio(url);
-  _playingEdgeAudio=audio;
-  audio.onended=function(){_ttsSpeaking=false;_playingEdgeAudio=null;if(btn)btn.dataset.speaking='0';};
-  audio.onerror=function(){_ttsSpeaking=false;_playingEdgeAudio=null;if(btn)btn.dataset.speaking='0';};
-  audio.play().catch(function(e){
+  // /api/tts is POST-only (and behind the same-origin CSRF gate); GET via
+  // new Audio(url) would 405 and silently fail, and would also leak the message
+  // text into the query string / access log. POST the JSON body, then play the
+  // returned audio via an object URL — mirrors the working boot.js edge path.
+  const _fail=function(msg){
     _ttsSpeaking=false;_playingEdgeAudio=null;
     if(btn)btn.dataset.speaking='0';
-    showToast('Edge TTS error: '+e.message);
-  });
+    if(msg&&typeof showToast==='function') showToast(msg,4000,'error');
+  };
+  fetch(new URL('api/tts', document.baseURI || location.href).href, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:text, voice:voice, rate:rate, pitch:pitch})
+  })
+  .then(function(r){
+    if(!r.ok){
+      // Surface the server error (e.g. 503 "edge-tts not installed", 429 rate limit)
+      return r.json().catch(function(){return {};}).then(function(j){
+        throw new Error((j&&j.error)||('TTS request failed: '+r.status));
+      });
+    }
+    return r.blob();
+  })
+  .then(function(blob){
+    const url=URL.createObjectURL(blob);
+    const audio=new Audio(url);
+    _playingEdgeAudio=audio;
+    const _cleanup=function(){_ttsSpeaking=false;_playingEdgeAudio=null;if(btn)btn.dataset.speaking='0';try{URL.revokeObjectURL(url);}catch(_){}};
+    audio.onended=_cleanup;
+    audio.onerror=function(){_cleanup();};
+    audio.play().catch(function(e){_cleanup();showToast('Edge TTS error: '+(e&&e.message||e));});
+  })
+  .catch(function(e){ _fail((e&&e.message)||'Edge TTS failed'); });
 }
 
 function stopTTS(){
