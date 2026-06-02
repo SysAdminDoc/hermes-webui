@@ -243,7 +243,7 @@ async function switchPanel(name, opts = {}) {
   // showing-<name> class on <main>; no class means chat (the default).
   const mainEl = document.querySelector('main.main');
   if (mainEl) {
-    ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs'].forEach(p => {
+    ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'].forEach(p => {
       mainEl.classList.toggle('showing-' + p, nextPanel === p);
     });
   }
@@ -5700,6 +5700,16 @@ function _toggleTabVisibilityChip(panel){
 }
 
 function switchSettingsSection(name){
+  // If the main content is not showing settings, switch back first
+  if (_currentPanel !== 'settings') {
+    _currentPanel = 'settings';
+    var mainEl = document.querySelector('main.main');
+    if (mainEl) {
+      ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'].forEach(function(p) {
+        mainEl.classList.toggle('showing-' + p, p === 'settings');
+      });
+    }
+  }
   const section=(name==='appearance'||name==='preferences'||name==='providers'||name==='plugins'||name==='system')?name:'conversation';
   _settingsSection=section;
   _currentSettingsSection=section;
@@ -6403,6 +6413,17 @@ async function loadSettingsPanel(){
 
 // ── Plugins panel (read-only plugin/hook visibility) ───────────────────────
 
+async function handlePluginEnableToggle(pluginKey, checked){
+  try{
+    const body={dashboard_plugins:{}};
+    body.dashboard_plugins[pluginKey]=!!checked;
+    await api('/api/settings',{method:'POST',body:JSON.stringify(body)});
+    loadPluginsPanel();
+  }catch(e){
+    showToast(t('settings_save_failed')+e.message);
+  }
+}
+
 async function loadPluginsPanel(){
   const list=$('pluginsList');
   const empty=$('pluginsEmpty');
@@ -6447,6 +6468,33 @@ function _buildPluginCard(plugin){
     : '<span class="plugin-hook-empty">'+t(isProvider?'plugins_provider_no_hooks':'plugins_no_hooks')+'</span>';
   const version=(plugin&&plugin.version)?' · v'+esc(plugin.version):'';
   const desc=(plugin&&plugin.description)?esc(plugin.description):t('plugins_no_description');
+const enabled=plugin&&plugin.enabled!==false;
+  const tab=plugin&&plugin.tab;
+  const isDashboardPlugin=!!(tab&&tab.path);
+  // No inline onclick/onchange: an inline handler interpolates tab.path/key into
+  // a JS-string-in-attribute context where HTML-escaping is insufficient (a
+  // crafted value could break out). Render inert markup + bind listeners below
+  // with the raw closure values.
+  const openBtn=enabled&&tab&&tab.path
+    ? `<a href="${esc(tab.path)}" class="plugin-open-btn">${esc(tab.label||plugin.name||'Open')} \u2197</a>`
+    : '';
+  const toggleHtml=enabled&&isDashboardPlugin
+    ? `<div class="plugin-card-footer-row">
+         <span class="plugin-toggle-label">${t('plugins_enable_toggle')||'Enabled'}</span>
+         <label class="plugin-toggle-switch">
+           <input type="checkbox" class="plugin-enable-toggle" checked>
+           <span class="plugin-toggle-slider"></span>
+         </label>
+       </div>`
+    : (isDashboardPlugin
+    ? `<div class="plugin-card-footer-row">
+         <span class="plugin-toggle-label">${t('plugins_enable_toggle')||'Enable'}</span>
+         <label class="plugin-toggle-switch">
+           <input type="checkbox" class="plugin-enable-toggle">
+           <span class="plugin-toggle-slider"></span>
+         </label>
+       </div>`
+    : '');
   let badgeText;
   let badgeClass;
   if(isProvider){
@@ -6471,12 +6519,72 @@ function _buildPluginCard(plugin){
       <div class="provider-card-hint">${desc}</div>
       <div class="provider-card-label">${t('plugins_registered_hooks')}</div>
       <div class="plugin-hook-list">${hookHtml}</div>
+      ${openBtn ? `<div class="plugin-card-footer">${openBtn}</div>` : ''}
+      ${toggleHtml}
     </div>
   `;
+  // Bind handlers with the RAW closure values (not interpolated into inline JS),
+  // so a hostile tab.path/key can't break out of a JS-string attribute context.
+  if(tab&&tab.path){
+    const _openEl=card.querySelector('.plugin-open-btn');
+    if(_openEl){
+      const _p=tab.path, _l=tab.label||plugin.name;
+      _openEl.addEventListener('click', function(ev){ switchPluginPage(ev, _p, _l); });
+    }
+  }
+  if(isDashboardPlugin){
+    const _tog=card.querySelector('.plugin-enable-toggle');
+    if(_tog){
+      const _k=plugin.key;
+      _tog.addEventListener('change', function(){ handlePluginEnableToggle(_k, this.checked); });
+    }
+  }
   return card;
 }
 
-// ── Providers panel ───────────────────────────────────────────────────────
+// ── Plugin pages ─────────────────────────────────────────────────────────────
+
+let _currentPluginPage = null;
+
+async function switchPluginPage(event, path, label) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (!_currentPluginPage || _currentPluginPage.path !== path) {
+    await _loadPluginPage(path, label);
+  }
+  // Update _currentPanel so clicking sidebar items won't short-circuit,
+  // but keep the sidebar panel views intact (no panelPlugin exists).
+  _currentPanel = 'plugin';
+  const mainEl = document.querySelector('main.main');
+  if (mainEl) {
+    ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'].forEach(p => {
+      mainEl.classList.toggle('showing-' + p, p === 'plugin');
+    });
+  }
+}
+
+async function _loadPluginPage(path, label) {
+  const container = $('pluginPageContainer');
+  const titleEl = $('pluginPageTitle');
+  if (!container) return;
+  if (titleEl) titleEl.textContent = label || path;
+  container.innerHTML = '';
+
+  // Use an iframe for full isolation (styles, scripts, modals stay sandboxed).
+  // Security note: plugins are locally-installed (~/.hermes/plugins/), similar
+  // trust model to VS Code extensions — only install plugins you trust.
+  const iframe = document.createElement('iframe');
+  iframe.src = path;
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+  iframe.setAttribute('title', label || 'Plugin');
+  iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups');
+  container.appendChild(iframe);
+  _currentPluginPage = { path, label };
+}
+
+// ── Providers panel ─────────────────────────────────────────────────────────
 
 const _providerCardEls = new Map(); // providerId → {card, statusDot, input, saveBtn, removeBtn}
 
