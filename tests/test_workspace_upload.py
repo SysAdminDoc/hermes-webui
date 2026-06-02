@@ -402,3 +402,28 @@ class TestWorkspaceUploadArchive:
         assert not (ws / "bomb.zip").exists()
         # No partial extraction directory left behind
         assert not (ws / "bomb").exists()
+
+    def test_archive_member_count_cap_trips(self, cleanup_test_sessions):
+        """An archive with too many members is rejected (inode-exhaustion guard).
+
+        The member cap (_MAX_ARCHIVE_MEMBERS = 10000) trips before the byte cap
+        when an archive packs a huge number of tiny files. Verifies the archive
+        and any partial extraction are cleaned up.
+        """
+        sid, ws = make_session_tracked(cleanup_test_sessions)
+
+        # 10001 one-byte members — under the 5MB byte cap, over the 10k member cap.
+        members = {f"f{i}.txt": b"x" for i in range(10001)}
+        zip_data = _make_zip(members)
+
+        result, status = post_multipart(
+            "/api/workspace/upload",
+            {"session_id": sid, "path": ""},
+            {"file": ("many.zip", zip_data)},
+        )
+
+        assert status == 200, f"Upload failed {status}: {result}"
+        assert result["extracted"] is False
+        assert "extract_error" in result
+        assert not (ws / "many.zip").exists()
+        assert not (ws / "many").exists()

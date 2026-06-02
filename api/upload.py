@@ -181,13 +181,22 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
 
     # Determine destination directory — use archive stem as folder name
     dest_dir = safe_resolve_ws(workspace, stem)
-    # Avoid overwriting existing files by appending a suffix
+    # Avoid overwriting existing files by appending a suffix (bounded — astronomically
+    # unlikely to collide, but never spin forever).
     if dest_dir.exists():
         import string, random
-        while dest_dir.exists():
+        for _ in range(1000):
+            if not dest_dir.exists():
+                break
             suffix = ''.join(random.choices(string.digits, k=3))
-            dest_dir = dest_dir.with_name(stem + '_' + suffix)
+            dest_dir = safe_resolve_ws(workspace, stem).with_name(stem + '_' + suffix)
+        else:
+            raise ValueError('Could not allocate a unique extraction directory')
     dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # Member-count cap: a tiny archive with millions of (possibly empty) members
+    # slips under the byte cap but can exhaust inodes / file descriptors. Bound it.
+    _MAX_ARCHIVE_MEMBERS = 10000
 
     extracted_files = []
     total_extracted = 0
@@ -199,6 +208,11 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
                     # Skip directories
                     if member.is_dir():
                         continue
+                    if len(extracted_files) >= _MAX_ARCHIVE_MEMBERS:
+                        raise ValueError(
+                            f'Archive has too many files (> {_MAX_ARCHIVE_MEMBERS}). '
+                            f'Possible archive bomb.'
+                        )
                     # Zip-slip protection
                     member_path = (dest_dir / member.filename).resolve()
                     if not member_path.is_relative_to(dest_dir.resolve()):
@@ -232,6 +246,11 @@ def extract_archive(file_bytes: bytes, filename: str, workspace: Path):
                 for member in tf.getmembers():
                     if not member.isfile():
                         continue
+                    if len(extracted_files) >= _MAX_ARCHIVE_MEMBERS:
+                        raise ValueError(
+                            f'Archive has too many files (> {_MAX_ARCHIVE_MEMBERS}). '
+                            f'Possible archive bomb.'
+                        )
                     # Tar-slip protection
                     member_path = (dest_dir / member.name).resolve()
                     if not member_path.is_relative_to(dest_dir.resolve()):
