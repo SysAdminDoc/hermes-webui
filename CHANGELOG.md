@@ -3,6 +3,11 @@
 
 ## [Unreleased]
 
+## [v0.51.208] — 2026-06-02 — Release GB (workspace upload hardening hotfix)
+
+### Fixed
+- Hardened the workspace file-upload surface (#3104 follow-up): (1) a negative `Content-Length` no longer bypasses the size cap and triggers an unbounded `rfile.read(-1)` — the length is now validated `[0, MAX_UPLOAD_BYTES]` centrally in `parse_multipart` for every upload handler; (2) `.tar`, `.tbz2`, and `.txz` archives now auto-extract (the upload handler's archive-suffix set was narrower than `extract_archive`'s, so those silently landed as raw files); (3) a rejected archive (zip-slip / zip-bomb / corrupt / too-many-members) now surfaces an error toast in the workspace panel instead of a misleading "Uploaded" success; (4) an in-workspace symlink subpath can no longer make the upload target `mkdir`/write outside the workspace root. Regression tests added.
+
 ## [v0.51.207] — 2026-06-02 — Release GA (Edge TTS as an alternative speech engine)
 
 ### Added
