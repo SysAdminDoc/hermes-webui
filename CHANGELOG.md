@@ -3,6 +3,14 @@
 
 ## [Unreleased]
 
+## [v0.51.254] — 2026-06-04 — Release HV (stage-r2 — mobile/cancel/scroll fixes + custom-provider model dedup)
+
+### Fixed
+- Client rendering no longer drops assistant-only partial-tool-call rows (`_partial_tool_calls`) from the visible transcript or fallback tool-card reconstruction after cancellation. This keeps interrupted turns visible and ensures interrupted tool calls still render as settled tool cards in history. (#3528, @franksong2702)
+- On Android, briefly backgrounding the WebUI no longer hard-reloads the whole page — offline recovery now soft-reattaches the live stream instead of a full reload, so you don't lose composer/scroll state on a transient disconnect. (#3550, @lurebat)
+- On iOS Safari, inserting a handoff/compression card mid-stream (or reconnecting via `refreshSession()`) no longer snaps the conversation to the top. (#3479, @mvanhorn)
+- Named custom providers (`@custom:name:model`) now deduplicate against bare model IDs correctly, without regressing Ollama multi-colon tags (e.g. `qwen2.5:7b-instruct-q4`) — only `@custom:`-prefixed IDs strip the two-segment prefix; everything else keeps the single-prefix strip. (#3478, @JayC-L)
+
 ## [v0.51.253] — 2026-06-04 — Release HU (stage-r1 — low-risk batch: scroll/badge/count/test fixes + compat docs)
 
 ### Fixed

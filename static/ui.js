@@ -86,12 +86,44 @@ async function checkOfflineRecoveryNow(){
     _setOfflineChecking(true);
     const ok=await _probeOfflineRecovery();
     _setOfflineChecking(false);
-    if(ok){_stopOfflineProbeTimer();window.location.reload();return true;}
+    if(ok){_stopOfflineProbeTimer();await _recoverFromOfflineSoftly();return true;}
     showOfflineBanner('network');
     return false;
   })();
   try{return await _offlineProbePromise;}
   finally{_offlineProbePromise=null;}
+}
+// Recover from a transient "Connection lost" without a full page reload.
+//
+// The offline banner fires whenever a fetch/SSE errors — which Android does
+// aggressively every time the PWA is backgrounded, even for a second. The old
+// behaviour here was `window.location.reload()`: a hard cold boot that re-runs
+// the whole app and re-pulls /api/sessions + /api/session, producing the
+// multi-second "reload to see the conversation I was just in" flash on every
+// resume. The reload was also intermittent (only when a request actually
+// errored that time), matching the reported "sometimes it reloads, sometimes
+// it doesn't".
+//
+// The server keeps the agent running and buffers stream events while no
+// subscriber is attached (#2307), so a hard reload is never required to
+// recover — we just need to reattach. This does the soft path: hide the
+// banner, restart the gateway SSE (bfcache/background kills the connection),
+// and re-fetch the active session so any messages that landed while we were
+// away appear. A full reload is the fallback only if the soft path throws.
+async function _recoverFromOfflineSoftly(){
+  try{
+    _hideOfflineBanner();
+    if(typeof startGatewaySSE==='function') startGatewaySSE();
+    if(S.session && typeof refreshSession==='function'){
+      await refreshSession();
+    }
+    return true;
+  }catch(_){
+    // Soft reattach failed (server mid-restart, session gone, etc.) — fall
+    // back to the original hard reload so the user is never stuck offline.
+    window.location.reload();
+    return false;
+  }
 }
 function _isAbortError(e){return !!(e&&(e.name==='AbortError'||e.code===20));}
 function _patchOfflineFetch(){
@@ -1340,11 +1372,19 @@ function _addLiveModelsToSelect(provider, models, sel){
     sel.appendChild(providerGroup);
   }
   const existingIds=new Set([...sel.options].map(o=>o.value));
-  // Normalized dedup: strip one @provider: prefix and namespace so
+  // Normalized dedup: strip @provider: prefix and namespace so
   // 'minimax/minimax-m2.7' matches '@nous:minimax/minimax-m2.7' (#907).
+  // Named custom IDs (@custom:name:model) have a known two-segment prefix
+  // and must strip both to dedup against bare model IDs (#3478).
   const _normId=id=>{
     let s=String(id||'');
-    if(s.startsWith('@')&&s.includes(':')) s=s.substring(s.indexOf(':')+1);
+    if(s.startsWith('@')&&s.includes(':')){
+      if(s.startsWith('@custom:')){
+        s=s.substring(s.lastIndexOf(':')+1)||s;
+      }else{
+        s=s.substring(s.indexOf(':')+1);
+      }
+    }
     s=s.split('/').pop();
     return s.replace(/-/g,'.').toLowerCase();
   };
@@ -5032,7 +5072,7 @@ async function refreshSession() {
     if(pendingMsg) S.messages.push(pendingMsg);
     S.activeStreamId=data.session.active_stream_id||null;
 
-    syncTopbar(); renderMessages();
+    syncTopbar(); _renderMessagesWithScrollSnapshot();
     showToast('Conversation refreshed');
   } catch(e) { setStatus('Refresh failed: ' + e.message); }
 }
@@ -6000,6 +6040,7 @@ function _compressionCardsNode(state){
 }
 function appendLiveCompressionCard(state){
   if(!S.session||!S.activeStreamId||!state) return false;
+  const scrollSnapshot=_captureMessageScrollSnapshot();
   let turn=$('liveAssistantTurn');
   if(!turn){
     turn=_createAssistantTurn();
@@ -6035,6 +6076,7 @@ function appendLiveCompressionCard(state){
   const existing=inner.querySelector('[data-live-compression-card="1"]');
   if(existing) existing.replaceWith(node);
   else inner.appendChild(node);
+  _restoreMessageScrollSnapshotSameFrame(scrollSnapshot);
   if(typeof scrollIfPinned==='function') scrollIfPinned();
   return true;
 }
@@ -6301,7 +6343,7 @@ function _handoffStateForCurrentSession(){
 }
 function clearHandoffUi(){
   window._handoffUi=null;
-  renderMessages();
+  _renderMessagesWithScrollSnapshot();
 }
 function setHandoffUi(state){
   if(!state){
@@ -6309,7 +6351,7 @@ function setHandoffUi(state){
     return;
   }
   window._handoffUi={...state};
-  renderMessages();
+  _renderMessagesWithScrollSnapshot();
 }
 function _handoffCardsHtml(state){
   if(!state) return '';
@@ -6542,7 +6584,13 @@ function _cliToolCardHasDiffSnippet(resultSnippet, patchSnippet){
 function _captureMessageScrollSnapshot(){
   const el=$('messages');
   if(!el) return null;
-  return {top:el.scrollTop};
+  const bottom=Math.max(0,el.scrollHeight-el.scrollTop-el.clientHeight);
+  return {
+    top:el.scrollTop,
+    bottom,
+    pinned:_shouldFollowMessagesOnDomReplace(),
+    userUnpinned:_messageUserUnpinned,
+  };
 }
 function _restoreMessageScrollSnapshot(snapshot){
   const el=$('messages');
@@ -6553,6 +6601,33 @@ function _restoreMessageScrollSnapshot(snapshot){
   // Sync _lastScrollTop after programmatic restore so sticky-unpin does not false-trigger (#1731).
   _lastScrollTop=el.scrollTop;
   requestAnimationFrame(()=>{ setTimeout(()=>{_programmaticScroll=false;},0); });
+}
+function _restoreMessageScrollSnapshotSameFrame(snapshot){
+  const el=$('messages');
+  if(!el||!snapshot) return;
+  const maxTop=Math.max(0,el.scrollHeight-el.clientHeight);
+  const bottom=Number(snapshot.bottom);
+  const target=(snapshot.pinned===true&&Number.isFinite(bottom))
+    ? maxTop-Math.max(0,bottom)
+    : Number(snapshot.top)||0;
+  _programmaticScroll=true;
+  el.scrollTop=Math.max(0,Math.min(target,maxTop));
+  _lastScrollTop=el.scrollTop;
+  if(snapshot.pinned===true){
+    _messageUserUnpinned=false;
+    _scrollPinned=true;
+    _nearBottomCount=2;
+  }else if(snapshot.userUnpinned===true){
+    _messageUserUnpinned=true;
+    _scrollPinned=false;
+    _nearBottomCount=0;
+  }
+  requestAnimationFrame(()=>{ setTimeout(()=>{_programmaticScroll=false;},0); });
+}
+function _renderMessagesWithScrollSnapshot(options){
+  const scrollSnapshot=_captureMessageScrollSnapshot();
+  renderMessages({...(options||{}),preserveScroll:true});
+  _restoreMessageScrollSnapshotSameFrame(scrollSnapshot);
 }
 function _scrollAfterMessageRender(preserveScroll, scrollSnapshot){
   // Terminal stream renders can happen after S.activeStreamId is cleared.
@@ -6632,7 +6707,8 @@ function renderMessages(options){
     if(m.role==='assistant'){
       const hasTc=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
       const hasTu=Array.isArray(m.content)&&m.content.some(p=>p&&p.type==='tool_use');
-      if(hasTc||hasTu||_messageHasReasoningPayload(m)) return true;
+      const hasPartialTc=Array.isArray(m._partial_tool_calls)&&m._partial_tool_calls.length>0;
+      if(hasTc||hasTu||hasPartialTc||_messageHasReasoningPayload(m)) return true;
       if(_assistantMessageHasVisibleContent(m)) return true;
     }
     return m._statusCard||msgContent(m)||m.attachments?.length;
@@ -6663,7 +6739,8 @@ function renderMessages(options){
       if(_isRecoveryControlMessage(m)){ri++;continue;}
       const hasTc=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
       const hasTu=Array.isArray(m.content)&&m.content.some(p=>p&&p.type==='tool_use');
-      if(msgContent(m)||m._statusCard||m.attachments?.length||(m.role==='assistant'&&(hasTc||hasTu||_messageHasReasoningPayload(m)||_assistantMessageHasVisibleContent(m)))) rebuilt.push({m,rawIdx:ri});
+      const hasPartialTc=Array.isArray(m._partial_tool_calls)&&m._partial_tool_calls.length>0;
+      if(msgContent(m)||m._statusCard||m.attachments?.length||(m.role==='assistant'&&(hasTc||hasTu||hasPartialTc||_messageHasReasoningPayload(m)||_assistantMessageHasVisibleContent(m)))) rebuilt.push({m,rawIdx:ri});
       ri++;
     }
     _visWithIdxCache=rebuilt;
@@ -7042,7 +7119,8 @@ function renderMessages(options){
       if(m.role==='assistant'){
         const hasTopLevelToolCalls=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
         const hasContentToolUse=Array.isArray(m.content)&&m.content.some(p=>p&&typeof p==='object'&&p.type==='tool_use');
-        if(hasTopLevelToolCalls||hasContentToolUse) fallbackToolSources.push({m,rawIdx});
+        const hasPartialToolCalls=Array.isArray(m._partial_tool_calls)&&m._partial_tool_calls.length>0;
+        if(hasTopLevelToolCalls||hasContentToolUse||hasPartialToolCalls) fallbackToolSources.push({m,rawIdx});
       }
     });
     const derived=[];
@@ -7078,6 +7156,31 @@ function renderMessages(options){
           const tid=p.id||'';
           const patchSnippet=_cliPatchSnippetFromArgs(name,args);
           const resultSnippet=resultsByTid[tid]||'';
+          const argsSnap={};
+          if(args && typeof args==='object'){
+            Object.keys(args).slice(0,4).forEach(k=>{ const v=String(args[k]); argsSnap[k]=v.slice(0,120)+(v.length>120?'...':''); });
+          }
+          derived.push({
+            name,
+            snippet:_cliToolCardSnippet(resultSnippet,patchSnippet),
+            is_diff:_cliToolCardHasDiffSnippet(resultSnippet,patchSnippet),
+            tid,
+            assistant_msg_idx:rawIdx,
+            args:argsSnap,
+            done:true,
+          });
+        });
+      }
+      // WebUI-internal partial tool calls captured on cancel/stop
+      // (private shape: name/args/done/preview/snippet, no OpenAI envelope).
+      if(Array.isArray(m._partial_tool_calls)){
+        m._partial_tool_calls.forEach(tc=>{
+          if(!tc||typeof tc!=='object') return;
+          const name=tc.name||'tool';
+          const args=tc.args||{};
+          const tid=tc.id||tc.call_id||tc.tool_call_id||tc.tid||'';
+          const patchSnippet=_cliPatchSnippetFromArgs(name,args);
+          const resultSnippet=_cliToolResultSnippet(tc.snippet||tc.result||tc.output||tc.preview||'');
           const argsSnap={};
           if(args && typeof args==='object'){
             Object.keys(args).slice(0,4).forEach(k=>{ const v=String(args[k]); argsSnap[k]=v.slice(0,120)+(v.length>120?'...':''); });
