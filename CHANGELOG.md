@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.257] — 2026-06-04 — Release HY (stage-r5 — provider refresh route + SessionDB self-heal)
+
+### Fixed
+- **"Refresh Models" on a provider card no longer returns "Error: Not found".** The composer/Settings sent `POST /api/models/refresh` but no route matched, so it always 404'd. Added the route, wired to the existing `invalidate_provider_models_cache(provider_id)`. (#3546, @rodboev)
+- **Credential self-heal no longer writes to a dead `SessionDB` handle.** When the first request triggered a credential refresh, the cached agent was evicted/closed but the retry rebuilt a new agent from kwargs still holding the old, closed `SessionDB` — so persistence silently targeted a dead handle. Per-request `SessionDB` construction is now centralized and refreshed on the self-heal retry. (#3548, @franksong2702)
+
 ## [v0.51.256] — 2026-06-04 — Release HX (stage-r4 — bound WebUI memory growth and idle CPU on large installs)
 
 ### Fixed
