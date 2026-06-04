@@ -3,6 +3,11 @@
 
 ## [Unreleased]
 
+## [v0.51.250] — 2026-06-03 — Release HR (stage-q22 — Zeus appearance skin)
+
+### Added
+- New **Zeus** appearance skin (Settings → Appearance, or `/theme skin zeus`) — OLED-near-black dark surfaces that keep the default gold accent, for a high-contrast "gold on black" look that no existing skin offered. All visual changes are scoped to `data-skin="zeus"`; it's dark-focused and falls back to the default light palette in light mode. (#3328, @heagandev)
+
 ## [v0.51.249] — 2026-06-03 — Release HQ (stage-q21 — auto-expand terminal on output toggle)
 
 ### Added
