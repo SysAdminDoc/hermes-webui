@@ -3,6 +3,11 @@
 
 ## [Unreleased]
 
+## [v0.51.282] — 2026-06-05 — Release IX (stage-3544 — surface memory/skill saves in Activity summary)
+
+### Added
+- **The collapsed Activity summary now shows when the agent saved a memory or updated a skill** — e.g. "Activity: 2 tools, 1 memory saved, 1 skill updated" — so persistent-state changes are visible at a glance without expanding the group. Detection matches the real tool action vocabularies (`memory`: add/replace count as saves, `remove` excluded; `skill_manage`: create/patch/edit/write_file count as updates, delete/remove_file excluded), and only completed, non-errored calls are counted. The memory/skill counts are subtracted from the tool count so it reflects only non-memory/skill tools. Classification is stamped as durable `data-*` attributes so the suffix survives the live tool-call group's HTML snapshot/restore on session switch. Sessions with no memory/skill writes render the unchanged "Activity: N tools" label. (#3544, @rodboev; closes #3340)
+
 ## [v0.51.281] — 2026-06-05 — Release IW (stage-verdigris — Verdigris emerald/bronze skin)
 
 ### Added
