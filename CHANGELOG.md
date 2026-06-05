@@ -3,6 +3,11 @@
 
 ## [Unreleased]
 
+## [v0.51.265] — 2026-06-04 — Release IG (stage-r15 — owner-aware cancelStream(), un-held)
+
+### Fixed
+- **Stop/Cancel no longer leaves the UI falsely idle, drops the cancellation transcript, or leaks the old stream's tokens into the next turn.** `cancelStream()` is now owner-aware and terminal-settle-aware: for the *active* session it leaves the live SSE transport open so the backend's terminal `cancel` event clears INFLIGHT, renders "Task cancelled", and refreshes the sidebar; it only tears down the SSE for *stale* owner paths (a different stream started before the cancel returned); and it clears local busy state only on exact ownership (`S.activeStreamId===streamId`), so a new turn started mid-cancel is never clobbered. (#3344, @franksong2702)
+
 ## [v0.51.264] — 2026-06-04 — Release IF (stage-r14 — sidebar cron-overflow + messaging source labels, un-held)
 
 ### Fixed
