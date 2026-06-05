@@ -7672,6 +7672,28 @@ function _toolDisplayName(tc){
   if(name==='delegate_task') return 'Delegate task';
   return name;
 }
+
+// Activity-summary detection for persisted memory/skill writes (#3340, #3544).
+// Action vocabularies match the real agent tool enums:
+//   memory.action      = add | replace | remove   (add/replace persist content → "saved")
+//   skill_manage.action= create | patch | edit | delete | write_file | remove_file
+//                        (create/patch/edit/write_file mutate a skill → "updated")
+// Deletions (memory 'remove', skill 'delete'/'remove_file') are intentionally
+// excluded so the "saved"/"updated" label verbs stay accurate; running/errored
+// calls are excluded so only completed writes are counted.
+const _MEMORY_SAVE_ACTIONS=new Set(['add','replace']);
+const _SKILL_UPDATE_ACTIONS=new Set(['create','patch','edit','write_file']);
+function _tcAction(tc){
+  return String((tc&&tc.args&&tc.args.action)||'').toLowerCase();
+}
+function _isMemorySave(tc){
+  if(!tc||tc.name!=='memory'||tc.done===false||tc.is_error) return false;
+  return _MEMORY_SAVE_ACTIONS.has(_tcAction(tc));
+}
+function _isSkillUpdate(tc){
+  if(!tc||tc.name!=='skill_manage'||tc.done===false||tc.is_error) return false;
+  return _SKILL_UPDATE_ACTIONS.has(_tcAction(tc));
+}
 function toolIcon(name){
   const icons={
     terminal:        li('terminal'),
@@ -7798,6 +7820,15 @@ function buildToolCard(tc){
         </div>`:''}
       </div>`:''}
     </div>`;
+  row._tcData = tc;
+  // Durable classification flags: _tcData (a JS property) does NOT survive the
+  // outerHTML/innerHTML snapshot+restore the live tool-call group uses on session
+  // switch/restore, which would make _syncToolCallGroupSummary re-count restored
+  // memory/skill rows as generic tools and silently drop the suffix. Mirror the
+  // classification onto data-* attributes so it survives serialization. (#3544)
+  if(_isMemorySave(tc)){row.setAttribute('data-memory-save','1');row.removeAttribute('data-skill-update');}
+  else if(_isSkillUpdate(tc)){row.setAttribute('data-skill-update','1');row.removeAttribute('data-memory-save');}
+  else {row.removeAttribute('data-memory-save');row.removeAttribute('data-skill-update');}
   return row;
 }
 
@@ -7847,10 +7878,25 @@ function _syncToolCallGroupSummary(group){
   const label=group.querySelector('.tool-call-group-label');
   const durationEl=group.querySelector('.tool-call-group-duration');
   if(label){
+    const rows=Array.from(group.querySelectorAll('.tool-card-row'));
+    // Prefer the live _tcData classification; fall back to the durable data-*
+    // flags for rows restored from an HTML snapshot (which drops JS properties).
+    const isMem=r=>_isMemorySave(r._tcData)||r.getAttribute('data-memory-save')==='1';
+    const isSkill=r=>_isSkillUpdate(r._tcData)||r.getAttribute('data-skill-update')==='1';
+    const memCount=rows.filter(isMem).length;
+    const skillCount=rows.filter(r=>!isMem(r)&&isSkill(r)).length;
+    const otherCount=Math.max(0, toolCount-memCount-skillCount);
+    let suffix='';
+    if(memCount) suffix+=`, ${memCount} ${memCount===1?'memory':'memories'} saved`;
+    if(skillCount) suffix+=`, ${skillCount} ${skillCount===1?'skill':'skills'} updated`;
+    const toolsPart=otherCount?`${otherCount} tool${otherCount===1?'':'s'}`:'';
     if(group.getAttribute('data-live-tool-call-group')==='1'){
-      label.textContent=toolCount?`Activity: ${toolCount} tool${toolCount===1?'':'s'}`:'Activity · Running';
-    }else if(toolCount) label.textContent=`Activity: ${toolCount} tool${toolCount===1?'':'s'}`;
-    else label.textContent='Activity';
+      if(toolsPart) label.textContent=`Activity: ${toolsPart}${suffix}`;
+      else if(suffix) label.textContent=`Activity: ${suffix.slice(2)}`;
+      else label.textContent='Activity · Running';
+    }else if(toolsPart||suffix){
+      label.textContent=toolsPart?`Activity: ${toolsPart}${suffix}`:`Activity: ${suffix.slice(2)}`;
+    }else label.textContent='Activity';
     label.setAttribute('data-sweep-label', label.textContent);
   }
   if(durationEl){
