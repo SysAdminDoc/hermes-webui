@@ -6020,6 +6020,11 @@ function _preferencesPayloadFromUi(){
   if(apiRedactCb) payload.api_redact_enabled=apiRedactCb.checked;
   const showCliCb=$('settingsShowCliSessions');
   if(showCliCb) payload.show_cli_sessions=showCliCb.checked;
+  const showCronCb=$('settingsShowCronSessions');
+  // Gate cron sessions on CLI sessions (the server short-circuits otherwise),
+  // identically to the explicit saveSettings() path, so neither save route can
+  // persist show_cron_sessions=true while show_cli_sessions=false. (#3514)
+  if(showCronCb) payload.show_cron_sessions=!!(showCliCb&&showCliCb.checked&&showCronCb.checked);
   const showPreviousMessagingCb=$('settingsShowPreviousMessagingSessions');
   if(showPreviousMessagingCb) payload.show_previous_messaging_sessions=showPreviousMessagingCb.checked;
   const syncCb=$('settingsSyncInsights');
@@ -6332,6 +6337,13 @@ async function loadSettingsPanel(){
     if(apiRedactCb){apiRedactCb.checked=settings.api_redact_enabled!==false;apiRedactCb.addEventListener('change',_schedulePreferencesAutosave,{once:false});}
     const showCliCb=$('settingsShowCliSessions');
     if(showCliCb){showCliCb.checked=!!settings.show_cli_sessions;showCliCb.addEventListener('change',_schedulePreferencesAutosave,{once:false});}
+    const showCronCb=$('settingsShowCronSessions');
+    if(showCronCb){
+      showCronCb.checked=!!settings.show_cron_sessions;
+      showCronCb.disabled=showCliCb?!showCliCb.checked:true;
+      showCronCb.addEventListener('change',_schedulePreferencesAutosave,{once:false});
+      if(showCliCb){showCliCb.addEventListener('change',function(){showCronCb.disabled=!showCliCb.checked;},{once:false});}
+    }
     const showPreviousMessagingCb=$('settingsShowPreviousMessagingSessions');
     if(showPreviousMessagingCb){showPreviousMessagingCb.checked=!!settings.show_previous_messaging_sessions;showPreviousMessagingCb.addEventListener('change',_schedulePreferencesAutosave,{once:false});}
     const syncCb=$('settingsSyncInsights');
@@ -7704,6 +7716,7 @@ async function saveSettings(andClose){
   const showTps=!!($('settingsShowTps')||{}).checked;
   const fadeTextEffect=!!($('settingsFadeTextEffect')||{}).checked;
   const showCliSessions=!!($('settingsShowCliSessions')||{}).checked;
+  const showCronSessions=!!($('settingsShowCronSessions')||{}).checked;
   const showPreviousMessagingSessions=!!($('settingsShowPreviousMessagingSessions')||{}).checked;
   const pinnedSessionsLimit=parseInt(($('settingsPinnedSessionsLimit')||{}).value,10)||3;
   const pw=($('settingsPassword')||{}).value;
@@ -7730,6 +7743,9 @@ async function saveSettings(andClose){
   body.terminal_auto_expand_on_output=!!($('settingsTerminalAutoExpand')||{}).checked;
   body.api_redact_enabled=!!($('settingsApiRedact')||{}).checked;
   body.show_cli_sessions=showCliSessions;
+  // Cron sessions are gated on CLI sessions (server short-circuits otherwise);
+  // mirror the autosave path so the explicit Save Settings button persists it too. (#3514)
+  body.show_cron_sessions=showCliSessions&&showCronSessions;
   body.show_previous_messaging_sessions=showPreviousMessagingSessions;
   body.pinned_sessions_limit=pinnedSessionsLimit;
   body.sync_to_insights=!!($('settingsSyncInsights')||{}).checked;
