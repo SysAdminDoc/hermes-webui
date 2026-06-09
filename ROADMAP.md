@@ -149,6 +149,16 @@ Per-version detail lives in [CHANGELOG.md](./CHANGELOG.md). The table below is a
 
 ---
 
+## Sprint methodology
+
+A sprint is a thematic batch (usually 3-8 PRs). External contributor PRs that
+do not fit a planned sprint ship individually as patch versions. Active sprint
+candidates are tracked via the `sprint-candidate` GitHub label.
+
+Pre-release gate (mandatory): `pytest tests/ -q --timeout=120` clean, browser
+sanity check, Opus advisor pass on the merged stage diff, CHANGELOG/ROADMAP
+version stamp, and CI green on Python 3.11/3.12/3.13.
+
 ## Versioning conventions
 
 - **Patch** (`v0.50.X`) — small batches, contributor PR releases, hotfixes
