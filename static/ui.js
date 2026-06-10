@@ -124,6 +124,19 @@ async function _recoverFromOfflineSoftly(){
     if(S.session && typeof refreshSession==='function'){
       await refreshSession();
     }
+    // After refreshSession() sets S.activeStreamId, reattach if a stream is live.
+    // The server buffers events while no subscriber is attached (#2307/#3863).
+    const sid=S.session&&S.session.session_id;
+    const streamId=S.session&&S.session.active_stream_id;
+    if(sid&&streamId&&typeof attachLiveStream==='function'){
+      let status=null;
+      try{
+        status=await api(`/api/chat/stream/status?stream_id=${encodeURIComponent(streamId)}`);
+      }catch(_){/* stream status check failed — leave session refreshed but don't reattach */}
+      // Outside the probe's catch so an attachLiveStream throw reaches the
+      // outer fallback (hard reload) instead of being silently swallowed.
+      if(status&&status.active) attachLiveStream(sid,streamId,S.session.pending_attachments||[],{reconnecting:true});
+    }
     return true;
   }catch(_){
     // Soft reattach failed (server mid-restart, session gone, etc.) — fall
