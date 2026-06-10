@@ -497,11 +497,12 @@ function _userMessageDomId(rawIdx){
   return `msg-user-${rawIdx}`;
 }
 
-function _questionJumpButtonHtml(questionRawIdx){
+function _questionJumpButtonHtml(questionRawIdx, assistantRawIdx){
   if(typeof questionRawIdx!=='number'||questionRawIdx<0) return '';
-  const label=t('jump_to_question')||'Question';
-  const title=t('jump_to_question_label')||'Jump to the question for this response';
-  return `<button class="msg-question-jump-btn" type="button" title="${esc(title)}" aria-label="${esc(title)}" onclick="jumpToTurnQuestion(${questionRawIdx})"><span aria-hidden="true">↑</span><span>${esc(label)}</span></button>`;
+  const label=t('jump_to_question')||'Response';
+  const title=t('jump_to_question_label')||'Jump to the start of this response';
+  const aIdx=(typeof assistantRawIdx==='number'&&assistantRawIdx>=0)?assistantRawIdx:-1;
+  return `<button class="msg-question-jump-btn" type="button" title="${esc(title)}" aria-label="${esc(title)}" onclick="jumpToTurnQuestion(${questionRawIdx},${aIdx})"><span aria-hidden="true">↑</span><span>${esc(label)}</span></button>`;
 }
 
 function _highlightQuestionRow(row){
@@ -512,10 +513,25 @@ function _highlightQuestionRow(row){
   window.setTimeout(()=>row.classList.remove('msg-question-highlight'),1800);
 }
 
-async function jumpToTurnQuestion(questionRawIdx){
+async function jumpToTurnQuestion(questionRawIdx, assistantRawIdx){
   const container=$('messages');
   if(!container||typeof questionRawIdx!=='number'||questionRawIdx<0) return;
   const scrollToTarget=()=>{
+    const hasAssistant=typeof assistantRawIdx==='number'&&assistantRawIdx>=0;
+    if(hasAssistant){
+      // A single assistant rawIdx can render multiple segment nodes — some hidden
+      // (assistant-segment-worklog-source / assistant-segment-anchor are display:none).
+      // scrollIntoView() on a hidden node silently no-ops, so only treat a VISIBLE
+      // segment (getClientRects().length>0) as a successful target; otherwise fall
+      // through to the question-row fallback rather than suppressing it. (#3934)
+      const segs=container.querySelectorAll('[data-msg-idx="'+assistantRawIdx+'"]');
+      for(const seg of segs){
+        if(seg.getClientRects().length>0){
+          seg.scrollIntoView({block:'start',behavior:'smooth'});
+          return true;
+        }
+      }
+    }
     const row=document.getElementById(_userMessageDomId(questionRawIdx));
     if(!row) return false;
     row.scrollIntoView({block:'center',behavior:'smooth'});
@@ -8175,6 +8191,10 @@ function renderMessages(options){
     if(role==='user') lastQuestionRawIdx=entry.rawIdx;
     else if(role==='assistant') questionRawIdxByAssistantRawIdx.set(entry.rawIdx,lastQuestionRawIdx);
   }
+  const assistantRawIdxByQuestionRawIdx=new Map();
+  for(const [aIdx,qIdx] of questionRawIdxByAssistantRawIdx){
+    if(!assistantRawIdxByQuestionRawIdx.has(qIdx)) assistantRawIdxByQuestionRawIdx.set(qIdx,aIdx);
+  }
   // #3709 (defect B): build a per-turn combined visible-answer text so the
   // thinking echo-strip can de-dupe a thinking-only message (whose own visible
   // body is empty) against the answer prose carried by a SIBLING message in the
@@ -8329,7 +8349,7 @@ function renderMessages(options){
     // user loses the navigation affordance.
     const _qJumpTarget=(!isUser&&!m._live)?questionRawIdxByAssistantRawIdx.get(rawIdx):undefined;
     const questionJumpBtn = (_qJumpTarget!==undefined&&_qJumpTarget!==null)
-      ? _questionJumpButtonHtml(_qJumpTarget)
+      ? _questionJumpButtonHtml(_qJumpTarget, assistantRawIdxByQuestionRawIdx.get(_qJumpTarget)??rawIdx)
       : '';
     const footHtml = `<div class="msg-foot">${timeHtml}<span class="msg-actions">${editBtn}${ttsBtn}${forkBtn}${copyBtn}${retryBtn}</span>${questionJumpBtn}</div>`;
 
