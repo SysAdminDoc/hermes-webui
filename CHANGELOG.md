@@ -7,6 +7,13 @@
 
 - **New RFC: Stable Assistant Turn Anchors for Live-to-Final rendering.** Defines a frontend presentation/reconciliation model for anchoring one assistant turn across live streaming, settlement, replay/reload/recovery, Compact Worklog, Transparent Stream, terminal states, artifacts, and side effects. (#3926)
 
+## [v0.51.351] — 2026-06-10 — Release LO (Phase 0 brick batch: data-loss + mobile stream reattach)
+
+### Fixed
+
+- **A provider error, credential failure, or exception mid-turn no longer discards all accumulated partial work.** When a turn failed partway, the session sidecar threw away the text, reasoning, and tool calls streamed so far — the user lost paid-token output and saw only an error. The two turn-error paths in `_run_agent_streaming` now snapshot the live streaming buffers under `STREAMS_LOCK` and append a `_partial` assistant message (the same preservation the user-cancel path already did), via a shared `_build_partial_message()` helper. Partial tool calls are stored under a private key so they are never forwarded to the next API call. (#3931, closes #3929)
+- **Live token streams reattach after an Android PWA app-switch.** Backgrounding the PWA during an active stream fires the offline banner (not the `visibilitychange` path); `_recoverFromOfflineSoftly()` refreshed the session and learned the stream id but never re-subscribed. It now probes stream status and calls `attachLiveStream()` so a still-running server stream resumes instead of appearing stalled. (#3932, closes #3863)
+
 ## [v0.51.350] — 2026-06-10 — Release LN (session-move / project-delete timeout fix)
 
 ### Fixed
