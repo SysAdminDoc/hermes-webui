@@ -1214,6 +1214,59 @@ def _named_custom_provider_slug_for_base_url(
     return ""
 
 
+def _provider_is_known_or_configured(
+    provider_id: object,
+    config_obj: dict | None = None,
+) -> bool:
+    """True when ``provider_id`` is a provider Hermes recognizes (static registry)
+    or the user has configured (named custom provider), decided from the STATIC
+    registry + config state only — never from a live/cold catalog snapshot.
+
+    This distinguishes a provider Hermes knows how to route (e.g. ``ollama-cloud``,
+    whose model group simply isn't folded into the current cached catalog yet, or a
+    named ``custom_providers`` entry) from a *genuinely unknown* one
+    (``@removed:...`` that is in no registry and configured nowhere). The former's
+    explicitly-qualified selection is preserved across a cold catalog; the latter
+    falls back to the default so chat/start doesn't route to an unrecognized
+    provider.
+
+    DELIBERATE SCOPE (see the @provider:model guard in
+    ``_resolve_compatible_session_model_state``): registry membership counts as
+    "known" even when the user has no key configured for that built-in. We do NOT
+    require authenticated-credential evidence here, on purpose. The only fully
+    reliable "is this provider authenticated" signal is the live auth store /
+    catalog rebuild — exactly the cost the caller's ``prefer_cached_catalog`` hot
+    path avoids — and a cheap env/config-only credential check would mis-classify
+    providers authenticated via OAuth/auth-store (``ollama-cloud`` among them),
+    re-introducing the original silent-revert bug for them. A known-but-unconfigured
+    pick is therefore kept and surfaces a clear run-time auth error rather than a
+    silent swap to the default.
+
+    Deliberately does NOT consult ``get_available_models()`` / the catalog groups,
+    which are exactly what is cold here — re-deriving them live would defeat the
+    ``prefer_cached_catalog`` hot-path win this guards.
+    """
+    raw = str(provider_id or "").strip().lower()
+    if not raw:
+        return False
+    # Configured custom provider: a named slug in custom_providers, or any
+    # ``custom`` / ``custom:<slug>`` form when custom_providers are defined.
+    if _named_custom_provider_slug_for_provider(raw, config_obj):
+        return True
+    if raw == "custom" or raw.startswith("custom:"):
+        return bool(_custom_provider_entries(config_obj))
+    # Known first-party / built-in provider id (alias-resolved). Static registry
+    # knowledge that is always available, so a live-discovery provider whose
+    # catalog group is momentarily absent still counts as known.
+    canonical = _resolve_provider_alias(raw)
+    return (
+        raw in _PROVIDER_DISPLAY
+        or canonical in _PROVIDER_DISPLAY
+        or raw in _PROVIDER_MODELS
+        or canonical in _PROVIDER_MODELS
+    )
+
+
 # Well-known models per provider (used to populate dropdown for direct API providers)
 _PROVIDER_MODELS = {
     "anthropic": [
