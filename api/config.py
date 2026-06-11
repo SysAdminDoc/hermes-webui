@@ -3149,6 +3149,52 @@ _MODELS_CACHE_SCHEMA_VERSION = 3
 _models_cache_path = STATE_DIR / "models_cache.json"
 
 
+def _get_models_cache_path() -> Path:
+    """Return the /api/models disk-cache path for the *active* profile (#3957).
+
+    WebUI profile switching is per-client/cookie scoped (issue #798), but the
+    models disk cache used to be a single import-time ``STATE_DIR /
+    "models_cache.json"`` shared across every profile.  The cache's
+    ``_source_fingerprint`` is profile-specific (it hashes the active profile's
+    config.yaml + auth.json), so a non-default profile rejected the shared
+    snapshot on every read and cold-rebuilt the catalog — the serial live
+    provider probes behind that cold build are what pushed ``/api/models`` (and
+    the Settings → Providers panel) past the 30s frontend timeout.
+
+    Profile-key the filename so each profile keeps its own warm cache:
+      - default / root profile  → ``models_cache.json``  (unchanged path; no
+        migration of the existing file)
+      - named profile ``<name>`` → ``models_cache.<name>.json``
+
+    The active profile is resolved per-request via ``get_active_profile_name()``
+    (thread-local cookie context), falling back to the module-level default
+    path if the profiles module is unavailable (very early boot / import cycle).
+
+    The named-profile path is derived from ``_models_cache_path`` (the
+    module-level default), not from ``STATE_DIR`` directly, so the path stays
+    correct if the default is repointed (e.g. tests monkeypatch
+    ``_models_cache_path`` to an isolated tmp file).
+    """
+    try:
+        from api.profiles import get_active_profile_name, _is_root_profile
+
+        name = (get_active_profile_name() or "").strip()
+        if not name or _is_root_profile(name):
+            return _models_cache_path
+        # Defensive filename sanitization: the cookie-derived profile name is
+        # already validated by _PROFILE_ID_RE at the request boundary, but keep
+        # the on-disk filename safe regardless of how the name was resolved.
+        safe = re.sub(r"[^a-z0-9_-]", "_", name.lower())[:64]
+        if not safe:
+            return _models_cache_path
+        # Splice the profile into the default filename: models_cache.json →
+        # models_cache.<safe>.json, keeping the default's parent dir + suffix.
+        base = _models_cache_path
+        return base.with_name(f"{base.stem}.{safe}{base.suffix}")
+    except Exception:
+        return _models_cache_path
+
+
 def _get_auth_store_path() -> Path:
     """Return the auth.json path for the active Hermes profile."""
     try:
@@ -3341,7 +3387,7 @@ def _models_cache_source_fingerprint() -> dict:
 
 def _delete_models_cache_on_disk() -> None:
     try:
-        os.unlink(str(_models_cache_path))
+        os.unlink(str(_get_models_cache_path()))
     except OSError:
         pass  # already absent
 
@@ -3434,9 +3480,9 @@ def _load_models_cache_from_disk() -> dict | None:
     try:
         import json as _j
 
-        if not _models_cache_path.exists():
+        if not _get_models_cache_path().exists():
             return None
-        with open(_models_cache_path, encoding="utf-8") as f:
+        with open(_get_models_cache_path(), encoding="utf-8") as f:
             cache = _j.load(f)
         if not _is_loadable_disk_cache(cache):
             return None
@@ -3482,10 +3528,11 @@ def _save_models_cache_to_disk(cache: dict) -> None:
         runtime_version = _current_webui_version()
         if runtime_version is not None:
             payload["_webui_version"] = runtime_version
-        tmp = str(_models_cache_path) + f".{os.getpid()}.tmp"
+        cache_path = _get_models_cache_path()
+        tmp = str(cache_path) + f".{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
-        os.rename(tmp, str(_models_cache_path))
+        os.rename(tmp, str(cache_path))
     except Exception:
         pass  # Non-fatal -- cache will rebuild on next call
 

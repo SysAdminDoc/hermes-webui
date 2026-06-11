@@ -784,6 +784,43 @@ def profile_env_for_background_worker(
                 restore_skill_home_modules(skill_home_snapshot)
 
 
+@contextmanager
+def profile_env_for_active_request(
+    purpose: str = "provider/model read",
+    logger_override: Optional[logging.Logger] = None,
+):
+    """Apply the active per-request profile's env around a read-only API call (#3957).
+
+    WebUI profile switching is per-client/cookie scoped (issue #798): a browser
+    on a named profile sets a ``hermes_profile`` cookie, which ``server.py``
+    turns into a thread-local via ``set_request_profile()``.  But the per-client
+    switch deliberately does NOT reload the profile's ``.env`` into
+    ``os.environ`` (that would mutate process-global state shared with other
+    clients).  So read-only endpoints that resolve provider credentials through
+    ``os.environ`` / ``HERMES_HOME`` — ``/api/providers`` (``get_auth_status``
+    probes) and ``/api/models`` (``provider_model_ids`` / custom-key lookup) —
+    resolve against the *default* profile's credentials instead of the active
+    one.  Symptoms: Settings → Providers times out and the model picker shows
+    only the default profile's models.
+
+    This mirrors what streaming already does for the duration of an agent run
+    (``profile_env_for_background_worker``): it temporarily applies the active
+    profile's ``.env`` + terminal config for the duration of the wrapped read,
+    then restores the previous env under ``_ENV_LOCK``.
+
+    No-ops (zero overhead, byte-identical behavior) for the default/root profile
+    — the overwhelmingly common single-profile deployment is unaffected.
+    """
+    profile = (get_active_profile_name() or "").strip()
+    if not profile or _is_root_profile(profile):
+        yield
+        return
+    with profile_env_for_background_worker(
+        profile, purpose, logger_override=logger_override
+    ):
+        yield
+
+
 def _set_hermes_home(home: Path):
     """Set HERMES_HOME env var and monkey-patch cached module-level paths."""
     os.environ['HERMES_HOME'] = str(home)

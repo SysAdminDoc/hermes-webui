@@ -5620,7 +5620,12 @@ def handle_get(handler, parsed) -> bool:
         return True
 
     if parsed.path == "/api/models":
-        return j(handler, get_available_models())
+        # Apply the active per-request profile's env so the model catalog
+        # resolves against that profile's credentials, not the process-default
+        # profile's (#3957). No-op for the default profile.
+        from api.profiles import profile_env_for_active_request
+        with profile_env_for_active_request("/api/models", logger_override=logger):
+            return j(handler, get_available_models())
 
     if parsed.path == "/api/models/live":
         return _handle_live_models(handler, parsed)
@@ -5647,7 +5652,14 @@ def handle_get(handler, parsed) -> bool:
 
     # ── Providers (GET) ──
     if parsed.path == "/api/providers":
-        return j(handler, get_providers())
+        # Apply the active per-request profile's env so provider auth probes
+        # resolve against that profile's credentials, not the process-default
+        # profile's (#3957). Without this, get_auth_status() probes on a
+        # non-default profile resolve the wrong/empty creds and can stall past
+        # the 30s frontend timeout. No-op for the default profile.
+        from api.profiles import profile_env_for_active_request
+        with profile_env_for_active_request("/api/providers", logger_override=logger):
+            return j(handler, get_providers())
 
     # ── Plugins/hooks visibility (read-only, no callback/source internals) ──
     if parsed.path == "/api/plugins":
