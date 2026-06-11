@@ -3480,9 +3480,10 @@ def _load_models_cache_from_disk() -> dict | None:
     try:
         import json as _j
 
-        if not _get_models_cache_path().exists():
+        cache_path = _get_models_cache_path()
+        if not cache_path.exists():
             return None
-        with open(_get_models_cache_path(), encoding="utf-8") as f:
+        with open(cache_path, encoding="utf-8") as f:
             cache = _j.load(f)
         if not _is_loadable_disk_cache(cache):
             return None
