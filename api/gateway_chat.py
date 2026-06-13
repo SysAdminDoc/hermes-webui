@@ -142,6 +142,18 @@ def _gateway_stream_usage(payload: dict) -> dict:
     }
 
 
+def _gateway_reasoning_delta(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    return str(
+        payload.get("text")
+        or payload.get("preview")
+        or payload.get("delta")
+        or payload.get("content")
+        or ""
+    ).strip()
+
+
 def _gateway_tool_progress_event(payload: dict) -> tuple[str, dict] | None:
     """Translate Hermes Gateway tool-progress SSE payloads to WebUI events."""
     if not isinstance(payload, dict):
@@ -150,7 +162,7 @@ def _gateway_tool_progress_event(payload: dict) -> tuple[str, dict] | None:
     if not name:
         return None
     if name == "_thinking":
-        reason_delta = str(payload.get("preview") or payload.get("delta") or "").strip()
+        reason_delta = _gateway_reasoning_delta(payload)
         if not reason_delta:
             return None
         return "reasoning", {"text": reason_delta}
@@ -388,14 +400,7 @@ def _run_gateway_chat_streaming(
                     sse_event = "message"
                     continue
                 if sse_event == "reasoning.available":
-                    reason_delta = (
-                        payload.get("text")
-                        or payload.get("preview")
-                        or payload.get("delta")
-                        or payload.get("content")
-                        or ""
-                    )
-                    reason_delta = str(reason_delta).strip()
+                    reason_delta = _gateway_reasoning_delta(payload)
                     if reason_delta:
                         if stream_id in STREAM_REASONING_TEXT:
                             STREAM_REASONING_TEXT[stream_id] += reason_delta
