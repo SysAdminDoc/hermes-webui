@@ -7631,6 +7631,17 @@ function _appendWorklogStep(group, anchor, cards, thinkingText, opts){
   }
 }
 function _syncLiveWorklogReasonsForAnchor(anchor, displayTextOverride){
+  // Worklog reason-mirroring (folding intermediate prose into a top Worklog rail
+  // and hiding the inline `assistant-segment` via `assistant-segment-worklog-source`
+  // → display:none) is the Compact Worklog presentation (#3401). In Transparent
+  // Stream mode prose must stay as visible, chronologically-placed inline segments
+  // interleaved with tool rows — so do NOT build the worklog rail or hide the
+  // inline segment here. Without this gate every round's prose mirror piles into
+  // the single top rail while tool rows append at the bottom, so all prose bunches
+  // above all tools during a live multi-round turn (#4096); it only self-heals when
+  // the turn settles and renderMessages() rebuilds with the compact-only
+  // `messageBelongsInWorklog` gate (which is already isCompactWorklogMode()-only).
+  if(typeof isCompactWorklogMode==='function' && !isCompactWorklogMode()) return;
   if(!anchor||!anchor.matches||!anchor.matches('[data-live-assistant="1"]')) return;
   const blocks=anchor.parentElement;
   if(!blocks) return;
@@ -7759,6 +7770,13 @@ function ensureActivityGroup(inner, opts){
 function normalizeLiveActivityGroupPlacement(turn){
   const blocks=_assistantTurnBlocks(turn);
   if(!blocks) return;
+  // Compact Worklog only: this reorders `.tool-call-group`/`.tool-worklog-group`
+  // containers, which exist solely on the Compact Worklog live path. Transparent
+  // Stream renders tool rows as flat `.transparent-event-row`s and never builds
+  // these group containers (see appendLiveToolCard's transparent branch), and the
+  // worklog prose-rail is gated off in transparent mode (#4096), so the selector
+  // below matches nothing and this is a no-op there. Kept implicit (empty match)
+  // rather than an early return so reconnect/restore behavior is unchanged.
   const groups=Array.from(
     blocks.querySelectorAll('.tool-worklog-group[data-live-tool-worklog-group="1"],.tool-call-group[data-live-tool-worklog-group="1"],.tool-call-group[data-live-tool-call-group="1"]')
   );
