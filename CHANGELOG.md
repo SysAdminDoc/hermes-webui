@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.403] — 2026-06-13 — Release NP (notification click reuses the existing chat tab, #4109)
+
+### Fixed
+
+- **Clicking a notification now focuses (and navigates) the existing chat tab instead of opening a new one (#4109).** The service-worker `notificationclick` handler still focuses an exact-path tab when one is open; when the notification points at a different session, it now reuses a same-origin focusable/navigable client (`navigate(targetUrl)` then `focus()`) rather than spawning a duplicate window, and only falls back to `openWindow` if no reusable tab exists. The new `sameOrigin` guard prevents navigating an unrelated cross-origin window. (#4109)
+
 ## [v0.51.400] — 2026-06-13 — Release NM (skill bundles in WebUI slash commands, #4087)
 
 ### Fixed
