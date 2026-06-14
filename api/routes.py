@@ -4100,6 +4100,8 @@ from api.route_approvals import (  # noqa: F401 — re-exports for backward comp
     _approval_sse_unsubscribe,
     _approval_sse_notify_locked,
     _approval_sse_notify,
+    reconcile_gateway_pending_mirror_locked,
+    submit_gateway_pending_mirror,
     submit_pending,
 )
 
@@ -11216,6 +11218,7 @@ def _handle_file_read(handler, parsed):
 def _handle_approval_pending(handler, parsed):
     sid = parse_qs(parsed.query).get("session_id", [""])[0]
     with _lock:
+        _head, _total, _changed = reconcile_gateway_pending_mirror_locked(sid)
         queue = _pending.get(sid)
         # Support both the new list format and a legacy single-dict value.
         if isinstance(queue, list):
@@ -11227,6 +11230,15 @@ def _handle_approval_pending(handler, parsed):
         else:
             p = None
             total = 0
+        if p is None:
+            gw_queue = _gateway_queues.get(sid) or []
+            if gw_queue:
+                raw = getattr(gw_queue[0], "data", None) or {}
+                if raw:
+                    p = raw
+                    total = len(gw_queue)
+                else:
+                    logger.warning("Gateway queue entry for %s has no .data attribute", sid)
     if p:
         return j(handler, {"pending": dict(p), "pending_count": total})
     return j(handler, {"pending": None, "pending_count": 0})
@@ -11254,6 +11266,7 @@ def _handle_approval_sse_stream(handler, parsed):
     initial_count = 0
     with _lock:
         _approval_sse_subscribers.setdefault(sid, []).append(q)
+        reconcile_gateway_pending_mirror_locked(sid)
         q_list = _pending.get(sid)
         if isinstance(q_list, list):
             initial_pending = dict(q_list[0]) if q_list else None
@@ -14708,6 +14721,7 @@ def _resolve_approval_legacy(sid: str, approval_id: str, choice: str) -> bool:
     found_target = False
     gateway_keys = []
     with _lock:
+        reconcile_gateway_pending_mirror_locked(sid)
         queue = _pending.get(sid)
         if isinstance(queue, list):
             if approval_id:
@@ -14732,17 +14746,13 @@ def _resolve_approval_legacy(sid: str, approval_id: str, choice: str) -> bool:
             if not approval_id or queue.get("approval_id") == approval_id:
                 pending = _pending.pop(sid, None)
                 found_target = pending is not None
-        # When no _pending entry found, peek into _gateway_queues for
-        # pattern_keys so session-level approval still works. The gateway
-        # path is the primary mechanism during active streaming; _pending
-        # is only used for UI polling/SSE notification.
-        # NOTE: Gateway queue entries don't carry approval_id, so when
-        # approval_id is given and _pending is empty, we assume the gateway
-        # entry at the head of the queue corresponds. This is safe because
-        # gateway entries are consumed synchronously with _pending entries
-        # under the same lock — there is no interleaving where a stale
-        # approval_id could match a different gateway entry.
-        if not pending:
+        # When no _pending entry found AND no explicit approval_id was
+        # given, peek into _gateway_queues for pattern_keys so legacy
+        # no-id clients still work. When approval_id IS given but not
+        # found, the caller sent a stale/duplicate id — do NOT fall
+        # through to the gateway queue, or a stale click on approval A
+        # would resolve the unrelated live approval B.
+        if not pending and not approval_id:
             gw_queue = _gateway_queues.get(sid)
             if gw_queue and len(gw_queue) > 0:
                 gw_entry = gw_queue[0]
