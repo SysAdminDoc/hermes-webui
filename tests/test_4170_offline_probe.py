@@ -37,12 +37,16 @@ def test_recovery_loop_probes_even_when_browser_reports_offline():
     assert "_probeOfflineRecovery()" in body
     assert "if(!_browserReportsOnline()){showOfflineBanner('browser');return false;}" not in body
     assert body.find("_probeOfflineRecovery()") < body.find("showOfflineBanner(")
+    assert "if(ok){if(!_offlineVisible)return true;_stopOfflineProbeTimer();await _recoverFromOfflineSoftly();return true;}" in body
     assert "showOfflineBanner(_browserReportsOnline()?'network':'browser')" in body
 
 
 def test_probe_backed_browser_banner_helper_uses_health_as_source_of_truth():
     body = _strip_comments(_fn_body(UI_JS, "async function _showOfflineBannerIfProbeFails("))
+    assert "const visibleAtStart=_offlineVisible;" in body
+    assert "if(visibleAtStart)_setOfflineChecking(true);" in body
     assert "const ok=await _probeOfflineRecovery();" in body
+    assert "if(visibleAtStart)_setOfflineChecking(false);" in body
     assert "if(ok)" in body
     assert "showOfflineBanner(reason||(_browserReportsOnline()?'network':'browser'))" in body
     assert body.find("_probeOfflineRecovery()") < body.find("showOfflineBanner(")

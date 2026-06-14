@@ -86,7 +86,10 @@ async function _probeOfflineRecovery(){
   finally{_offlineHealthProbePromise=null;}
 }
 async function _showOfflineBannerIfProbeFails(reason){
+  const visibleAtStart=_offlineVisible;
+  if(visibleAtStart)_setOfflineChecking(true);
   const ok=await _probeOfflineRecovery();
+  if(visibleAtStart)_setOfflineChecking(false);
   if(ok){
     if(_offlineVisible){_stopOfflineProbeTimer();await _recoverFromOfflineSoftly();}
     return true;
@@ -101,7 +104,7 @@ async function checkOfflineRecoveryNow(){
     _setOfflineChecking(true);
     const ok=await _probeOfflineRecovery();
     _setOfflineChecking(false);
-    if(ok){_stopOfflineProbeTimer();await _recoverFromOfflineSoftly();return true;}
+    if(ok){if(!_offlineVisible)return true;_stopOfflineProbeTimer();await _recoverFromOfflineSoftly();return true;}
     showOfflineBanner(_browserReportsOnline()?'network':'browser');
     return false;
   })();
