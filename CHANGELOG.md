@@ -3,6 +3,13 @@
 
 ## [Unreleased]
 
+## [v0.51.417] — 2026-06-14 — Release OD (sidebar issue-number + external-refresh fixes, #4154/#3916)
+
+### Fixed
+
+- **GitHub issue numbers in session titles are no longer stripped from the sidebar (#4154).** The sidebar tag extractor treated any `#word` as an attention tag and removed it from the displayed title, so a title like "Fix #1234" lost its issue reference. Purely-numeric `#NNNN` patterns are now preserved while real attention tags (`#approval`, `#clarify`, …) still extract. (#4154)
+- **The 30-second external-refresh poll no longer fires for non-external sessions (#3916).** `refreshActiveSessionIfExternallyUpdated` now early-returns for WebUI-native sessions, which don't need the external-update reconciliation, avoiding needless reload churn. (#3916)
+
 ## [v0.51.416] — 2026-06-14 — Release OC (cache + single-flight /api/sessions payloads, #3791)
 
 ### Fixed
