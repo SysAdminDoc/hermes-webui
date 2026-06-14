@@ -508,7 +508,8 @@ def _run_gateway_chat_streaming(
             s.model = model
             s.model_provider = model_provider
             s.save()
-        gateway_session_payload = s.compact() | {"messages": s.messages, "tool_calls": []}
+        from api.streaming import _session_payload_with_full_messages
+        gateway_session_payload = _session_payload_with_full_messages(s, tool_calls=[])
         put_gateway_event("done", {"session": redact_session_data(gateway_session_payload), "usage": usage})
         put_gateway_event("stream_end", {"session_id": session_id})
     except urllib.error.HTTPError as exc:
