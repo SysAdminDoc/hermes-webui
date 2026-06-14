@@ -77,10 +77,19 @@ async function _probeOfflineRecovery(){
   if(_offlineHealthProbePromise)return _offlineHealthProbePromise;
   _offlineHealthProbePromise=(async()=>{
     const fetcher=_offlineRawFetch||window.fetch.bind(window);
+    // Bound the probe so a black-hole network (connected, server hung, packets
+    // dropped) can't delay the banner past a few seconds — the probe now gates
+    // the initial banner display on the offline-event/startup paths.
+    let ctrl=null,timer=null;
+    try{ctrl=(typeof AbortController!=='undefined')?new AbortController():null;}catch(_){ctrl=null;}
+    if(ctrl)timer=setTimeout(()=>{try{ctrl.abort();}catch(_){}},3000);
     try{
-      const res=await fetcher(_offlineHealthUrl(),{cache:'no-store',credentials:'include'});
+      const opts={cache:'no-store',credentials:'include'};
+      if(ctrl)opts.signal=ctrl.signal;
+      const res=await fetcher(_offlineHealthUrl(),opts);
       return !!(res&&res.ok);
     }catch(_){return false;}
+    finally{if(timer)clearTimeout(timer);}
   })();
   try{return await _offlineHealthProbePromise;}
   finally{_offlineHealthProbePromise=null;}
