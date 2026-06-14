@@ -2860,10 +2860,12 @@ def _stale_snapshot_metadata_refresh_ids(sessions: list[dict]) -> set[str]:
             # decide snapshot visibility. Only legacy/incomplete rows need the
             # sidecar mtime rescue; otherwise every historical snapshot whose
             # file mtime is newer than its logical timestamp is re-read on every
-            # sidebar poll.
+            # sidebar poll. Treat stale-zero-message rows as incomplete even
+            # when user_message_count/last_message_at are present; their sidecar
+            # may hold the real count that makes the snapshot visible.
             if (
                 snapshot.get('user_message_count') is not None
-                and snapshot.get('message_count') is not None
+                and int(snapshot.get('message_count') or 0) > 0
                 and snapshot.get('last_message_at') is not None
             ):
                 continue

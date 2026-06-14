@@ -580,6 +580,34 @@ def test_complete_snapshot_refresh_ids_do_not_follow_mtime_when_sidebar_metadata
     assert models._stale_snapshot_metadata_refresh_ids(rows) == set()
 
 
+def test_stale_zero_message_snapshot_refresh_ids_follow_mtime(monkeypatch):
+    """A snapshot with message_count=0 but user messages is not complete metadata."""
+    rows = [
+        {
+            "session_id": "snapshot_stale_zero",
+            "title": "Stale Zero Snapshot",
+            "message_count": 0,
+            "user_message_count": 2,
+            "updated_at": 100.0,
+            "last_message_at": 100.0,
+            "pre_compression_snapshot": True,
+            "parent_session_id": "root_sid",
+        },
+        {
+            "session_id": "visible_child",
+            "title": "Visible Child",
+            "message_count": 1,
+            "user_message_count": 1,
+            "updated_at": 120.0,
+            "last_message_at": 120.0,
+            "parent_session_id": "snapshot_stale_zero",
+        },
+    ]
+    monkeypatch.setattr(models, "_sidecar_mtime_after_index_timestamp", lambda _row: True)
+
+    assert models._stale_snapshot_metadata_refresh_ids(rows) == {"snapshot_stale_zero"}
+
+
 def test_stale_index_fuller_pre_compression_snapshot_uses_sidecar_metadata(monkeypatch):
     """A stale index must not hide the fuller pre-compression sidecar.
 
