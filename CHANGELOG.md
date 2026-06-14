@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.419] — 2026-06-14 — Release OF (settled-stream message-count consistency, #4192)
+
+### Fixed
+
+- **Streaming completion payloads now report a message count that matches the embedded transcript.** Settled `done`/error SSE payloads (including the gateway-routed chat `done` event) no longer reuse stale compact metadata when they embed the full `messages` array, so completion/reconcile code can't mistake a complete payload for a short stale window. A shared `_session_payload_with_full_messages()` helper sets `message_count` to the embedded transcript length at all three settled-payload sites. (#4192)
+
 ## [v0.51.418] — 2026-06-14 — Release OE (slash-command autocomplete after non-ASCII prefix + multiple slashes, #3924)
 
 ### Fixed
