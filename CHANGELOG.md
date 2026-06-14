@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.411] — 2026-06-14 — Release NX (offline recovery verifies unreliable browser offline reports via /health probe, #4170)
+
+### Fixed
+
+- **Offline recovery now verifies unreliable browser offline reports with the existing `/health` probe before showing or sticking on the browser-reason banner.** `navigator.onLine` is treated as a hint for the banner reason, while server reachability remains the source of truth, so browsers that incorrectly report offline can recover without a page reload or permanent connection-lost state. The health probe is bounded by a 3s `AbortController` timeout so a black-hole network can't delay the banner. (#4170)
+
 ## [v0.51.410] — 2026-06-14 — Release NW (chat Mermaid lightbox + workspace CSV table preview, #4075/#4025)
 
 ### Added
