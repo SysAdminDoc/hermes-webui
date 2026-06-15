@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.426] — 2026-06-15 — Release OM (custom-provider model-prefix routing fix, #4210)
+
+### Fixed
+
+- **Custom providers with no `base_url` no longer get hijacked to OpenRouter when the model id has a known-provider prefix.** A bare `custom` or named `custom:<slug>` provider pointed at a vendor-routing proxy (e.g. `custom:llm-proxy` with no configured `base_url`, since the proxy URL is supplied at request time) used to receive an OpenRouter redirect for model ids like `x-ai/grok-2` or `google/gemma-2` whenever the prefix was a member of `_PROVIDER_MODELS`. The backend then failed to initialize with `RuntimeError: No LLM provider configured` because the user had no OpenRouter credentials configured. `resolve_model_provider()` now applies the same custom-provider exemption the `config_base_url` branch already carries (sibling of #3872 / v0.51.349), so the request stays on the user's selected custom provider with the full model id preserved. (#4210)
+
 ## [v0.51.425] — 2026-06-15 — Release OL (data-integrity batch: empty-pending guard #4205 + cron-reply fix #3975)
 
 ### Fixed
