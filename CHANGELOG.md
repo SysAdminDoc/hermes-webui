@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.464] — 2026-06-16 — Release PY (scannable model picker)
+
 ### Added
 
 - **Model picker provider groups are now collapsible and open scannable (#4279).** Provider groups in the model picker start collapsed except the group that owns your currently-selected model, so a picker with many providers/models opens as a tidy list of provider headings rather than one long flat scroll. Searching auto-expands matching groups (and searches hidden overflow models); clearing the search restores the collapsed-except-selected view. The "Show all N models" affordance is restyled as a distinct "+ Show all N models" expander (muted italic, indented, not mistakable for a selectable model) and now reveals the overflow in place — the group stays open and the view scrolls to the newly-revealed models instead of resetting to the top. The redundant per-row provider chip is suppressed for rows already under their own provider heading (kept only for hoisted/search rows). Builds on @akrhin's collapsible-groups work.
