@@ -2547,9 +2547,9 @@ function renderModelDropdown(){
         const wrapper=document.createElement('div');
         wrapper.className='model-group-body';
         wrapper.dataset.group=groupKey;
-        // A group carrying a provider endpoint-error hint (#4253) must stay
-        // visible by default — otherwise the "models endpoint unreachable"
-        // warning is hidden inside a collapsed body and the user never sees it.
+        // A group carrying a provider endpoint-error hint must stay visible by
+        // default — otherwise the "models endpoint unreachable" warning is hidden
+        // inside a collapsed body and the user never sees it. (#2540 surface)
         const _hasEndpointError=!!(meta&&(meta.modelsEndpointError||meta.endpointErrorOnly));
         if(hasSearch) _groupOpenState[groupKey]=true;
         else if(_forceOpenGroups.has(groupKey)) _groupOpenState[groupKey]=true;
@@ -2560,7 +2560,9 @@ function renderModelDropdown(){
         heading.classList.add('collapsible');
         dd.appendChild(wrapper);
         _groupWrappers[groupKey]=wrapper;
-        // Render endpoint error hint inside the collapsible group (#4253)
+        // Render the provider endpoint-error hint inside the collapsible group
+        // so it collapses/expands with it (the group is force-opened above when
+        // an error is present, so the hint stays visible by default).
         _renderProviderEndpointHint(meta,wrapper);
         heading.addEventListener('click',(e)=>{
           e.stopPropagation();

@@ -1012,7 +1012,11 @@ def _is_known_model_provider(provider_id: str) -> bool:
         if _is_plugin_model_provider(pid):
             return True
     except Exception:
-        logger.debug("plugin model-provider check failed for %s", pid)
+        # A transient failure here (import/IO hiccup in the plugin registry) makes
+        # a real plugin-backed provider briefly look unknown and drop from the
+        # picker until the next successful check. Surface at warning so it's
+        # visible in default production logs rather than silently swallowed.
+        logger.warning("plugin model-provider check failed for %s", pid, exc_info=True)
     return False
 
 
