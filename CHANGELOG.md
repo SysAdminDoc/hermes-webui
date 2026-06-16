@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.460] — 2026-06-16 — Release PU (custom voice providers recognized)
+
+### Fixed
+
+- **Command (custom) speech-to-text providers are now recognized by the voice capability probe (#4312).** When `stt.provider` pointed at a Hermes command-type STT provider, the WebUI's `/api/transcribe/capability` probe only knew the built-in providers, so it reported voice input as unavailable and the browser fell back unnecessarily. The probe now delegates command-provider recognition to the agent's own resolver (`_resolve_command_stt_provider_config`) as the single source of truth, consulted after the built-in chain. Thanks @LLMinem.
+
 ## [v0.51.459] — 2026-06-16 — Release PT (your message stays your message)
 
 ### Fixed
