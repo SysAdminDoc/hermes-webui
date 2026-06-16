@@ -761,13 +761,23 @@ searchInput.value = '';
 searchInput._listeners.input();
 const cleared = snapshot(dropdown);
 
+// After clearing, measure the rendered group body — not the hidden <select>.
+// _appendOverflowOptionsToGroup appends to the <select> unconditionally, so
+// counting <option> elements there is always 4 whether or not the
+// hiddenByDefault/hiddenCount sync is present. The regression the fix prevents
+// is the rendered dropdown snapping back to the capped view + a fresh "Show all"
+// expander, so we must check the live DOM rows inside the .model-group-body.
+const groupWrapper = querySelectorAllImpl(dropdown, '.model-group-body[data-group="openrouter"]')[0] || null;
+const clearedRenderedModelCount = groupWrapper ? querySelectorAllImpl(groupWrapper, '.model-opt').length : -1;
+const clearedHasMoreButton = groupWrapper ? querySelectorAllImpl(groupWrapper, '.model-opt-more').length > 0 : false;
+
 process.stdout.write(JSON.stringify({
   inPlacePath: true,
   initialShowAll: initial.some(item => String(item.html || '').includes('Show all')),
   expandedHasShowAll: expanded.some(item => String(item.html || '').includes('Show all')),
   clearedHasShowAll: cleared.some(item => String(item.html || '').includes('Show all')),
-  clearedModelCount: modelSelect.children[0].children.length,
-  optionCountAfterExpand: modelSelect.children[0].children.length,
+  clearedRenderedModelCount,
+  clearedHasMoreButton,
 }));
 """
 
@@ -1172,6 +1182,16 @@ function querySelectorAllImpl(node, selector) {
         }
       }
     }
+    // Bare tag-name selector: e.g. 'option'. Required so
+    // _appendOverflowOptionsToGroup's querySelectorAll('option') finds
+    // pre-injected <option> elements — without this, existingByValue stays
+    // empty and the function never returns 0, so the extraModels.length guard
+    // is never exercised.
+    else if (!selector.startsWith('.') && !selector.includes('[') && !selector.includes(' ')) {
+      if (n.tagName && n.tagName === selector.toUpperCase()) {
+        results.push(n);
+      }
+    }
   }
 
   return results;
@@ -1189,6 +1209,9 @@ function isMatch(node, selector) {
       return node.className && node.className.includes(className) &&
              node.dataset && node.dataset[dataKey] === dataVal;
     }
+  }
+  if (!selector.startsWith('.') && !selector.includes('[')) {
+    return node.tagName && node.tagName === selector.toUpperCase();
   }
   return false;
 }
@@ -1534,9 +1557,13 @@ def test_runtime_inplace_expand_then_search_clear_preserves_expanded_group(_driv
     assert out["initialShowAll"], "Overflow group should show 'Show all' row initially"
     assert not out["expandedHasShowAll"], "After in-place expansion, 'Show all' row should be gone"
     assert not out["clearedHasShowAll"], "After search→clear, 'Show all' row should still be gone"
-    assert out["clearedModelCount"] == 4, (
-        "After search→clear following in-place expansion, all 4 models should still be visible "
-        "(2 visible + 2 overflow)"
+    assert not out["clearedHasMoreButton"], (
+        "After search→clear, no 'Show all' expander should reappear inside the group body"
+    )
+    assert out["clearedRenderedModelCount"] == 4, (
+        "After search→clear following in-place expansion, all 4 models must remain rendered "
+        "in the .model-group-body (2 visible + 2 overflow); a missing hiddenByDefault sync "
+        "causes the group to snap back to 2 capped rows"
     )
 
 
@@ -1560,8 +1587,20 @@ def test_runtime_inplace_endpoint_error_group_renders_open(_driver_paths):
                     {"id": "openrouter/overflow-two", "label": "Overflow Two"},
                 ],
                 "modelsEndpointError": {"message": "fetch failed"},
-            }
+            },
+            # A second group whose model is selected so the openrouter group is NOT
+            # the selected group and won't auto-open via _selectedGroupKey matching.
+            # Without _hasEndpointError the openrouter wrapper gets display:none.
+            {
+                "provider": "Anthropic",
+                "provider_id": "anthropic",
+                "models": [
+                    {"id": "anthropic/claude-3-5-sonnet", "label": "Claude 3.5 Sonnet"},
+                ],
+                "extra_models": [],
+            },
         ],
+        "selectedValue": "anthropic/claude-3-5-sonnet",
         "searchTerm": "",
     }
     result = subprocess.run(
