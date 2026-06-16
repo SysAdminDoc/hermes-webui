@@ -12441,7 +12441,7 @@ def _handle_live_models(handler, parsed):
                                 _lm_entry = _lm_pool.select()
                                 if _lm_entry:
                                     if not _api_key:
-                                        _api_key = _lm_entry.runtime_api_key
+                                        _api_key = getattr(_lm_entry, "runtime_api_key", "") or ""
                                     if not _base_url:
                                         _base_url = str(getattr(_lm_entry, "base_url", "") or "").strip()
                     except ImportError:
