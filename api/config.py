@@ -4036,7 +4036,63 @@ def _static_models_catalog_without_live_probes() -> dict:
 # session is expensive (~10s for zai due to endpoint probing).  The credential pool
 # only changes when the user adds/removes credentials, which is rare; a 24h TTL
 # is plenty safe and ensures get_available_models() cold paths are fast.
-_CREDENTIAL_POOL_CACHE: dict[str, tuple[float, "CredentialPool"]] = {}  # noqa: F821  forward-ref string annotation, resolved at runtime  # pid -> (ts, pool)
+_CREDENTIAL_POOL_CACHE: dict[tuple[str, str], tuple[float, "CredentialPool"]] = {}  # noqa: F821  forward-ref string annotation, resolved at runtime  # (profile_tag, pid) -> (ts, pool)
+
+
+def _credential_pool_profile_tag() -> str:
+    """Active-profile identity for the credential-pool cache key.
+
+    The credential pool is per-Hermes-profile (it lives in that profile's
+    auth.json). Keying the process-global cache by provider id ALONE lets a
+    pool loaded under profile A satisfy a lookup under profile B in the same
+    server process — so a custom provider configured only in A would falsely
+    report configured in B (and then 401 at request time). Scoping every
+    cache key by the active profile's auth-store path keeps pools from
+    crossing profile boundaries.
+    """
+    try:
+        return str(_get_auth_store_path())
+    except Exception:
+        return ""
+
+
+def _has_explicit_pool_credentials(provider_id: str) -> bool:
+    """Return True when the credential pool has at least one non-ambient entry
+    for *provider_id* (i.e. not a gh-cli / GITHUB_TOKEN auto-detect).
+
+    Reuses ``_CREDENTIAL_POOL_CACHE`` so that callers on hot paths (provider
+    detection, model listing, live-model fetch) don't pay the ~10s load_pool
+    cost more than once per TTL window.
+    """
+    try:
+        from agent.credential_pool import load_pool as _load_pool
+
+        _pid = _resolve_provider_alias(provider_id)
+        _ck = (_credential_pool_profile_tag(), _pid)
+        _cached = _CREDENTIAL_POOL_CACHE.get(_ck)
+        if _cached is not None:
+            _cp_ts, _cp_pool = _cached
+            if (time.time() - _cp_ts) < 86400.0:
+                _all_entries = _cp_pool.entries()
+            else:
+                _cp_pool = _load_pool(_pid)
+                _CREDENTIAL_POOL_CACHE[_ck] = (time.time(), _cp_pool)
+                _all_entries = _cp_pool.entries()
+        else:
+            _cp_pool = _load_pool(_pid)
+            _CREDENTIAL_POOL_CACHE[_ck] = (time.time(), _cp_pool)
+            _all_entries = _cp_pool.entries()
+
+        return any(
+            not _is_ambient_gh_cli_entry(
+                str(getattr(e, "source", "") or ""),
+                str(getattr(e, "label", "") or ""),
+                str(getattr(e, "key_source", "") or ""),
+            )
+            for e in _all_entries
+        )
+    except ImportError:
+        return False
 _provider_models_invalidated_ts: dict[str, float] = {}  # provider_id -> timestamp of last invalidation
 
 # Disk-backed in-memory cache for get_available_models().
@@ -4525,10 +4581,10 @@ def invalidate_models_cache():
         _available_models_cache_source_fingerprint = None
         _cache_build_in_progress = False
         _cache_build_cv.notify_all()
-        # Clear the credential pool cache too. The cache key is provider_id
-        # only, so without this, tests (and live provider key edits) see a
-        # stale CredentialPool from a prior auth_store payload — the test_
-        # credential_pool_providers suite was hitting this directly.
+        # Clear the credential pool cache too (all profiles). Without this,
+        # tests (and live provider key edits) see a stale CredentialPool from a
+        # prior auth_store payload — the test_credential_pool_providers suite was
+        # hitting this directly. A full reset is intentionally profile-wide.
         _CREDENTIAL_POOL_CACHE.clear()
     # Also delete the disk cache so the next cold build starts fresh.
     # Disk delete is outside the lock — file I/O shouldn't block other readers.
@@ -4549,8 +4605,9 @@ def invalidate_credential_pool_cache(provider_id: str):
     """
     global _CREDENTIAL_POOL_CACHE
     with _available_models_cache_lock:
-        _CREDENTIAL_POOL_CACHE.pop(provider_id, None)
-        _CREDENTIAL_POOL_CACHE.pop(_resolve_provider_alias(provider_id), None)
+        _cp_tag = _credential_pool_profile_tag()
+        _CREDENTIAL_POOL_CACHE.pop((_cp_tag, provider_id), None)
+        _CREDENTIAL_POOL_CACHE.pop((_cp_tag, _resolve_provider_alias(provider_id)), None)
     try:
         # api.providers imports from api.config; keep this lazy to avoid
         # import-cycle/module-initialization issues.
@@ -4582,9 +4639,11 @@ def invalidate_provider_models_cache(provider_id: str):
         _provider_models_invalidated_ts[provider_id] = time.time()
         # Also evict the credential pool so the next cold path re-loads it.
         # Must evict both the original key and its canonical form (load_pool
-        # may be called with either, and both paths cache under their own key).
-        _CREDENTIAL_POOL_CACHE.pop(provider_id, None)
-        _CREDENTIAL_POOL_CACHE.pop(_resolve_provider_alias(provider_id), None)
+        # may be called with either, and both paths cache under their own key),
+        # scoped to the active profile's cache key.
+        _cp_tag = _credential_pool_profile_tag()
+        _CREDENTIAL_POOL_CACHE.pop((_cp_tag, provider_id), None)
+        _CREDENTIAL_POOL_CACHE.pop((_cp_tag, _resolve_provider_alias(provider_id)), None)
     _delete_models_cache_on_disk()
 
 
@@ -4944,8 +5003,10 @@ def get_available_models(*, prefer_cache: bool = False) -> dict:
                     for _pid in list(_pool.keys()):
                         try:
                             _canonical_pid = _resolve_provider_alias(str(_pid))
-                            # Check credential pool cache first
-                            _cached = _CREDENTIAL_POOL_CACHE.get(_pid)
+                            # Check credential pool cache first (profile-scoped key
+                            # so a pool loaded under another profile can't leak in).
+                            _ck = (_credential_pool_profile_tag(), _pid)
+                            _cached = _CREDENTIAL_POOL_CACHE.get(_ck)
                             if _cached is not None:
                                 _cp_ts, _cp_pool = _cached
                                 if (time.time() - _cp_ts) < 86400.0:
@@ -4953,12 +5014,12 @@ def get_available_models(*, prefer_cache: bool = False) -> dict:
                                 else:
                                     _lp_t0 = time.monotonic()
                                     _cp_pool = _load_pool(_pid)
-                                    _CREDENTIAL_POOL_CACHE[_pid] = (time.time(), _cp_pool)
+                                    _CREDENTIAL_POOL_CACHE[_ck] = (time.time(), _cp_pool)
                                     _all_entries = _cp_pool.entries()
                             else:
                                 _lp_t0 = time.monotonic()
                                 _cp_pool = _load_pool(_pid)
-                                _CREDENTIAL_POOL_CACHE[_pid] = (time.time(), _cp_pool)
+                                _CREDENTIAL_POOL_CACHE[_ck] = (time.time(), _cp_pool)
                                 _all_entries = _cp_pool.entries()
                             _explicit = [
                                 e for e in _all_entries
@@ -5426,13 +5487,30 @@ def get_available_models(*, prefer_cache: bool = False) -> dict:
                     _named_custom_groups[_slug] = (_cp_name, [])
 
                 _cp_base_url = str(_cp.get("base_url") or "").strip()
-                if _slug and _cp_base_url:
-                    _cp_api_key = str(_cp.get("api_key") or "").strip()
-                    if not _cp_api_key:
-                        _cp_key_env = str(_cp.get("key_env") or "").strip()
-                        if _cp_key_env:
-                            _cp_api_key = str(os.getenv(_cp_key_env) or "").strip()
+                _cp_api_key = str(_cp.get("api_key") or "").strip()
+                if not _cp_api_key:
+                    _cp_key_env = str(_cp.get("key_env") or "").strip()
+                    if _cp_key_env:
+                        _cp_api_key = str(os.getenv(_cp_key_env) or "").strip()
+                # Fallback: check credential pool for both api_key and base_url
+                if (not _cp_api_key or not _cp_base_url) and _slug:
+                    try:
+                        from api.config import _has_explicit_pool_credentials
+                        if _has_explicit_pool_credentials(_slug):
+                            from agent.credential_pool import load_pool
+                            _resolved = _resolve_provider_alias(_slug)
+                            _pool = load_pool(_resolved)
+                            if _pool:
+                                _entry = _pool.select()
+                                if _entry:
+                                    if not _cp_api_key:
+                                        _cp_api_key = getattr(_entry, "runtime_api_key", "") or ""
+                                    if not _cp_base_url:
+                                        _cp_base_url = str(getattr(_entry, "base_url", "") or "").strip()
+                    except ImportError:
+                        pass
 
+                if _slug and _cp_base_url:
                     # Check if user has configured models in config.yaml —
                     # configured models take priority over live /v1/models
                     # discovery (same as hermes-agent model_switch.py Section 4
