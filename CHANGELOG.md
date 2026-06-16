@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.463] — 2026-06-16 — Release PX (tighter remote workspace boundaries)
+
+### Fixed
+
+- **Remote POSIX workspace trust boundaries are hardened (#3664).** The remote-terminal workspace containment check now normalizes both the candidate path and `terminal.cwd` before comparing, so a lexical `..` escape (e.g. `{cwd}/../other/...`) no longer slips past the containment check. The blocked-system-root gate was also restored below the home-directory allow-list in both workspace validators, so legitimate systemd-homed paths under `/var/home/<user>/...` stay allowed while system directories remain blocked. POSIX path shapes are normalized at the source so every downstream block probe is consistent (`/etc/../home/user` → `/home/user`, `/./etc/ssh` → `/etc/ssh`). Thanks @rodboev.
+
 ## [v0.51.462] — 2026-06-16 — Release PW (sidebar survives slow loads)
 
 ### Fixed
