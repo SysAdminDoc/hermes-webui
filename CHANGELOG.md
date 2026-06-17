@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [v0.51.469] — 2026-06-17 — Release QD (transcript virtualization fix + opt-out)
+
 ### Fixed
 
 - **Long chat transcripts no longer freeze, jump to an older message, and scroll back after a streaming response completes (#4325).** Since transcript virtualization shipped (v0.51.440, #500/#4214), finalizing a streamed reply on a long (80+ message) session re-measured virtual row heights and restored the viewport by a stale pixel `scrollTop` that pointed at the wrong message after the remeasure — producing a freeze + scroll-jump + snap-back. The stream-end scroll restore now re-pins to a semantic DOM row (by message index) instead of a raw pixel offset, and when that anchor row was virtualized out of the current window it is mounted (scroll nudged + re-render with `preserveScroll`) before restoring. Thanks @rodboev (#4328).
