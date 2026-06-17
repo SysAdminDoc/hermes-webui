@@ -612,6 +612,15 @@ function _syncMessageVirtualHeightCache(visWithIdx){
 function _currentMessageVirtualWindow(visWithIdx, keepTailCount){
   _syncMessageVirtualHeightCache(visWithIdx);
   const container=$('messages');
+  // #4325 opt-out: when the user disables transcript virtualization, always
+  // render the full transcript (no windowing). Mirrors the <=threshold path so
+  // every downstream consumer (render, anchor, prepend-delta) treats it as a
+  // plain non-virtualized list.
+  if(typeof window!=='undefined' && window._virtualizeTranscript===false){
+    const total=visWithIdx.length;
+    const tailStart=Math.max(0, total-Math.max(0, Number(keepTailCount)||0));
+    return {virtualized:false,start:0,end:total,topPad:0,bottomPad:0,total,tailStart};
+  }
   return _messageVirtualWindow({
     total:visWithIdx.length,
     scrollTop:container?container.scrollTop:0,
