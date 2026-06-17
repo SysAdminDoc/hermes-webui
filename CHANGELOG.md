@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.472] — 2026-06-17 — Release QG (paste image + text together)
+
+### Fixed
+
+- **Pasting an image copied from a browser, Notes, or Slack now attaches the image again (#1620 regression).** When the clipboard carries both text and an image (the normal shape for "right-click → Copy Image" and most rich-source copies), the composer paste handler previously bailed entirely and silently dropped the image. It now attaches any real image (`kind==='file'` image item) while still letting the browser paste accompanying text normally — matching how the major AI chat UIs handle paste. Pure screenshots still attach as before, plain text still pastes with no attachment, and a rich-text editor's rendered HTML preview (a `text/html` string, not a file) is not misclassified as an image. Thanks @kaishi00.
+
 ## [v0.51.471] — 2026-06-17 — Release QF (searchable settings)
 
 ### Added
