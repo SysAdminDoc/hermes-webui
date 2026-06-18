@@ -9952,7 +9952,11 @@ def handle_post(handler, parsed) -> bool:
         # /api/sessions right after the visibility toggle). Invalidate explicitly.
         if any(
             k in body
-            for k in ("show_cli_sessions", "show_cron_sessions")
+            for k in (
+                "show_cli_sessions",
+                "show_cron_sessions",
+                "show_previous_messaging_sessions",
+            )
         ):
             try:
                 _clear_session_list_cache()
