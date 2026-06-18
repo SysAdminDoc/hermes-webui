@@ -1709,7 +1709,22 @@ def _session_list_cache_source_stamp(key: tuple) -> tuple[tuple[int, int], tuple
         _session_list_cache_path_stamp(gateway_metadata_path),
         _session_list_cache_path_stamp(session_index_path),
         _session_list_cache_path_stamp(settings_file),
+        # Commit-reliable content fingerprint of state.db — the file-stat stamps
+        # above can collide under WAL-mode writes (same mtime_ns bucket + WAL
+        # frame size), so without this a freshly-committed CLI/gateway session
+        # could be served stale for the cache TTL. Mirrors the models-layer fix.
+        _session_list_cache_state_db_fingerprint(state_db_path),
     )
+
+
+def _session_list_cache_state_db_fingerprint(state_db_path: Path | None):
+    if state_db_path is None:
+        return None
+    try:
+        from api.models import _sqlite_content_fingerprint
+        return _sqlite_content_fingerprint(state_db_path)
+    except Exception:
+        return None
 
 
 def _session_list_cache_overlay_runtime_rows(rows: list[dict]) -> list[dict]:
@@ -9940,6 +9955,28 @@ def handle_post(handler, parsed) -> bool:
 
         saved = save_settings(body)
         saved.pop("password_hash", None)  # never expose hash to client
+
+        # Settings that change which sessions appear in the sidebar must
+        # invalidate the session-list cache directly. Relying on the cache's
+        # settings-file mtime stamp is fragile: a toggle that writes the
+        # settings file within the same mtime granularity as a cached entry (and
+        # produces the default-valued key, e.g. show_cli_sessions back to its
+        # True default) can leave a stale row set served for up to the cache TTL.
+        # This is the root cause of the intermittent gateway_sync test flake
+        # (a freshly-inserted CLI/gateway session occasionally absent from
+        # /api/sessions right after the visibility toggle). Invalidate explicitly.
+        if any(
+            k in body
+            for k in (
+                "show_cli_sessions",
+                "show_cron_sessions",
+                "show_previous_messaging_sessions",
+            )
+        ):
+            try:
+                _clear_session_list_cache()
+            except Exception:
+                pass
 
         auth_enabled_after = is_auth_enabled()
         auth_just_enabled = bool(
