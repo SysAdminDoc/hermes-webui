@@ -2686,54 +2686,55 @@ function renderModelDropdown(){
           if(closed) _forceOpenGroups.add(groupKey); else _forceOpenGroups.delete(groupKey);
           heading.classList.toggle('open',closed);
         });
-      }
-      const useSubGroups=(
-        wrapper &&
-        SUB_GROUP_PROVIDERS.has(meta.providerId) &&
-        groupRows.length>=SUB_GROUP_MIN_MODELS
-      );
-      if(useSubGroups){
-        const byPrefix=new Map();
-        for(const m of groupRows){
-          const pfx=_vendorPrefix(m.value)||'other';
-          if(!byPrefix.has(pfx)) byPrefix.set(pfx,[]);
-          byPrefix.get(pfx).push(m);
-        }
-        const sorted=[...byPrefix.entries()].sort((a,b)=>{
-          if(a[0]==='other') return 1;
-          if(b[0]==='other') return -1;
-          return b[1].length-a[1].length;
-        });
-        for(const [pfx,pfxRows] of sorted){
-          if(pfxRows.length>=2){
-            const subKey=`${groupKey}::${pfx}`;
-            if(!(subKey in _groupOpenState)) _groupOpenState[subKey]=true;
-            if(hasSearch) _groupOpenState[subKey]=true;
-            const subHeading=document.createElement('div');
-            subHeading.className='model-group sub collapsible';
-            subHeading.dataset.group=subKey;
-            if(_groupOpenState[subKey]) subHeading.classList.add('open');
-            subHeading.textContent=pfx;
-            const subWrapper=document.createElement('div');
-            subWrapper.className='model-group-body sub';
-            subWrapper.dataset.group=subKey;
-            if(!_groupOpenState[subKey]) subWrapper.style.display='none';
-            subHeading.addEventListener('click',(e)=>{
-              e.stopPropagation();
-              const closed=subWrapper.style.display==='none';
-              subWrapper.style.display=closed?'':'none';
-              _groupOpenState[subKey]=closed;
-              subHeading.classList.toggle('open',closed);
-            });
-            wrapper.appendChild(subHeading);
-            wrapper.appendChild(subWrapper);
-            for(const m of pfxRows) subWrapper.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
-          } else {
-            for(const m of pfxRows) wrapper.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
+        const useSubGroups=(
+          SUB_GROUP_PROVIDERS.has(meta.providerId) &&
+          groupRows.length>=SUB_GROUP_MIN_MODELS
+        );
+        if(useSubGroups){
+          const byPrefix=new Map();
+          for(const m of groupRows){
+            const pfx=_vendorPrefix(m.value)||'other';
+            if(!byPrefix.has(pfx)) byPrefix.set(pfx,[]);
+            byPrefix.get(pfx).push(m);
           }
+          const sorted=[...byPrefix.entries()].sort((a,b)=>{
+            if(a[0]==='other') return 1;
+            if(b[0]==='other') return -1;
+            return b[1].length-a[1].length;
+          });
+          for(const [pfx,pfxRows] of sorted){
+            if(pfxRows.length>=2){
+              const subKey=`${groupKey}::${pfx}`;
+              if(!(subKey in _groupOpenState)) _groupOpenState[subKey]=true;
+              if(hasSearch) _groupOpenState[subKey]=true;
+              const subHeading=document.createElement('div');
+              subHeading.className='model-group sub collapsible';
+              subHeading.dataset.group=subKey;
+              if(_groupOpenState[subKey]) subHeading.classList.add('open');
+              subHeading.textContent=pfx;
+              const subWrapper=document.createElement('div');
+              subWrapper.className='model-group-body sub';
+              subWrapper.dataset.group=subKey;
+              if(!_groupOpenState[subKey]) subWrapper.style.display='none';
+              subHeading.addEventListener('click',(e)=>{
+                e.stopPropagation();
+                const closed=subWrapper.style.display==='none';
+                subWrapper.style.display=closed?'':'none';
+                _groupOpenState[subKey]=closed;
+                subHeading.classList.toggle('open',closed);
+              });
+              wrapper.appendChild(subHeading);
+              wrapper.appendChild(subWrapper);
+              for(const m of pfxRows) subWrapper.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
+            } else {
+              for(const m of pfxRows) wrapper.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
+            }
+          }
+        } else {
+          for(const m of groupRows) wrapper.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
         }
-      } else if(wrapper){
-        for(const m of groupRows) wrapper.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
+      } else {
+        for(const m of groupRows) dd.appendChild(_makeModelRow(m,sel,shouldRenderHeading));
       }
       if(!term&&hiddenCount){
         const showAll=document.createElement('div');
