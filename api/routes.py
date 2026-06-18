@@ -949,6 +949,206 @@ def _load_gateway_session_identity_map() -> dict[str, dict]:
     return mapping.copy()
 
 
+def _gateway_status_payload() -> dict:
+    import datetime
+
+    identity_map = _load_gateway_session_identity_map()
+    sessions_path = _gateway_session_metadata_path()
+
+    # Detect whether the gateway process is alive, independent of connected
+    # messaging platforms. An empty identity_map means zero connected
+    # platforms, not necessarily a stopped gateway.
+    health = build_agent_health_payload()
+    alive = health.get("alive")
+    details = health.get("details") if isinstance(health.get("details"), dict) else {}
+    health_reason = details.get("reason")
+    health_state = details.get("state")
+    health_gateway_state = details.get("gateway_state")
+    if alive is True:
+        running = True
+        configured = True
+    elif alive is False:
+        running = False
+        configured = True
+    else:
+        gateway_running_metadata = (
+            health_reason == "gateway_stale_running_state"
+            or health_gateway_state == "running"
+        )
+        configured = True if gateway_running_metadata else bool(identity_map)
+        running = bool(identity_map)
+
+    platforms_set: set[str] = set()
+    for meta in identity_map.values():
+        raw = meta.get("raw_source") or meta.get("platform") or ""
+        norm = _normalize_messaging_source(raw)
+        if norm:
+            platforms_set.add(norm)
+    platform_labels = {
+        "telegram": "Telegram",
+        "discord": "Discord",
+        "slack": "Slack",
+        "email": "Email",
+        "web": "Web",
+        "api": "API",
+    }
+    platforms = sorted(
+        [{"name": p, "label": platform_labels.get(p, p.title())} for p in platforms_set],
+        key=lambda x: x["label"],
+    )
+    last_active = ""
+    if running and sessions_path.exists():
+        try:
+            mtime = sessions_path.stat().st_mtime
+            last_active = datetime.datetime.fromtimestamp(mtime).isoformat()
+        except Exception:
+            pass
+    return {
+        "running": running,
+        "configured": configured,
+        "platforms": platforms,
+        "last_active": last_active,
+        "session_count": len(identity_map),
+        "health": {
+            "state": health_state,
+            "reason": health_reason,
+            "gateway_state": health_gateway_state,
+        },
+    }
+
+
+_GATEWAY_LIFECYCLE_TIMEOUT_SECONDS = 60
+
+# Server-side single-flight guard for gateway lifecycle actions. The client
+# disables its button while a request is in flight, but a scripted authed
+# client could still fire overlapping start/stop/restart calls, spawning
+# concurrent `hermes gateway` subprocesses. Serialize them here (mirrors the
+# self-update _apply_lock pattern): a non-blocking acquire returns 409 on
+# contention rather than launching a second overlapping subprocess.
+_GATEWAY_ACTION_LOCK = threading.Lock()
+
+
+def _run_gateway_lifecycle_command(action: str) -> subprocess.CompletedProcess:
+    if action not in {"start", "stop", "restart"}:
+        raise ValueError("unsupported gateway action")
+
+    from api import config as api_config
+    from api.profiles import get_active_profile_name
+
+    agent_dir = getattr(api_config, "_AGENT_DIR", None)
+    if not agent_dir:
+        raise FileNotFoundError("Hermes agent checkout not found")
+    agent_dir = Path(agent_dir).expanduser().resolve()
+    main_py = agent_dir / "hermes_cli" / "main.py"
+    if not main_py.exists():
+        raise FileNotFoundError("Hermes agent CLI entrypoint not found")
+
+    cmd = [str(getattr(api_config, "PYTHON_EXE", sys.executable)), str(main_py)]
+    profile_name = ""
+    try:
+        profile_name = str(get_active_profile_name() or "").strip()
+    except Exception as exc:
+        logger.debug("Could not resolve active profile for gateway lifecycle: %s", exc)
+    if profile_name and profile_name != "default":
+        cmd.extend(["--profile", profile_name])
+    cmd.extend(["gateway", action])
+
+    env = os.environ.copy()
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("BROWSER", "echo")
+    return subprocess.run(
+        cmd,
+        cwd=str(agent_dir),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=_GATEWAY_LIFECYCLE_TIMEOUT_SECONDS,
+    )
+
+
+def _handle_gateway_lifecycle(handler, action: str, body: dict):
+    del body  # Reserved for future per-gateway naming without changing the route contract.
+    # Reject overlapping lifecycle actions instead of spawning concurrent
+    # `hermes gateway` subprocesses (a non-blocking acquire — the action holds
+    # the lock for at most _GATEWAY_LIFECYCLE_TIMEOUT_SECONDS).
+    if action not in {"start", "stop", "restart"}:
+        return bad(handler, "unsupported gateway action", 400)
+    if not _GATEWAY_ACTION_LOCK.acquire(blocking=False):
+        return j(
+            handler,
+            {
+                "ok": False,
+                "error": "Another gateway action is already in progress; try again shortly.",
+                "action": action,
+            },
+            status=409,
+        )
+    try:
+        result = _run_gateway_lifecycle_command(action)
+    except ValueError as exc:
+        return bad(handler, str(exc), 400)
+    except FileNotFoundError as exc:
+        return j(handler, {"ok": False, "error": _sanitize_error(exc), "action": action}, status=500)
+    except subprocess.TimeoutExpired as exc:
+        logger.warning(
+            "Gateway %s command timed out after %ss; stdout=%r stderr=%r",
+            action,
+            _GATEWAY_LIFECYCLE_TIMEOUT_SECONDS,
+            exc.stdout,
+            exc.stderr,
+        )
+        return j(
+            handler,
+            {
+                "ok": False,
+                "error": f"Gateway {action} timed out after {_GATEWAY_LIFECYCLE_TIMEOUT_SECONDS} seconds",
+                "action": action,
+            },
+            status=504,
+        )
+    except Exception as exc:
+        logger.exception("Gateway %s command failed before completion", action)
+        return j(handler, {"ok": False, "error": _sanitize_error(exc), "action": action}, status=500)
+    finally:
+        _GATEWAY_ACTION_LOCK.release()
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    if result.returncode != 0:
+        logger.warning(
+            "Gateway %s command failed with exit code %s; stdout=%r stderr=%r",
+            action,
+            result.returncode,
+            stdout,
+            stderr,
+        )
+        return j(
+            handler,
+            {
+                "ok": False,
+                "error": f"Gateway {action} failed with exit code {result.returncode}",
+                "action": action,
+                "returncode": result.returncode,
+            },
+            status=500,
+        )
+
+    return j(
+        handler,
+        {
+            "ok": True,
+            "action": action,
+            # Do NOT return captured stdout/stderr — the `hermes gateway` CLI
+            # prints service/PID/status details the browser shouldn't receive
+            # (mirrors the failure path, which already suppresses them). The
+            # frontend localizes its own success copy; the refreshed status
+            # payload carries the user-facing state.
+            "message": f"Gateway {action} completed.",
+            "status": _gateway_status_payload(),
+        },
+    )
+
+
 def _mark_cron_running(job_id: str):
     with _RUNNING_CRON_LOCK:
         _RUNNING_CRON_JOBS[job_id] = time.time()
@@ -1739,10 +1939,7 @@ def _session_list_payload_to_response(payload: dict) -> dict:
     safe_merged = []
     runtime_rows = _session_list_cache_overlay_runtime_rows(payload.get("sessions", []) or [])
     for s in runtime_rows:
-        item = dict(s) if isinstance(s, dict) else {}
-        if isinstance(item.get("title"), str):
-            item["title"] = _redact_text(item["title"])
-        item["attention"] = _session_attention_summary(str(item.get("session_id") or ""))
+        item = _sidebar_session_response_item(s) if isinstance(s, dict) else {}
         safe_merged.append(item)
     return {
         "sessions": safe_merged,
@@ -2396,7 +2593,7 @@ def _get_or_materialize_session(sid: str):
 
     # Preserve source metadata fields
     def _apply_source_meta(s):
-        s.is_cli_session = True
+        s.is_cli_session = is_cli_session_row(cli_meta)
         s.source_tag = cli_meta.get("source_tag")
         s.raw_source = cli_meta.get("raw_source") or cli_meta.get("source_tag")
         s.session_source = cli_meta.get("session_source")
@@ -4583,6 +4780,46 @@ def _normalize_sidebar_source_flags(session: dict) -> dict:
     return normalized
 
 
+def _reconcile_session_detail_source_flags(session: dict, state_meta: dict) -> dict:
+    """Return a /api/session payload whose source flags match state.db truth.
+
+    WebUI-origin sidecars can carry stale CLI/import flags after older repair or
+    import paths touched the JSON file. The sidebar projection already trusts the
+    state.db source row for those sessions; the detail endpoint must do the same
+    or the frontend opens a WebUI-native transcript as an external session and
+    starts the destructive active-refresh reload loop.
+    """
+    if not isinstance(session, dict):
+        return session
+    if not _session_source_is_webui(state_meta):
+        return dict(session)
+
+    reconciled = dict(session)
+    reconciled["is_cli_session"] = False
+    reconciled["read_only"] = False
+    reconciled["source_tag"] = _safe_first(state_meta.get("source_tag"), "webui")
+    reconciled["raw_source"] = _safe_first(state_meta.get("raw_source"), "webui")
+    reconciled["session_source"] = _safe_first(state_meta.get("session_source"), "webui")
+    reconciled["source_label"] = _safe_first(state_meta.get("source_label"), "WebUI")
+    if state_meta.get("source"):
+        reconciled["source"] = state_meta["source"]
+
+    for key in ("message_count", "actual_message_count"):
+        if state_meta.get(key) is not None:
+            reconciled[key] = max(
+                _numeric_count(reconciled.get(key)),
+                _numeric_count(state_meta.get(key)),
+            )
+    for key in ("created_at", "updated_at", "last_message_at"):
+        if state_meta.get(key) is not None:
+            current = reconciled.get(key)
+            try:
+                reconciled[key] = max(float(current or 0), float(state_meta.get(key) or 0))
+            except (TypeError, ValueError):
+                reconciled[key] = state_meta[key]
+    return reconciled
+
+
 def _session_source_is_webui(session: dict) -> bool:
     """Return True for state.db/sidebar rows that describe WebUI-origin sessions."""
     if not isinstance(session, dict):
@@ -4832,6 +5069,8 @@ from api.workspace import (
     make_anchored_dir,
     validate_workspace_to_add,
     _is_blocked_system_path,
+    _home_path,
+    _is_within,
     _strip_surrounding_quotes,
     _is_remote_terminal_backend,
     _workspace_blocked_roots,
@@ -4941,6 +5180,91 @@ def _session_attention_summary(session_id: str) -> dict | None:
             "severity": "question",
         }
     return None
+
+
+_SIDEBAR_SESSION_RESPONSE_FIELDS = {
+    "session_id",
+    "title",
+    "display_title",
+    "_state_db_title",
+    "workspace",
+    "model",
+    "model_provider",
+    "message_count",
+    "user_message_count",
+    "created_at",
+    "updated_at",
+    "last_message_at",
+    "pinned",
+    "archived",
+    "project_id",
+    "profile",
+    "input_tokens",
+    "output_tokens",
+    "estimated_cost",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "cache_hit_percent",
+    "personality",
+    "context_length",
+    "config_context_length",
+    "window_usage_percent",
+    "source_tag",
+    "raw_source",
+    "session_source",
+    "source_label",
+    "is_cli_session",
+    "is_messaging_session",
+    "is_streaming",
+    "active_stream_id",
+    "has_pending_user_message",
+    "pending_started_at",
+    "default_hidden",
+    "worktree_path",
+    "worktree_branch",
+    "parent_session_id",
+    "parent_title",
+    "parent_source",
+    "relationship_type",
+    "pre_compression_snapshot",
+    "_lineage_root_id",
+    "_lineage_tip_id",
+    "_compression_segment_count",
+    "_lineage_collapsed_count",
+    "_parent_lineage_root_id",
+    "_cross_surface_child_session",
+    "match_type",
+    "match_preview",
+    # Preserved so the sidebar can suppress rename / action-menu / swipe on
+    # read-only (imported CLI + Claude Code) sessions, and render the detailed
+    # gateway model label. Dropping these silently regressed both surfaces.
+    # Only the latest `gateway_routing` is included (the sidebar label reader
+    # prefers it); the unbounded `gateway_routing_history` is intentionally NOT
+    # sent in the list payload to avoid per-row bloat.
+    "read_only",
+    "is_read_only",
+    "gateway_routing",
+}
+
+
+def _sidebar_session_response_item(session: dict, *, redact_enabled: bool | None = None) -> dict:
+    """Return the bounded /api/sessions row shape used by the sidebar.
+
+    Full session/detail fields such as messages, tool calls, compression
+    summaries, context-engine state, gateway routing history, drafts, and
+    pending user text are intentionally excluded from the list endpoint. Large
+    installs should not ship tens of KB of per-row detail just to render a
+    conversation title.
+    """
+    item = {
+        key: value
+        for key, value in dict(session).items()
+        if key in _SIDEBAR_SESSION_RESPONSE_FIELDS
+    }
+    if isinstance(item.get("title"), str):
+        item["title"] = _redact_text(item["title"], _enabled=redact_enabled)
+    item["attention"] = _session_attention_summary(str(item.get("session_id") or ""))
+    return item
 
 
 # ── Login page locale strings ─────────────────────────────────────────────────
@@ -5278,6 +5602,9 @@ def _llm_wiki_config_path() -> str | None:
 # Cap WIKI walks to prevent self-DoS if WIKI_PATH points at /, /etc, /home, etc.
 # Real LLM wikis have under a few thousand files; 10k is generous and catches misconfig.
 _LLM_WIKI_MAX_FILES = 10000
+# Cap a single served wiki page at 2 MiB so a huge/binary file can't be slurped
+# wholesale into memory + a JSON response (DoS / memory-blowup guard).
+_LLM_WIKI_MAX_PAGE_BYTES = 2 * 1024 * 1024
 # Refuse to walk these system roots even if explicitly configured.
 _LLM_WIKI_FORBIDDEN_ROOTS = frozenset(
     str(Path(p).expanduser().resolve()) for p in ("/", "/etc", "/usr", "/var", "/opt", "/sys", "/proc")
@@ -5336,16 +5663,31 @@ def _llm_wiki_count_files(root: Path) -> int:
 
 def _llm_wiki_page_files(wiki_path: Path) -> list[Path]:
     pages: list[Path] = []
-    # Defense in depth: refuse forbidden system roots.
+    # Defense in depth: refuse forbidden system roots, and resolve the wiki root
+    # ONCE as the single trust base for all containment checks below.
     try:
-        if str(wiki_path.resolve()) in _LLM_WIKI_FORBIDDEN_ROOTS:
+        wiki_real = wiki_path.resolve()
+        if str(wiki_real) in _LLM_WIKI_FORBIDDEN_ROOTS:
             return pages
     except Exception:
         return pages
+
+    def _is_clean_relpath(rel: Path) -> bool:
+        # No dot-prefixed segment (dotfile/dotdir) anywhere in the path.
+        return not any(part.startswith(".") for part in rel.parts)
+
     iterated = 0
     for dirname in _LLM_WIKI_PAGE_DIRS:
         section = wiki_path / dirname
         if not section.exists() or not section.is_dir():
+            continue
+        # The section itself must resolve UNDER the real wiki root — guards a
+        # symlinked section (e.g. concepts -> /tmp/outside) from exposing files
+        # outside the wiki tree entirely.
+        try:
+            section_real = section.resolve()
+            section_real.relative_to(wiki_real)
+        except (OSError, ValueError):
             continue
         for item in section.rglob("*.md"):
             iterated += 1
@@ -5353,9 +5695,21 @@ def _llm_wiki_page_files(wiki_path: Path) -> list[Path]:
                 return pages  # bounded
             try:
                 rel = item.relative_to(section)
-                if item.is_file() and not any(part.startswith(".") for part in rel.parts):
-                    pages.append(item)
-            except Exception:
+                if not item.is_file() or not _is_clean_relpath(rel):
+                    continue
+                # Resolve the real target and require it to live under BOTH the
+                # real wiki root and the real section, with no dot-prefixed
+                # segment on the resolved-relative path. This closes symlink
+                # escapes whose link name looks like a clean *.md page but whose
+                # target is an arbitrary / hidden / out-of-tree file (the read
+                # endpoint would otherwise serve it).
+                item_real = item.resolve()
+                item_real.relative_to(section_real)
+                rel_real = item_real.relative_to(wiki_real)
+                if not _is_clean_relpath(rel_real):
+                    continue
+                pages.append(item)
+            except (OSError, ValueError):
                 continue
     return pages
 
@@ -6712,6 +7066,91 @@ def handle_get(handler, parsed) -> bool:
         return True
     if parsed.path == "/api/wiki/status":
         return _handle_llm_wiki_status(handler, parsed)
+    if parsed.path == "/api/wiki/browse":
+        wiki_root, _, _ = _llm_wiki_resolve_path()
+        if not wiki_root or not os.path.isdir(wiki_root):
+            return bad(handler, "Wiki not configured or directory not found", status=404)
+        page_paths = _llm_wiki_page_files(wiki_root)
+        pages = []
+        for fp in sorted(page_paths, key=lambda p: str(p).lower()):
+            try:
+                rel = fp.relative_to(wiki_root)
+            except ValueError:
+                continue
+            try:
+                st = fp.stat()
+            except OSError:
+                continue
+            pages.append({"name": fp.name, "path": str(rel).replace("\\", "/"), "size": st.st_size, "mtime": int(st.st_mtime)})
+        return j(handler, {"pages": pages})
+    if parsed.path == "/api/wiki/page":
+        wiki_root, _, _ = _llm_wiki_resolve_path()
+        page_path = parse_qs(parsed.query or "").get("path", [""])[0]
+        if not wiki_root or not page_path:
+            return bad(handler, "Wiki not configured or path not provided", status=400)
+        # Reject a real `..` path SEGMENT (or absolute path), not the bare
+        # substring — a legitimate listed filename like `v1..v2.md` contains
+        # ".." without being traversal. Containment + the resolved-allowlist
+        # membership check below are the actual security boundary.
+        _page_parts = page_path.replace("\\", "/").split("/")
+        if os.path.isabs(page_path) or any(part == ".." for part in _page_parts):
+            return bad(handler, "Invalid path", status=400)
+        full_path = Path(os.path.join(wiki_root, page_path))
+        if not _skill_path_within(Path(wiki_root), full_path):
+            return bad(handler, "Invalid path", status=400)
+        # Only serve files the browse/list path would surface (same allowlist:
+        # *.md under the wiki page-dirs, no dotfiles, forbidden-roots guard).
+        # Without this the read endpoint could return ANY file inside the wiki
+        # root (e.g. .env / .git/config / non-.md), since containment alone
+        # doesn't constrain which files are readable (Opus review finding).
+        # Capture each allowlisted page's STABLE IDENTITY (st_dev, st_ino) so the
+        # post-open fstat below can detect a file/parent-dir swapped in after the
+        # allowlist check (TOCTOU write-race, Codex finding) — a pathname re-open
+        # alone can't, since O_NOFOLLOW only guards the final component, not a
+        # swapped parent directory.
+        allowed_identity: dict[Path, tuple] = {}
+        try:
+            for _p in _llm_wiki_page_files(Path(wiki_root)):
+                try:
+                    rp = _p.resolve()
+                    st0 = rp.stat()
+                    allowed_identity[rp] = (st0.st_dev, st0.st_ino)
+                except OSError:
+                    continue
+        except Exception:
+            allowed_identity = {}
+        try:
+            resolved_target = full_path.resolve()
+        except OSError:
+            return bad(handler, "Page not found", status=404)
+        if resolved_target not in allowed_identity:
+            return bad(handler, "Page not found", status=404)
+        # Read the ALREADY-RESOLVED, allowlisted real path with O_NOFOLLOW so a
+        # symlink swapped in for the final component between the allowlist check
+        # and the read is refused rather than followed. Then fstat the open fd
+        # and require its (st_dev, st_ino) to match the identity captured during
+        # allowlisting — this closes a parent-directory swap that O_NOFOLLOW
+        # would otherwise follow. Any mismatch / vanished / swapped page returns
+        # a clean 404, never a 500.
+        try:
+            fd = os.open(str(resolved_target), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                st_open = os.fstat(fd)
+                if (st_open.st_dev, st_open.st_ino) != allowed_identity[resolved_target]:
+                    return bad(handler, "Page not found", status=404)
+                raw = os.read(fd, _LLM_WIKI_MAX_PAGE_BYTES + 1)
+            finally:
+                os.close(fd)
+            if len(raw) > _LLM_WIKI_MAX_PAGE_BYTES:
+                raw = raw[:_LLM_WIKI_MAX_PAGE_BYTES]
+            content = raw.decode("utf-8", errors="replace")
+        except (FileNotFoundError, IsADirectoryError):
+            return bad(handler, "Page not found", status=404)
+        except OSError:
+            # ELOOP (symlink swapped in under O_NOFOLLOW) or any other read
+            # failure → clean 404, never a 500.
+            return bad(handler, "Could not read page", status=404)
+        return j(handler, {"content": content, "path": page_path})
     if parsed.path == "/api/logs":
         return _handle_logs(handler, parsed)
 
@@ -6737,7 +7176,9 @@ def handle_get(handler, parsed) -> bool:
         return j(handler, get_available_models())
 
     if parsed.path == "/api/models/live":
-        return _handle_live_models(handler, parsed)
+        from api.profiles import profile_env_for_active_request
+        with profile_env_for_active_request("/api/models/live", logger_override=logger):
+            return _handle_live_models(handler, parsed)
 
     # ── Auxiliary models (GET/POST) ──
     if parsed.path == "/api/model/auxiliary":
@@ -7119,7 +7560,9 @@ def handle_get(handler, parsed) -> bool:
                     float(raw.get("updated_at") or 0),
                     _merged_last_message_at,
                 )
-            if cli_meta and _is_messaging_session_record(cli_meta):
+            if cli_meta and _session_source_is_webui(cli_meta):
+                raw = _reconcile_session_detail_source_flags(raw, cli_meta)
+            elif cli_meta and _is_messaging_session_record(cli_meta):
                 raw = _merge_cli_sidebar_metadata(raw, cli_meta)
                 # ``message_count`` in /api/session is the display coordinate
                 # space used for pagination and the header badge. Messaging
@@ -7324,7 +7767,7 @@ def handle_get(handler, parsed) -> bool:
                 diag=diag,
             )
             diag.stage("response_write")
-            return j(handler, _session_list_payload_to_response(payload))
+            return j(handler, _session_list_payload_to_response(payload), pretty=False)
         finally:
             diag.finish()
 
@@ -7734,97 +8177,7 @@ def handle_get(handler, parsed) -> bool:
 
     # ── Gateway Status (GET) ──
     if parsed.path == "/api/gateway/status":
-        import datetime
-        identity_map = _load_gateway_session_identity_map()
-        sessions_path = _gateway_session_metadata_path()
-
-        # Detect whether the gateway process is alive, independent of
-        # connected messaging platforms.  An empty identity_map just
-        # means zero platforms connected, not that the gateway is down.
-        #
-        # agent_health.build_agent_health_payload() is the authoritative
-        # signal: it reads gateway.status runtime metadata and returns a
-        # tri-state `alive` field (True/False/None).  This avoids the
-        # false-negative where the gateway is running but has zero active
-        # messaging sessions (empty identity_map).
-        #
-        # `alive` tri-state semantics:
-        #   True  → gateway process is alive
-        #   False → gateway metadata exists but process is down
-        #   None  → no gateway metadata/status available; this WebUI
-        #           setup is probably not configured with a gateway
-        health = build_agent_health_payload()
-        alive = health.get("alive")
-        details = health.get("details") if isinstance(health.get("details"), dict) else {}
-        health_reason = details.get("reason")
-        health_state = details.get("state")
-        health_gateway_state = details.get("gateway_state")
-        if alive is True:
-            running = True
-            configured = True
-        elif alive is False:
-            running = False
-            configured = True
-        else:  # alive is None
-            # `alive is None` conflates two very different states:
-            #   (a) no gateway metadata at all → genuinely not configured
-            #   (b) gateway metadata EXISTS but is stale/inconclusive.
-            # A stale-but-RUNNING gateway (freshly started, hasn't ticked
-            # `updated_at` yet, or cross-container) still proves the gateway is
-            # *configured* — the banner must not report "Gateway not configured"
-            # just because no conversation has happened yet and identity_map is
-            # empty (#3194).
-            #
-            # A stale-STOPPED gateway is deliberately NOT treated as configured:
-            # agent_health emits `gateway_stale_stopped_state` precisely so a
-            # stopped service the user isn't running reads like "no root gateway
-            # configured" rather than nagging (#1944). So stale-stopped falls
-            # through to the identity_map signal like the genuinely-unconfigured
-            # case.
-            gateway_running_metadata = (
-                health_reason == "gateway_stale_running_state"
-                or health_gateway_state == "running"
-            )
-            configured = True if gateway_running_metadata else bool(identity_map)
-            running = bool(identity_map)
-
-        platforms_set: set[str] = set()
-        for meta in identity_map.values():
-            raw = meta.get("raw_source") or meta.get("platform") or ""
-            norm = _normalize_messaging_source(raw)
-            if norm:
-                platforms_set.add(norm)
-        _PLATFORM_LABELS = {
-            "telegram": "Telegram",
-            "discord": "Discord",
-            "slack": "Slack",
-            "email": "Email",
-            "web": "Web",
-            "api": "API",
-        }
-        platforms = sorted(
-            [{"name": p, "label": _PLATFORM_LABELS.get(p, p.title())} for p in platforms_set],
-            key=lambda x: x["label"],
-        )
-        last_active = ""
-        if running and sessions_path.exists():
-            try:
-                mtime = sessions_path.stat().st_mtime
-                last_active = datetime.datetime.fromtimestamp(mtime).isoformat()
-            except Exception:
-                pass
-        return j(handler, {
-            "running": running,
-            "configured": configured,
-            "platforms": platforms,
-            "last_active": last_active,
-            "session_count": len(identity_map),
-            "health": {
-                "state": health_state,
-                "reason": health_reason,
-                "gateway_state": health_gateway_state,
-            },
-        })
+        return j(handler, _gateway_status_payload())
 
     # ── MCP Servers (GET) ──
     if parsed.path == "/api/mcp/servers":
@@ -9234,6 +9587,9 @@ def handle_post(handler, parsed) -> bool:
     if parsed.path == "/api/memory/write":
         return _handle_memory_write(handler, body)
 
+    if parsed.path in {"/api/gateway/start", "/api/gateway/stop", "/api/gateway/restart"}:
+        return _handle_gateway_lifecycle(handler, parsed.path.rsplit("/", 1)[-1], body)
+
     # ── Profile API (POST) ──
     if parsed.path == "/api/profile/switch":
         name = body.get("name", "").strip()
@@ -9580,7 +9936,7 @@ def handle_post(handler, parsed) -> bool:
                     created_at=cli_meta.get("created_at"),
                     updated_at=cli_meta.get("updated_at"),
                 )
-                s.is_cli_session = True
+                s.is_cli_session = is_cli_session_row(cli_meta)
                 s.source_tag = cli_meta.get("source_tag")
                 s.raw_source = cli_meta.get("raw_source") or cli_meta.get("source_tag")
                 s.session_source = cli_meta.get("session_source")
@@ -9605,7 +9961,7 @@ def handle_post(handler, parsed) -> bool:
                     created_at=cli_meta.get("created_at"),
                     updated_at=cli_meta.get("updated_at"),
                 )
-                s.is_cli_session = True
+                s.is_cli_session = is_cli_session_row(cli_meta)
                 s.source_tag = cli_meta.get("source_tag")
                 s.raw_source = cli_meta.get("raw_source") or cli_meta.get("source_tag")
                 s.session_source = cli_meta.get("session_source")
@@ -11149,6 +11505,7 @@ def _handle_tts(handler, parsed):
     voice = "zh-CN-XiaoxiaoNeural"
     rate_str = ""
     pitch_str = ""
+    engine = "edge"  # "edge" | "elevenlabs" | "browser" (browser is client-side only)
 
     if handler.command != "POST":
         from api.helpers import bad as _bad
@@ -11160,6 +11517,7 @@ def _handle_tts(handler, parsed):
         voice = data.get("voice") or voice
         rate_str = _normalize_tts_prosody(data.get("rate"), unit="%")
         pitch_str = _normalize_tts_prosody(data.get("pitch"), unit="Hz")
+        engine = (data.get("engine") or "edge").strip().lower()
     except Exception:
         from api.helpers import bad as _bad
         return _bad(handler, "invalid request body", 400)
@@ -11232,6 +11590,90 @@ def _handle_tts(handler, parsed):
         from api.helpers import bad as _bad
         return _bad(handler, "rate limit exceeded — please wait", 429)
 
+    # ── ElevenLabs TTS ──────────────────────────────────────────────────
+    if engine == "elevenlabs":
+        api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+        if not api_key:
+            # Fall back to reading from Hermes .env file
+            try:
+                from api.onboarding import _load_env_file
+                from api.profiles import get_active_hermes_home
+                api_key = _load_env_file(get_active_hermes_home() / ".env").get("ELEVENLABS_API_KEY", "")
+            except Exception:
+                pass
+        if not api_key:
+            from api.helpers import bad as _bad
+            return _bad(handler, "ELEVENLABS_API_KEY not configured", 503)
+
+        # Resolve voice_id from Hermes config.yaml → env fallback
+        voice_id = "pNInz6obpgDQGcFmaJgB"  # Adam (same default as hermes-agent config.yaml)
+        model_id = "eleven_multilingual_v2"
+        try:
+            from api.config import get_config
+            tts_cfg = (get_config() or {}).get("tts", {})
+            if isinstance(tts_cfg, dict):
+                el_cfg = tts_cfg.get("elevenlabs", {})
+                if isinstance(el_cfg, dict):
+                    voice_id = el_cfg.get("voice_id", voice_id)
+                    model_id = el_cfg.get("model", model_id) or el_cfg.get("model_id", model_id)
+                    # ^ treat empty string as "not set" — fall through to default
+        except Exception:
+            pass  # fall back to defaults
+
+        # Validate voice_id is a safe path segment (no traversal)
+        # fullmatch (not match) so a trailing newline can't slip past the `$`
+        # anchor — defense-in-depth on the config-derived voice_id before it
+        # goes into the request URL (#3510 review).
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', voice_id):
+            from api.helpers import bad as _bad
+            return _bad(handler, "invalid voice_id in config", 400)
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream?output_format=mp3_44100_128"
+        req_body = json.dumps({
+            "text": text,
+            "model_id": model_id,
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+        }).encode("utf-8")
+
+        from urllib.request import Request, urlopen as _urlopen
+
+        req = Request(url, data=req_body, headers={
+            "xi-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        })
+
+        # Buffer the full response before sending first byte.
+        # The streaming endpoint is designed for chunked delivery, but urllib's
+        # chunked-read path adds per-chunk overhead that dominates short TTS
+        # payloads. With the 5000-char cap enforced above the buffer is bounded
+        # (a few MB of mp3 worst case), so full-buffer-then-send is faster in
+        # practice and simpler to reason about.
+        audio_data = b""
+        try:
+            with _urlopen(req, timeout=30) as resp:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    audio_data += chunk
+        except Exception:
+            logger.exception("ElevenLabs TTS generation failed")
+            from api.helpers import bad as _bad
+            return _bad(handler, "ElevenLabs TTS generation failed", 500)
+
+        handler.send_response(200)
+        handler.send_header("Content-Type", "audio/mpeg")
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Content-Length", str(len(audio_data)))
+        handler.end_headers()
+        try:
+            handler.wfile.write(audio_data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        return True
+
+    # ── Edge TTS ────────────────────────────────────────────────────────
     allowed = {
         "zh-CN-XiaoxiaoNeural", "zh-CN-XiaoyiNeural", "zh-CN-YunxiNeural",
         "zh-CN-YunjianNeural", "zh-CN-YunyangNeural",
@@ -12427,6 +12869,23 @@ def _handle_live_models(handler, parsed):
                     _model_cfg = cfg.get("model", {})
                     _base_url = _model_cfg.get("base_url")
                     _api_key = _model_cfg.get("api_key")
+                # Fallback: try credential pool for base_url + api_key
+                if (not _base_url or not _api_key) and provider.startswith("custom:"):
+                    try:
+                        from api.config import _has_explicit_pool_credentials, _resolve_provider_alias
+                        if _has_explicit_pool_credentials(provider):
+                            from agent.credential_pool import load_pool as _lpool
+                            _resolved = _resolve_provider_alias(provider)
+                            _lm_pool = _lpool(_resolved)
+                            if _lm_pool:
+                                _lm_entry = _lm_pool.select()
+                                if _lm_entry:
+                                    if not _api_key:
+                                        _api_key = getattr(_lm_entry, "runtime_api_key", "") or ""
+                                    if not _base_url:
+                                        _base_url = str(getattr(_lm_entry, "base_url", "") or "").strip()
+                    except ImportError:
+                        pass
                 if _base_url and _api_key:
                     try:
                         import urllib.request
@@ -14325,6 +14784,7 @@ def _handle_chat_sync(handler, body):
         _next_context_messages = _dedupe_replayed_context_messages(
             _previous_context_messages,
             _next_context_messages,
+            msg,
         )
         s.context_messages = _next_context_messages
         s.messages = _merge_display_messages_after_agent_result(
@@ -15420,9 +15880,23 @@ def _handle_workspace_add(handler, body):
     # _is_blocked_system_path honours user-tmp carve-outs (e.g. /var/folders on
     # macOS) so pytest's tmp_path_factory paths and other legit user-tmp dirs
     # still register cleanly.
-    candidate = Path(path_str).expanduser().resolve()
+    try:
+        candidate = Path(path_str).expanduser().resolve()
+    except (ValueError, OSError, RuntimeError) as e:
+        # Invalid path (e.g. embedded null byte) — fail closed with a clean 400
+        # instead of letting .resolve() raise an uncaught 500.
+        return bad(handler, f"Invalid path: {_sanitize_error(e)}")
     if _is_blocked_system_path(candidate):
-        return bad(handler, f"Path points to a system directory: {candidate}")
+        # Home-directory carve-out, mirroring the validators
+        # (resolve_trusted_workspace / validate_workspace_to_add): a workspace
+        # at or under the active user's home must stay allowed even when that
+        # home lives under an otherwise-blocked root (e.g. systemd-homed
+        # /var/home/<user>/...). Without this the route rejects valid
+        # /var/home workspaces before validate_workspace_to_add()'s carve-out
+        # can run.
+        _home = _home_path()
+        if not (_home != Path("/") and (candidate == _home or _is_within(candidate, _home))):
+            return bad(handler, f"Path points to a system directory: {candidate}")
     # Now safe to create the directory if requested
     if auto_create:
         try:
