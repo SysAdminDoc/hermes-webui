@@ -100,3 +100,28 @@ def test_restore_checkpoint_reads_git_blob_after_worktree_symlink_swap(tmp_path,
     assert "POST_COMMIT_SECRET_MARKER_SHOULD_NOT_COPY" not in (workspace / "file.txt").read_text(
         encoding="utf-8"
     )
+
+
+def test_checkpoint_diff_renders_large_workspace_file_as_modified_not_deleted(tmp_path, monkeypatch):
+    """Regression (Codex gate): a large but legitimate workspace file (> the
+    read_file_content MAX_FILE_BYTES 400KB cap) that differs from the checkpoint
+    must render as MODIFIED, not be silently dropped to None and reported as
+    DELETED. The symlink-safe workspace reader must have no size cap.
+    """
+    workspace, ckpt_dir, checkpoint = _init_checkpoint(tmp_path, monkeypatch)
+    # Checkpoint has a small version of the file.
+    _commit_checkpoint_file(ckpt_dir, "big.txt", "old small checkpoint content\n")
+    # Workspace has a LARGE (> 400KB) modified version of the same file.
+    big_content = "X" * (500 * 1024) + "\nMODIFIED_LARGE_MARKER\n"
+    (workspace / "big.txt").write_text(big_content, encoding="utf-8")
+
+    result = rollback.get_checkpoint_diff(str(workspace), checkpoint)
+
+    # The file must appear in the diff as a change, NOT be treated as deleted.
+    assert "big.txt" in result["diff"]
+    statuses = {f["file"]: f.get("status") for f in result["files_changed"]}
+    assert statuses.get("big.txt") == "modified", (
+        "a large modified workspace file must render as modified, not deleted "
+        "(the capped read_file_content path regressed this): got "
+        f"{statuses.get('big.txt')!r}"
+    )

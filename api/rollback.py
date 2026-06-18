@@ -153,17 +153,37 @@ def _read_checkpoint_text(git: str, ckpt_dir: Path, modes: dict[str, int], rel_p
 
 
 def _read_workspace_text(workspace_root: Path, rel_path: str) -> str | None:
-    """Read workspace text through the anchored workspace file API.
+    """Read workspace text symlink-safely without the size cap of read_file_content.
 
-    The normal workspace helpers reject traversal and symlink escapes. Treat
-    invalid or unreadable files as absent so the diff does not imply that the
-    workspace contains an empty file.
+    Resolves the path under the workspace (rejecting traversal/symlink escapes)
+    and opens it through an anchored, O_NOFOLLOW file descriptor so a symlink
+    component cannot redirect the read outside the workspace boundary. Unlike
+    ``read_file_content``, this has no MAX_FILE_BYTES cap — a large but legitimate
+    regular file must render as *modified*, not be silently dropped (which would
+    make the rollback diff falsely report it as *deleted*). Treat missing /
+    invalid / escape / non-regular paths as absent (None).
     """
-    from api.workspace import read_file_content
+    from api.workspace import open_anchored_fd, safe_resolve_ws
 
     try:
-        return read_file_content(workspace_root, rel_path)["content"]
-    except (FileNotFoundError, OSError, ValueError):
+        target = safe_resolve_ws(workspace_root, rel_path)
+    except (ValueError, OSError):
+        return None
+    try:
+        fd = open_anchored_fd(workspace_root, target, want_dir=False)
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            return None
+        with os.fdopen(fd, "rb") as fh:
+            return fh.read().decode(errors="replace")
+    except OSError:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
         return None
 
 
