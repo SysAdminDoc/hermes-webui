@@ -3804,18 +3804,43 @@ def _sqlite_content_fingerprint(db_path: Path):
         return None
     try:
         import sqlite3
-        with closing(sqlite3.connect(str(db_path))) as conn:
+        # Read-only + a tiny busy timeout: a fingerprint read must NEVER stall the
+        # /api/sessions hot path when state.db is briefly locked by a writer.
+        # On lock (or any error) we return None and the caller falls back to the
+        # cheap file-stat stamp, so correctness degrades gracefully to the prior
+        # behavior rather than blocking for the default multi-second busy timeout.
+        try:
+            conn = sqlite3.connect(
+                f"file:{db_path}?mode=ro", uri=True, timeout=0.05
+            )
+        except Exception:
+            return None
+        try:
+            conn.execute("PRAGMA busy_timeout=50")
             parts = []
             for table in ("sessions", "messages"):
                 try:
+                    # MAX(rowid) is an O(1) index lookup (no table scan) and
+                    # advances on every INSERT. Pair it with the table's largest
+                    # rowid + a count-free total: we deliberately avoid COUNT(*)
+                    # which forces a full SCAN on large messages tables (~tens of
+                    # ms per sidebar refresh on a big store). MAX(rowid) misses a
+                    # pure DELETE-without-insert, but the file-stat fallback in
+                    # _sqlite_file_stat_cache_key still moves on a delete commit,
+                    # and a delete never makes a MISSING row appear (the flake we
+                    # fix is an ADDED row not showing up).
                     row = conn.execute(
-                        f"SELECT COUNT(*), COALESCE(MAX(rowid), 0) FROM {table}"
+                        f"SELECT MAX(rowid) FROM {table}"
                     ).fetchone()
-                    parts.append((row[0], row[1]))
+                    parts.append(row[0] if row else None)
                 except Exception:
-                    # Table may not exist yet on a fresh/partial db — treat as empty.
-                    parts.append((0, 0))
+                    parts.append(None)
             return tuple(parts)
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
     except Exception:
         return None
 

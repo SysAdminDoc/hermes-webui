@@ -90,6 +90,7 @@ def test_content_fingerprint_safe_on_missing_or_empty_db():
     conn.execute("CREATE TABLE unrelated(x)")
     conn.commit()
     conn.close()
-    # No sessions/messages tables → zeroed parts, no exception.
+    # No sessions/messages tables → None parts (MAX(rowid) on a missing table),
+    # no exception. Shape is a 2-tuple of (sessions_max_rowid, messages_max_rowid).
     fp = _sqlite_content_fingerprint(p)
-    assert fp == ((0, 0), (0, 0))
+    assert fp == (None, None)
