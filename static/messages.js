@@ -1423,6 +1423,23 @@ async function send(){
 
 const LIVE_STREAMS={};
 
+// #4416: track whether the tab was hidden at ANY point during a live stream, so
+// the response-complete notification fires for a backgrounded tab even when
+// Chromium throttles the background-tab SSE and delivers the `done` event LATE
+// (after the user returns, when document.hidden already reads false). Keyed by
+// session id; set at stream attach, OR'd true whenever the tab goes hidden,
+// read + cleared at done. One idempotent visibilitychange listener (never
+// leaks) flips the bit on all active entries.
+const _STREAM_WAS_HIDDEN={};
+let _streamHiddenTrackerBound=false;
+function _bindStreamHiddenTracker(){
+  if(_streamHiddenTrackerBound||typeof document==='undefined'||typeof document.addEventListener!=='function') return;
+  _streamHiddenTrackerBound=true;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){ for(const k in _STREAM_WAS_HIDDEN) _STREAM_WAS_HIDDEN[k]=true; }
+  });
+}
+
 function closeLiveStream(sessionId, streamId, source){
   const live=LIVE_STREAMS[sessionId];
   if(!live) return;
@@ -1489,6 +1506,12 @@ function closeOtherLiveStreams(activeSid){
 function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
   if(!activeSid||!streamId) return;
   const reconnecting=!!options.reconnecting;
+  // #4416: start (or, on reconnect, keep) tracking whether the tab was hidden
+  // during this stream so the done-notification fires for a backgrounded tab.
+  _bindStreamHiddenTracker();
+  if(!reconnecting||!(activeSid in _STREAM_WAS_HIDDEN)){
+    _STREAM_WAS_HIDDEN[activeSid]=(typeof document!=='undefined'&&!!document.hidden);
+  }
   if(!INFLIGHT[activeSid]) INFLIGHT[activeSid]={messages:[...S.messages],uploaded:[...uploaded],toolCalls:[]};
   else {
     if(uploaded.length) INFLIGHT[activeSid].uploaded=[...uploaded];
@@ -3532,7 +3555,14 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
         renderSessionList();
         _setActivePaneIdleIfOwner();
         playNotificationSound();
-        sendBrowserNotification('Response complete',assistantText?assistantText.slice(0,100):'Task finished',{sid:activeSid});
+        // #4416: notify if the tab was hidden at ANY point during this stream
+        // (not just at done-receive time, which a throttled background-tab SSE
+        // delivers late — after the user returns and document.hidden is false).
+        // If the user watched the whole stream, _wasEverHidden stays false and
+        // the notification is suppressed (matches Slack/Discord/Gmail/Claude).
+        const _wasEverHidden=!!_STREAM_WAS_HIDDEN[activeSid];
+        delete _STREAM_WAS_HIDDEN[activeSid];
+        sendBrowserNotification('Response complete',assistantText?assistantText.slice(0,100):'Task finished',{forceHidden:_wasEverHidden,sid:activeSid});
       };
       if(_shouldUseStreamFade()&&assistantBody){
         _cancelAnimationFramePendingStreamRender();
@@ -5351,7 +5381,15 @@ function requestNotificationPermission(){
 }
 function sendBrowserNotification(title,body,options={}){
   const force=!!(options&&options.force);
-  if(!force&&(!window._notificationsEnabled||!document.hidden)) return;
+  // #4416: `forceHidden` means the caller already determined the tab was hidden
+  // during the relevant window (e.g. a stream that ran while backgrounded), so
+  // the live `document.hidden` visibility gate — which a late, throttled SSE
+  // makes unreliable — should be treated as satisfied. The user's
+  // notifications-enabled SETTING is still honored (unlike `force`, which is the
+  // explicit "Send test" override); only the visibility gate is bypassed.
+  const forceHidden=!!(options&&options.forceHidden);
+  if(!force&&!window._notificationsEnabled) return;
+  if(!force&&!forceHidden&&!document.hidden) return;
   if(!('Notification' in window)) return;
   if(Notification.permission==='granted'){
     _showPwaNotification(title,body,options).catch(()=>{try{new Notification(title||assistantDisplayName(),_notificationOptions(body,options));}catch(_err){}});
