@@ -1765,9 +1765,9 @@ const assistantStart = fn.indexOf('if(!currentAssistantTurn){');
 const assistantEnd = fn.indexOf('const seg=document.createElement', assistantStart);
 const assistantBranch = fn.slice(assistantStart, assistantEnd);
 console.log(JSON.stringify({
-  rewrites_role_header: assistantBranch.includes(\"role.outerHTML=_assistantRoleHtml(\"),
-  refreshes_session_id: assistantBranch.includes(\"currentAssistantTurn.dataset.sessionId=S.session.session_id\"),
-  clears_transparent_collapse: assistantBranch.includes(\"recycled.removeAttribute('data-transparent-turn-collapsed')\"),
+  rewrites_role_header: assistantBranch.includes('role.outerHTML=_assistantRoleHtml('),
+  refreshes_session_id: assistantBranch.includes('currentAssistantTurn.dataset.sessionId=S.session.session_id'),
+  clears_transparent_collapse: assistantBranch.includes("recycled.removeAttribute('data-transparent-turn-collapsed')"),
 }));
 """
         out = json.loads(_run_node(source))
