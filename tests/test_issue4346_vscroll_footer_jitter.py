@@ -1759,17 +1759,33 @@ console.log(JSON.stringify({
 
     def test_recycled_assistant_turn_refreshes_role_header(self):
         """Recycled assistant turns must refresh timestamp and TPS header markup."""
-        source = _extract_func_script(JS) + r"""
+        role_header_needle = json.dumps("role.outerHTML=_assistantRoleHtml(")
+        session_id_needle = json.dumps(
+            "currentAssistantTurn.dataset.sessionId=S.session.session_id"
+        )
+        transparent_collapse_needle = json.dumps(
+            "recycled.removeAttribute('data-transparent-turn-collapsed')"
+        )
+        source = (
+            _extract_func_script(JS)
+            + """
 const fn = extractFunc('renderMessages');
 const assistantStart = fn.indexOf('if(!currentAssistantTurn){');
 const assistantEnd = fn.indexOf('const seg=document.createElement', assistantStart);
 const assistantBranch = fn.slice(assistantStart, assistantEnd);
 console.log(JSON.stringify({
-  rewrites_role_header: assistantBranch.includes('role.outerHTML=_assistantRoleHtml('),
-  refreshes_session_id: assistantBranch.includes('currentAssistantTurn.dataset.sessionId=S.session.session_id'),
-  clears_transparent_collapse: assistantBranch.includes("recycled.removeAttribute('data-transparent-turn-collapsed')"),
+  rewrites_role_header: assistantBranch.includes("""
+            + role_header_needle
+            + """),
+  refreshes_session_id: assistantBranch.includes("""
+            + session_id_needle
+            + """),
+  clears_transparent_collapse: assistantBranch.includes("""
+            + transparent_collapse_needle
+            + """),
 }));
 """
+        )
         out = json.loads(_run_node(source))
         assert out["rewrites_role_header"] is True, \
             "recycled assistant turns must refresh the role header"
