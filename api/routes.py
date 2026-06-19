@@ -5917,6 +5917,16 @@ def _llm_wiki_page_files_uncached(wiki_path: Path) -> list[Path]:
                 rel = item.relative_to(section)
                 if not item.is_file() or not _is_clean_relpath(rel):
                     continue
+                # Reject multi-link (hardlinked) page files. A hardlink at a
+                # clean *.md name can point at an arbitrary inode (incl. one
+                # outside the wiki); O_NOFOLLOW + inode-identity at read time
+                # cannot tell such a hardlink apart from the real page, so
+                # exclude any file with st_nlink > 1 from the allowlist. (#4375)
+                try:
+                    if item.lstat().st_nlink > 1:
+                        continue
+                except OSError:
+                    continue
                 # Resolve the real target and require it to live under BOTH the
                 # real wiki root and the real section, with no dot-prefixed
                 # segment on the resolved-relative path. This closes symlink
@@ -6004,6 +6014,12 @@ def _llm_wiki_allowlisted_entries(wiki_path: Path) -> dict[str, tuple[Path, tupl
                 resolved_target = listed_path.resolve()
                 resolved_target.relative_to(section_real)
                 if not resolved_target.is_file():
+                    continue
+                # Reject hardlinked targets (st_nlink > 1): a multi-link file at
+                # a clean page name can carry an arbitrary inode through the
+                # O_NOFOLLOW + identity read check. Defense in depth alongside
+                # the same rejection in the allowlist walk. (#4375)
+                if resolved_target.stat().st_nlink > 1:
                     continue
                 rel_resolved = resolved_target.relative_to(wiki_real)
                 if not _wiki_read_relpath_is_clean(rel_resolved):

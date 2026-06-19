@@ -262,6 +262,49 @@ def test_wiki_page_cached_nested_entry_rechecks_resolved_containment(monkeypatch
     assert b"stale_cache_marker" not in handler.body, "stale cached nested symlink leaked hidden content"
 
 
+def test_wiki_page_cached_entry_rejects_hardlink_swap_to_outside(monkeypatch, tmp_path):
+    """A hardlink swap to an outside file within the TTL must not leak (#4375).
+
+    O_NOFOLLOW + inode-identity cannot distinguish a hardlink at a clean page
+    name from the real page, so multi-link (st_nlink > 1) page files are
+    rejected by both the allowlist walk and the read-path revalidation. Prime
+    the cache with a real page, replace it with a hardlink to an outside secret
+    within the TTL, and assert the read 404s without leaking the secret.
+    """
+    import os as _os
+    from api import routes
+
+    wiki_root = tmp_path / "wiki"
+    section = wiki_root / "concepts"
+    section.mkdir(parents=True)
+    page = section / "page.md"
+    page.write_text("# real\n", encoding="utf-8")
+    outside = tmp_path / "outside_secret"
+    outside.write_text("DONOTLEAK=hardlink_cache_marker\n", encoding="utf-8")
+
+    routes._llm_wiki_clear_page_files_cache()
+    monkeypatch.setattr(routes, "_WIKI_ALLOWLIST_TTL", 60.0)
+    monkeypatch.setattr(routes, "_llm_wiki_resolve_path", lambda: (wiki_root, None, None))
+
+    # Prime the cached name list while the page is a genuine single-link file.
+    assert routes._llm_wiki_page_files(wiki_root) == [page]
+
+    # Swap the listed page name to a hardlink pointing at the outside secret,
+    # within the TTL window (cache still warm for the page NAME).
+    page.unlink()
+    try:
+        _os.link(outside, page)
+    except (OSError, NotImplementedError, AttributeError):
+        import pytest
+        pytest.skip("hardlinks not supported on this platform")
+
+    handler = _FakeHandler()
+    routes.handle_get(handler, urlparse("http://example.com/api/wiki/page?path=concepts/page.md"))
+
+    assert handler.status == 404, f"cached page hardlinked to outside file must 404, got {handler.status}"
+    assert b"hardlink_cache_marker" not in handler.body, "hardlink swap leaked outside content"
+
+
 def test_wiki_browse_cached_entry_rechecks_resolved_containment(monkeypatch, tmp_path):
     import os as _os
     from api import routes
