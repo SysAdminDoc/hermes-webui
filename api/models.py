@@ -416,6 +416,9 @@ def _append_recovered_pending_turn(session, *, timestamp: int | None = None) -> 
         'timestamp': recovered_ts,
         '_recovered': True,
     }
+    pending_source = getattr(session, 'pending_user_source', None)
+    if pending_source and pending_source != 'webui':
+        recovered['_source'] = pending_source
     if session.pending_attachments:
         recovered['attachments'] = list(session.pending_attachments)
     session.messages.append(recovered)
@@ -621,6 +624,7 @@ class Session:
                  pending_user_message: str=None,
                  pending_attachments=None,
                  pending_started_at=None,
+                 pending_user_source: str=None,
                  context_messages=None,
                  compression_anchor_visible_idx=None,
                  compression_anchor_message_key=None,
@@ -668,6 +672,7 @@ class Session:
         self.pending_user_message = pending_user_message
         self.pending_attachments = pending_attachments or []
         self.pending_started_at = pending_started_at
+        self.pending_user_source = pending_user_source
         self.context_messages = context_messages if isinstance(context_messages, list) else []
         self.compression_anchor_visible_idx = compression_anchor_visible_idx
         self.compression_anchor_message_key = compression_anchor_message_key
@@ -743,7 +748,7 @@ class Session:
             'input_tokens', 'output_tokens', 'estimated_cost',
             'cache_read_tokens', 'cache_write_tokens',
             'personality', 'active_stream_id',
-            'pending_user_message', 'pending_attachments', 'pending_started_at',
+            'pending_user_message', 'pending_attachments', 'pending_started_at', 'pending_user_source',
             'compression_anchor_visible_idx', 'compression_anchor_message_key',
             'compression_anchor_summary', 'pre_compression_snapshot',
             'context_engine', 'compression_anchor_engine', 'compression_anchor_mode',
@@ -1891,6 +1896,7 @@ def _apply_core_sync_or_error_marker(
             session.pending_user_message = None
             session.pending_attachments = []
             session.pending_started_at = None
+            session.pending_user_source = None
             session.save(touch_updated_at=touch_updated_at)
             logger.info(
                 "Session %s: cleared stale pending state for completed stream %s without error marker",
@@ -1917,6 +1923,7 @@ def _apply_core_sync_or_error_marker(
         session.pending_user_message = None
         session.pending_attachments = []
         session.pending_started_at = None
+        session.pending_user_source = None
         session.messages.append(
             _build_recovery_marker_with_retry_hook(
                 recovered_output=recovered_output,
@@ -1971,6 +1978,7 @@ def _apply_core_sync_or_error_marker(
             session.pending_user_message = None
             session.pending_attachments = []
             session.pending_started_at = None
+            session.pending_user_source = None
             if recovered_output:
                 session.messages.append(
                     _interrupted_recovery_marker(
@@ -2018,6 +2026,7 @@ def _apply_core_sync_or_error_marker(
     session.pending_user_message = None
     session.pending_attachments = []
     session.pending_started_at = None
+    session.pending_user_source = None
     session.messages.append(
         _build_recovery_marker_with_retry_hook(
             recovered_output=recovered_output,
