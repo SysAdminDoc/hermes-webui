@@ -1,7 +1,9 @@
-"""CDP behavioral test: scrollbar drag flag lifecycle and event dispatch.
+"""Operator-run CDP repro for scrollbar drag flag lifecycle and event dispatch.
 
 Tests the actual deployed code on localhost:8787 via Chrome DevTools Protocol.
-Verifies flag lifecycle, event handler wiring, and render suppression.
+Verifies flag lifecycle, event handler wiring, and render behavior.
+
+Run directly with Python; this is not part of the automated pytest suite.
 """
 import pytest
 pytest.importorskip("websockets")

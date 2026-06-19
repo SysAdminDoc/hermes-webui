@@ -1,4 +1,4 @@
-"""Native scrollbar drag test using Windows SendInput + CDP.
+"""Operator-run native scrollbar drag repro using Windows SendInput + CDP.
 
 SendInput generates real OS-level mouse events that interact with the native
 scrollbar thumb, unlike CDP's Input.dispatchMouseEvent which only goes through
@@ -8,6 +8,8 @@ Flow:
 1. CDP: get Chrome window position and scrollbar coordinates
 2. SendInput: move real mouse cursor to scrollbar, click-and-drag
 3. CDP: verify scrollTop changed, flag lifecycle, content integrity
+
+Run directly with Python on Windows; this is not part of the automated pytest suite.
 """
 import sys
 import pytest
