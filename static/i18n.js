@@ -858,6 +858,7 @@ const LOCALES = {
     kanban_add_dependency: 'Add dependency',
     kanban_remove_dependency: 'Remove dependency',
     kanban_dependency_placeholder: 'Task ID to link',
+    kanban_dependency_self: 'A task cannot depend on itself',
       kanban_only_mine: 'Only mine',
       kanban_bulk_action: 'Bulk action',
       kanban_nudge_dispatcher: 'Preview dispatcher',
