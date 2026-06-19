@@ -269,27 +269,30 @@ class TestBug2TypeCheckRecycling:
 // Extract the renderMessages function body
 const rmSrc = extractFunc('renderMessages');
 
-// Verify the guard expression exists in the actual source
-const guardPresent = rmSrc.includes("row.classList.contains('msg-row')");
+// Verify the full fixed guard exists in the actual source
+const rmCompact = rmSrc.replace(/\s+/g, '');
+const guardPresent = rmCompact.includes(
+  "if(row&&(!row.classList.contains('msg-row')||row.classList.contains('assistant-turn')))row=null;"
+);
 if (!guardPresent) {
-  console.log(JSON.stringify({error: "classList.contains('msg-row') guard not found in renderMessages"}));
+  console.log(JSON.stringify({error: "full user-row recycle guard not found in renderMessages"}));
   process.exit(0);
 }
 
 // Run the guard with a wrong-typed node
 const wrongNode = {
-  classList: { contains(name){ return name === 'assistant-turn'; } },
+  classList: { contains(name){ return name === 'assistant-turn' || name === 'msg-row'; } },
   dataset: { recycleKey: '3' },
 };
 let row = wrongNode;
-if (row && !row.classList.contains('msg-row')) row = null;
+if (row && (!row.classList.contains('msg-row') || row.classList.contains('assistant-turn'))) row = null;
 
 const correctNode = {
   classList: { contains(name){ return name === 'msg-row'; } },
   dataset: { msgIdx: '3' },
 };
 let row2 = correctNode;
-if (row2 && !row2.classList.contains('msg-row')) row2 = null;
+if (row2 && (!row2.classList.contains('msg-row') || row2.classList.contains('assistant-turn'))) row2 = null;
 
 console.log(JSON.stringify({
   guard_in_source: true,
@@ -624,7 +627,7 @@ for(const child of [userRow]){
 // Lookup phase (simulating user row branch in renderMessages)
 const rawIdx = 4;
 let row = _msgNodeRecycleEnabled ? _recycleStash.get(rawIdx) : null;
-if(row && !row.classList.contains('msg-row')) row = null;
+if(row && (!row.classList.contains('msg-row') || row.classList.contains('assistant-turn'))) row = null;
 
 console.log(JSON.stringify({
   recycled: row === userRow,
@@ -693,13 +696,13 @@ if(recycled && !recycled.classList.contains('assistant-turn')) recycled = null;
 const assistantTurn = {
   id: '',
   dataset: { recycleKey: '5' },
-  classList: { contains(name){ return name === 'assistant-turn'; } },
+  classList: { contains(name){ return name === 'assistant-turn' || name === 'msg-row'; } },
   querySelector(){ return null; },
 };
 _recycleStash.set(5, assistantTurn);
 
 let row = _msgNodeRecycleEnabled ? _recycleStash.get(5) : null;
-if(row && !row.classList.contains('msg-row')) row = null;
+if(row && (!row.classList.contains('msg-row') || row.classList.contains('assistant-turn'))) row = null;
 
 console.log(JSON.stringify({
   assistant_branch_rejected_user_row: recycled === null,
@@ -803,7 +806,7 @@ const _msgNodeRecycleEnabled = true;
 // Simulate the user-row recycling branch
 const rawIdx = 2;
 let r = _msgNodeRecycleEnabled ? _recycleStash.get(rawIdx) : null;
-if(r && !r.classList.contains('msg-row')) r = null;
+if(r && (!r.classList.contains('msg-row') || r.classList.contains('assistant-turn'))) r = null;
 if(r){
   const newRawText = 'hello world';
   const nextRowHtml = '<div class="msg-body">hello world</div><div class="msg-foot">same</div>';
@@ -842,7 +845,7 @@ const _msgNodeRecycleEnabled = true;
 
 const rawIdx = 2;
 let r = _msgNodeRecycleEnabled ? _recycleStash.get(rawIdx) : null;
-if(r && !r.classList.contains('msg-row')) r = null;
+if(r && (!r.classList.contains('msg-row') || r.classList.contains('assistant-turn'))) r = null;
 if(r){
   const newRawText = 'new content';
   const nextRowHtml = '<div class="msg-body">new content</div>';
@@ -882,7 +885,7 @@ const _msgNodeRecycleEnabled = true;
 
 const rawIdx = 2;
 let r = _msgNodeRecycleEnabled ? _recycleStash.get(rawIdx) : null;
-if(r && !r.classList.contains('msg-row')) r = null;
+if(r && (!r.classList.contains('msg-row') || r.classList.contains('assistant-turn'))) r = null;
 const newRawText = 'same text';
 const nextRowHtml = '<div class="msg-body">same text</div><div class="msg-foot">new</div>';
 if(r){
@@ -919,7 +922,7 @@ const _msgNodeRecycleEnabled = true;
 
 const rawIdx = 2;
 let r = _msgNodeRecycleEnabled ? _recycleStash.get(rawIdx) : null;
-if(r && !r.classList.contains('msg-row')) r = null;
+if(r && (!r.classList.contains('msg-row') || r.classList.contains('assistant-turn'))) r = null;
 const newRawText = 'same text';
 const nextRowHtml = '<div class="msg-body">same text</div><div class="msg-foot">same</div>';
 if(r){
@@ -1432,8 +1435,8 @@ console.log(JSON.stringify({
 const assistantTurn = {
   id: '',
   dataset: { recycleKey: '5', role: 'assistant' },
-  classList: { contains(name){ return name === 'assistant-turn'; } },
-  className: 'assistant-turn',
+  classList: { contains(name){ return name === 'assistant-turn' || name === 'msg-row'; } },
+  className: 'msg-row assistant-turn',
   childNodes: [{classList: {contains(n){return n==='assistant-segment';}}}],
 };
 
@@ -1442,7 +1445,7 @@ let buggy_row = assistantTurn;
 
 // WITH guard
 let fixed_row = assistantTurn;
-if (fixed_row && !fixed_row.classList.contains('msg-row'))
+if (fixed_row && (!fixed_row.classList.contains('msg-row') || fixed_row.classList.contains('assistant-turn')))
   fixed_row = null;
 
 const mismatches = [];
@@ -1475,16 +1478,16 @@ const _recycleStash = new Map();
 
 // Pre-shift DOM: user rows at 0,2,4; assistant turns at 1,3
 const nodes = [
-  {type: 'user',      idx: 0, cls: 'msg-row'},
-  {type: 'assistant', idx: 1, cls: 'assistant-turn'},
-  {type: 'user',      idx: 2, cls: 'msg-row'},
-  {type: 'assistant', idx: 3, cls: 'assistant-turn'},
-  {type: 'user',      idx: 4, cls: 'msg-row'},
+  {type: 'user',      idx: 0, classes: ['msg-row']},
+  {type: 'assistant', idx: 1, classes: ['msg-row', 'assistant-turn']},
+  {type: 'user',      idx: 2, classes: ['msg-row']},
+  {type: 'assistant', idx: 3, classes: ['msg-row', 'assistant-turn']},
+  {type: 'user',      idx: 4, classes: ['msg-row']},
 ];
 for (const n of nodes) {
   const mock = {
     dataset: n.type === 'assistant' ? {recycleKey: String(n.idx)} : {msgIdx: String(n.idx)},
-    classList: { contains(name){ return name === n.cls; } },
+    classList: { contains(name){ return n.classes.includes(name); } },
     _type: n.type,
   };
   _recycleStash.set(n.idx, mock);
@@ -1516,8 +1519,12 @@ for (const w of wanted) {
   if (node._type === w.wantType) buggy_correct++;
   else buggy_wrong++;
 
-  // With guard
-  if (node.classList.contains(w.branch)) fixed_correct++;
+  // With the real asymmetric fixed guards
+  const accepted = w.wantType === 'assistant'
+    ? node.classList.contains('assistant-turn')
+    : (node.classList.contains('msg-row') && !node.classList.contains('assistant-turn'));
+  if (accepted && node._type === w.wantType) fixed_correct++;
+  else if (accepted) fixed_wrong++;
   else fixed_miss++;  // rejected, will build fresh
 }
 
@@ -1527,6 +1534,7 @@ console.log(JSON.stringify({
   buggy_wrong_type: buggy_wrong,
   buggy_miss: buggy_miss,
   fixed_correct: fixed_correct,
+  fixed_wrong_type: fixed_wrong,
   fixed_rejected: fixed_miss,
   collisions_prevented: buggy_wrong,
 }));
@@ -1534,6 +1542,8 @@ console.log(JSON.stringify({
         out = json.loads(_run_node(source))
         assert out["buggy_wrong_type"] > 0, \
             "Simulation didn't produce any cross-type collisions (test setup error)"
+        assert out["fixed_wrong_type"] == 0, \
+            f"Fixed guard still accepted wrong-type nodes: {out['fixed_wrong_type']}"
         assert out["fixed_rejected"] >= out["buggy_wrong_type"], \
             f"Guards didn't catch all collisions: {out['fixed_rejected']} rejected vs {out['buggy_wrong_type']} wrong"
 
