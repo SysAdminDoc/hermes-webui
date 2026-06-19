@@ -1426,18 +1426,30 @@ const LIVE_STREAMS={};
 // #4416: track whether the tab was hidden at ANY point during a live stream, so
 // the response-complete notification fires for a backgrounded tab even when
 // Chromium throttles the background-tab SSE and delivers the `done` event LATE
-// (after the user returns, when document.hidden already reads false). Keyed by
-// session id; set at stream attach, OR'd true whenever the tab goes hidden,
-// read + cleared at done. One idempotent visibilitychange listener (never
-// leaks) flips the bit on all active entries.
+// (after the user returns, when document.hidden already reads false). Each entry
+// is STREAM-OWNED ({streamId, wasHidden}) so a stale entry left by a non-`done`
+// terminal path (apperror/cancel/stream-error/reconnect-no-active) can never be
+// mis-attributed to a later stream for the same session id — a reconnect only
+// keeps the prior state when the streamId matches. One idempotent
+// visibilitychange listener (never leaks) flips wasHidden on all active entries.
 const _STREAM_WAS_HIDDEN={};
 let _streamHiddenTrackerBound=false;
 function _bindStreamHiddenTracker(){
   if(_streamHiddenTrackerBound||typeof document==='undefined'||typeof document.addEventListener!=='function') return;
   _streamHiddenTrackerBound=true;
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden){ for(const k in _STREAM_WAS_HIDDEN) _STREAM_WAS_HIDDEN[k]=true; }
+    if(document.hidden){ for(const k in _STREAM_WAS_HIDDEN){ const e=_STREAM_WAS_HIDDEN[k]; if(e) e.wasHidden=true; } }
   });
+}
+function _clearStreamHidden(sid, streamId){
+  // Clear only when we own the current stream's entry (or unconditionally when
+  // streamId is omitted). Prevents a terminal path for an old stream from wiping
+  // a newer stream's tracker.
+  if(!sid) return;
+  const e=_STREAM_WAS_HIDDEN[sid];
+  if(!e) return;
+  if(streamId&&e.streamId&&e.streamId!==streamId) return;
+  delete _STREAM_WAS_HIDDEN[sid];
 }
 
 function closeLiveStream(sessionId, streamId, source){
@@ -1506,11 +1518,17 @@ function closeOtherLiveStreams(activeSid){
 function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
   if(!activeSid||!streamId) return;
   const reconnecting=!!options.reconnecting;
-  // #4416: start (or, on reconnect, keep) tracking whether the tab was hidden
-  // during this stream so the done-notification fires for a backgrounded tab.
+  // #4416: start (or, on reconnect for the SAME stream, keep) tracking whether
+  // the tab was hidden during this stream so the done-notification fires for a
+  // backgrounded tab. A reconnect with a different streamId re-seeds (the old
+  // entry belonged to a prior stream).
   _bindStreamHiddenTracker();
-  if(!reconnecting||!(activeSid in _STREAM_WAS_HIDDEN)){
-    _STREAM_WAS_HIDDEN[activeSid]=(typeof document!=='undefined'&&!!document.hidden);
+  {
+    const _prev=_STREAM_WAS_HIDDEN[activeSid];
+    const _keep=reconnecting&&_prev&&_prev.streamId===streamId;
+    if(!_keep){
+      _STREAM_WAS_HIDDEN[activeSid]={streamId,wasHidden:(typeof document!=='undefined'&&!!document.hidden)};
+    }
   }
   if(!INFLIGHT[activeSid]) INFLIGHT[activeSid]={messages:[...S.messages],uploaded:[...uploaded],toolCalls:[]};
   else {
@@ -1779,6 +1797,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     _smdEndParser();
     if(typeof finalizeThinkingCard==='function') finalizeThinkingCard();
     _clearOwnerInflightState();
+    _clearStreamHidden(activeSid, streamId);  // #4416: terminal path, drop hidden tracker
     _flushReasoningToAnchor();
     _scheduleAnchorRegistryCleanup();
     _clearApprovalForOwner();
@@ -3560,8 +3579,9 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
         // delivers late — after the user returns and document.hidden is false).
         // If the user watched the whole stream, _wasEverHidden stays false and
         // the notification is suppressed (matches Slack/Discord/Gmail/Claude).
-        const _wasEverHidden=!!_STREAM_WAS_HIDDEN[activeSid];
-        delete _STREAM_WAS_HIDDEN[activeSid];
+        const _hiddenEntry=_STREAM_WAS_HIDDEN[activeSid];
+        const _wasEverHidden=!!(_hiddenEntry&&_hiddenEntry.wasHidden);
+        _clearStreamHidden(activeSid, streamId);
         sendBrowserNotification('Response complete',assistantText?assistantText.slice(0,100):'Task finished',{forceHidden:_wasEverHidden,sid:activeSid});
       };
       if(_shouldUseStreamFade()&&assistantBody){
@@ -3727,6 +3747,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       // This is distinct from the SSE network 'error' event below.
       try{if(source&&source.readyState!==2)source.close();}catch(_){ }
       _clearOwnerInflightState();
+      _clearStreamHidden(activeSid, streamId);  // #4416: terminal path, drop hidden tracker
       _clearApprovalForOwner();
       _clearClarifyForOwner('terminal');
       let d={};
@@ -3899,6 +3920,7 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       if(typeof finalizeThinkingCard==='function') finalizeThinkingCard();
       try{if(source&&source.readyState!==2)source.close();}catch(_){ }
       _clearOwnerInflightState();
+      _clearStreamHidden(activeSid, streamId);  // #4416: terminal path, drop hidden tracker
       _clearApprovalForOwner();
       _clearClarifyForOwner('cancelled');
       let _cancelData={};

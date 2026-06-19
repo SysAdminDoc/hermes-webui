@@ -40,8 +40,13 @@ def test_completion_notification_fires_when_tab_was_hidden_during_stream():
     # The per-stream hidden tracker exists and is wired at attach + done.
     assert "_STREAM_WAS_HIDDEN" in MESSAGES_JS
     assert "function _bindStreamHiddenTracker" in MESSAGES_JS
-    assert "const _wasEverHidden=!!_STREAM_WAS_HIDDEN[activeSid];" in MESSAGES_JS
-    assert "delete _STREAM_WAS_HIDDEN[activeSid];" in MESSAGES_JS
+    # Entries are stream-owned ({streamId, wasHidden}) so a stale entry from a
+    # non-`done` terminal path can't be mis-attributed to a later same-sid stream.
+    assert "const _wasEverHidden=!!(_hiddenEntry&&_hiddenEntry.wasHidden);" in MESSAGES_JS
+    assert "function _clearStreamHidden" in MESSAGES_JS
+    # Cleared on the non-done terminal paths too (belt-and-suspenders alongside
+    # the streamId-ownership guard).
+    assert MESSAGES_JS.count("_clearStreamHidden(activeSid, streamId)") >= 4
     # sendBrowserNotification honors forceHidden but still respects the
     # notifications-enabled setting (forceHidden is NOT the test-button force).
     assert "const forceHidden=!!(options&&options.forceHidden);" in MESSAGES_JS
