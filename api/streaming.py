@@ -3448,7 +3448,7 @@ def _sanitize_messages_for_api(messages, *, cfg: dict = None):
 
     # Second pass: build the sanitized list, dropping orphaned tool messages.
     clean = []
-    for idx, msg in enumerate(messages):
+    for msg in messages:
         if not isinstance(msg, dict):
             continue
         # Skip display-only Thinking entries. They are visible transcript
