@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.503] — 2026-06-18 — Release RN (process-wakeup turns no longer render as user messages)
+
+### Fixed
+
+- **A turn triggered by a background-process wakeup is no longer shown in the transcript as if you had typed it (#4373).** A pending user turn now records its origin, and a turn from a process wakeup is tagged so the chat view suppresses it. The source threads through the full turn lifecycle — pending state, the completion merge, error-materialization, cancel, recovery, the gateway runtime (both chat and runs-API sub-paths), and compression — and is cleared in every teardown path. A normal WebUI turn is never affected. Thanks @rodboev.
+
 ## [v0.51.502] — 2026-06-18 — Release RL (CLI/gateway sessions appear immediately; sidebar-cache invalidation hardened)
 
 ### Fixed
