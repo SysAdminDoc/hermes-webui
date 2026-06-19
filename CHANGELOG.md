@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.510] — 2026-06-19 — Release RU (Kanban task workspace + dependency controls)
+
+### Added
+
+- **Kanban tasks can now set a workspace and manage dependencies from the WebUI (#3797).** The task-create modal gains a **Workspace kind** selector (scratch / worktree / directory) with a conditional path field (validated on create; correctly disabled on edit, which the backend does not patch), and a task's detail view gains **dependency** add/remove controls. The dependency field is an autocomplete of existing tasks (titles shown) rather than a blind ID box, rejects self-dependencies, and a dependency added to task X correctly records the linked task as X's prerequisite (parent). Dark-theme styled to match the rest of the editor. Linked-task IDs are JS-context-encoded in the action handlers. Thanks @rodboev. (Remaining task-editor parity items — skills, max runtime, dependencies at create time, workspace-path autocomplete — tracked in #4470.)
+
 ## [v0.51.509] — 2026-06-19 — Release RT (notice when the connected gateway can't do approvals)
 
 ### Added
