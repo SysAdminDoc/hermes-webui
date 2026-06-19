@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.525] — 2026-06-19 — Release SJ (built-in personalities available in WebUI)
+
+### Added
+
+- **The 14 built-in agent personalities now show up in the WebUI without hand-editing config.yaml (#4465).** WebUI resolved the `/personality` list from config only, so a fresh profile saw an empty list even though the CLI ships built-ins (helpful, concise, technical, creative, teacher, and the playful set). The WebUI config loader now hydrates the same built-ins as a default (user-defined personalities still override a built-in of the same name), and config saves strip the generated built-ins back out — so `config.yaml` only ever persists your *custom* personalities, never the defaults. Thanks @franksong2702.
+
 ## [v0.51.524] — 2026-06-19 — Release SI (opt-in chunked SSE for buffering reverse proxies)
 
 ### Added
