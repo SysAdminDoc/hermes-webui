@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.521] — 2026-06-19 — Release SF (imported sessions scoped to the active profile)
+
+### Security
+
+- **Sessions imported under a named profile are now owned by that profile, not by root/default (#4489).** `/api/session/import` validates the workspace under the request's active profile but built the new `Session` with no `profile`, so it defaulted to `None` (root/default-owned). A default/root request could then export the imported transcript or use its session id to read files from the named-profile workspace — a cross-profile leak. The import now stamps `profile=get_active_profile_name()`, so the boundary check denies (404) a mismatched profile. The default profile keeps its existing ownership semantics. Thanks @Hinotoi-agent.
+
 ## [v0.51.520] — 2026-06-19 — Release SE (recover from untracked-file update collisions)
 
 ### Fixed
