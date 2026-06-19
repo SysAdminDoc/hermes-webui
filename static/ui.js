@@ -11430,6 +11430,7 @@ function renderMessages(options){
       }else{
         currentAssistantTurn=_createAssistantTurn(tsTitle, isTpsDisplayEnabled()?_formatTurnTps(m._turnTps):'');
       }
+      currentAssistantTurn.dataset.msgIdx=rawIdx;
       inner.appendChild(currentAssistantTurn);
     }
     const seg=document.createElement('div');
