@@ -3312,6 +3312,7 @@ def _preserve_pre_compression_snapshot(s, old_sid: str) -> None:
             snapshot.pending_user_message = None
             snapshot.pending_attachments = []
             snapshot.pending_started_at = None
+            snapshot.pending_user_source = None
             snapshot.save(touch_updated_at=False, skip_index=False)
             logger.info(
                 "Marked pre-compression session %s as sidebar-hidden snapshot",
