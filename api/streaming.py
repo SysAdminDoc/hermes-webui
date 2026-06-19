@@ -1174,6 +1174,7 @@ def _persist_cancelled_turn(session, *, message: str = 'Task cancelled.') -> Non
     session.pending_user_message = None
     session.pending_attachments = []
     session.pending_started_at = None
+    session.pending_user_source = None
     if not _session_has_cancel_marker(session):
         agent_name = _preferred_agent_display_name_for_session(session)
         session.messages.append({
@@ -1192,6 +1193,7 @@ def _cleanup_ephemeral_cancelled_turn(session) -> None:
     session.pending_user_message = None
     session.pending_attachments = []
     session.pending_started_at = None
+    session.pending_user_source = None
     try:
         import pathlib
         pathlib.Path(session.path).unlink(missing_ok=True)
@@ -3265,10 +3267,12 @@ def _preserve_pre_compression_snapshot(s, old_sid: str) -> None:
             saved_pending_user_message = getattr(s, 'pending_user_message', None)
             saved_pending_attachments = list(getattr(s, 'pending_attachments', []) or [])
             saved_pending_started_at = getattr(s, 'pending_started_at', None)
+            saved_pending_user_source = getattr(s, 'pending_user_source', None)
             s.active_stream_id = None
             s.pending_user_message = None
             s.pending_attachments = []
             s.pending_started_at = None
+            s.pending_user_source = None
             try:
                 # skip_index=False so the snapshot appears in _index.json with
                 # the pre_compression_snapshot marker. The sidebar projection
@@ -3287,6 +3291,7 @@ def _preserve_pre_compression_snapshot(s, old_sid: str) -> None:
                 s.pending_user_message = saved_pending_user_message
                 s.pending_attachments = saved_pending_attachments
                 s.pending_started_at = saved_pending_started_at
+                s.pending_user_source = saved_pending_user_source
             return
         # Existing file is already at least as complete as memory; stamp only
         # the snapshot marker so index/sidebar projection can hide it without
@@ -3307,6 +3312,7 @@ def _preserve_pre_compression_snapshot(s, old_sid: str) -> None:
             snapshot.pending_user_message = None
             snapshot.pending_attachments = []
             snapshot.pending_started_at = None
+            snapshot.pending_user_source = None
             snapshot.save(touch_updated_at=False, skip_index=False)
             logger.info(
                 "Marked pre-compression session %s as sidebar-hidden snapshot",
@@ -4366,7 +4372,7 @@ def _retire_truncation_watermark_after_commit(session) -> None:
         session.truncation_watermark = None
 
 
-def _merge_display_messages_after_agent_result(previous_display, previous_context, result_messages, msg_text):
+def _merge_display_messages_after_agent_result(previous_display, previous_context, result_messages, msg_text, source: str = "webui"):
     """Keep UI transcript durable while allowing model context to compact.
 
     If Hermes Agent returns a normal append-only history, append that delta to
@@ -4565,6 +4571,8 @@ def _merge_display_messages_after_agent_result(previous_display, previous_contex
         # exchange and then clear the pending prompt. Materialize the current
         # turn at the transcript boundary before the assistant/tool response.
         current_user_msg = {'role': 'user', 'content': msg_text}
+        if source and source != 'webui':
+            current_user_msg['_source'] = source
         insert_at = 0
         while insert_at < len(candidates) and _is_context_compression_marker(candidates[insert_at]):
             insert_at += 1
@@ -4608,6 +4616,8 @@ def _merge_display_messages_after_agent_result(previous_display, previous_contex
         ):
             display_msg = copy.deepcopy(msg)
             display_msg['content'] = msg_text
+            if source and source != 'webui':
+                display_msg['_source'] = source
         merged.append(copy.deepcopy(display_msg))
         if key is not None:
             seen.add(key)
@@ -4999,6 +5009,9 @@ def _materialize_pending_user_turn_before_error(session) -> bool:
         'timestamp': recovered_ts,
         '_recovered': True,
     }
+    pending_source = getattr(session, 'pending_user_source', None)
+    if pending_source and pending_source != 'webui':
+        recovered['_source'] = pending_source
     pending_attachments = getattr(session, 'pending_attachments', None)
     if pending_attachments:
         recovered['attachments'] = list(pending_attachments)
@@ -5856,6 +5869,7 @@ def _run_agent_streaming(
         # process-level active-profile global.  Falls back gracefully.
         try:
             from api.profiles import (
+                filter_runtime_env_for_gateway_parity,
                 patch_skill_home_modules,
                 get_hermes_home_for_profile,
                 get_profile_runtime_env,
@@ -5863,9 +5877,11 @@ def _run_agent_streaming(
             _profile_home_path = get_hermes_home_for_profile(getattr(s, 'profile', None))
             _profile_home = str(_profile_home_path)
             _profile_runtime_env = get_profile_runtime_env(_profile_home_path)
+            _safe_profile_runtime_env = filter_runtime_env_for_gateway_parity(_profile_runtime_env)
         except ImportError:
             _profile_home = os.environ.get('HERMES_HOME', '')
             _profile_runtime_env = {}
+            _safe_profile_runtime_env = {}
             patch_skill_home_modules = None
 
         # Profile-aware provider/model enrichment: when the session belongs
@@ -5922,7 +5938,7 @@ def _run_agent_streaming(
         # The finally block re-acquires to restore — keeping critical sections short
         # and preventing a deadlock where the restore would re-enter the same lock.
         with _ENV_LOCK:
-            old_profile_env = {key: os.environ.get(key) for key in _profile_runtime_env}
+            old_profile_env = {key: os.environ.get(key) for key in _safe_profile_runtime_env}
             old_cwd = os.environ.get('TERMINAL_CWD')
             old_exec_ask = os.environ.get('HERMES_EXEC_ASK')
             old_session_key = os.environ.get('HERMES_SESSION_KEY')
@@ -5930,7 +5946,7 @@ def _run_agent_streaming(
             old_session_platform = os.environ.get('HERMES_SESSION_PLATFORM')
             old_session_chat_id = os.environ.get('HERMES_SESSION_CHAT_ID')
             old_hermes_home = os.environ.get('HERMES_HOME')
-            os.environ.update(_profile_runtime_env)
+            os.environ.update(_safe_profile_runtime_env)
             os.environ['TERMINAL_CWD'] = str(s.workspace)
             os.environ['HERMES_EXEC_ASK'] = '1'
             os.environ['HERMES_SESSION_KEY'] = session_id
@@ -7186,6 +7202,7 @@ def _run_agent_streaming(
                     _previous_context_messages,
                     _restore_display_reasoning_metadata(_previous_messages, _result_messages),
                     msg_text,
+                    source=getattr(s, 'pending_user_source', None) or 'webui',
                 )
                 _retire_truncation_watermark_after_commit(s)  # #3831
                 # Strip XML tool-call blocks from assistant message content.
@@ -7478,6 +7495,7 @@ def _run_agent_streaming(
                                     _previous_context_messages,
                                     _restore_reasoning_metadata(_previous_messages, _result_messages),
                                     msg_text,
+                                    source=getattr(s, 'pending_user_source', None) or 'webui',
                                 )
                                 _retire_truncation_watermark_after_commit(s)  # #3831
                                 # Skip the error block — jump directly to the
@@ -7533,6 +7551,7 @@ def _run_agent_streaming(
                         s.pending_user_message = None
                         s.pending_attachments = []
                         s.pending_started_at = None
+                        s.pending_user_source = None
                         try:
                             _snapshot_and_append_partial_on_error(s, stream_id)
                         except Exception:
@@ -7713,6 +7732,7 @@ def _run_agent_streaming(
                 s.pending_user_message = None
                 s.pending_attachments = []
                 s.pending_started_at = None
+                s.pending_user_source = None
                 # Tag the matching user message with attachment filenames for display on reload
                 # Only tag a user message whose content relates to this turn's text
                 # (msg_text is the full message including the [Attached files: ...] suffix)
@@ -8458,6 +8478,7 @@ def _run_agent_streaming(
                                     _previous_context_messages,
                                     _restore_reasoning_metadata(_previous_messages, _result_messages),
                                     msg_text,
+                                    source=getattr(s, 'pending_user_source', None) or 'webui',
                                 )
                                 _retire_truncation_watermark_after_commit(s)  # #3831
                                 s.save()
@@ -8508,6 +8529,7 @@ def _run_agent_streaming(
                 s.pending_user_message = None
                 s.pending_attachments = []
                 s.pending_started_at = None
+                s.pending_user_source = None
                 try:
                     _snapshot_and_append_partial_on_error(s, stream_id)
                 except Exception:
@@ -8945,6 +8967,7 @@ def cancel_stream(stream_id: str) -> bool:
                 # the cleanup.
                 try:
                     _pending_user = getattr(_cs, 'pending_user_message', None)
+                    _pending_source = getattr(_cs, 'pending_user_source', None)
                     _pending_atts_raw = getattr(_cs, 'pending_attachments', None)
                     _pending_atts = list(_pending_atts_raw) if isinstance(_pending_atts_raw, (list, tuple)) else []
                     _pending_started = getattr(_cs, 'pending_started_at', None) or 0
@@ -8970,11 +8993,16 @@ def cancel_stream(stream_id: str) -> bool:
                                 if _pending_user == _last_content or _pending_user in _last_content:
                                     _already_persisted = True
                         if not _already_persisted:
+                            _recovered_ts = int(time.time())
+                            if isinstance(_pending_started, (int, float)) and _pending_started > 0:
+                                _recovered_ts = int(_pending_started)
                             _user_turn: dict = {
                                 'role': 'user',
                                 'content': _pending_user,
-                                'timestamp': int(time.time()),
+                                'timestamp': _recovered_ts,
                             }
+                            if _pending_source and _pending_source != 'webui':
+                                _user_turn['_source'] = _pending_source
                             if _pending_atts:
                                 _user_turn['attachments'] = _pending_atts
                             _msgs_for_recovery.append(_user_turn)
@@ -8987,6 +9015,7 @@ def cancel_stream(stream_id: str) -> bool:
                 _cs.pending_user_message = None
                 _cs.pending_attachments = []
                 _cs.pending_started_at = None
+                _cs.pending_user_source = None
                 # Persist any partial assistant text that was streamed before cancel (#893).
                 # Preserving partial content means the user sees what the agent had
                 # produced rather than losing it entirely.  The marker is _partial=True
