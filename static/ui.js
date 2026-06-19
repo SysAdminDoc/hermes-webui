@@ -453,6 +453,7 @@ function _cancelMessageVirtualizedRender(){
 }
 function _messageIsRenderable(m){
   if(!m||!m.role||m.role==='tool') return false;
+  if(m._source === 'process_wakeup') return false;
   if(_isContextCompactionMessage(m)||_isPreservedCompressionTaskListMessage(m)) return false;
   if(_isRecoveryControlMessage(m)) return false;
   const hasTc=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
@@ -7289,6 +7290,7 @@ function getPendingSessionMessage(session, messagesOverride=null){
     attachments:attachments.length?attachments:undefined,
     _ts:session?.pending_started_at||Date.now()/1000,
     _pending:true,
+    _source:session?.pending_user_source||undefined,
   };
 }
 async function checkInflightOnBoot(sid) {

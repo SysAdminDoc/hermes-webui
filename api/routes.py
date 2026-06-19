@@ -2239,6 +2239,8 @@ def _clear_stale_stream_state(session) -> bool:
                     original_stub.pending_attachments = []
                 if hasattr(original_stub, "pending_started_at"):
                     original_stub.pending_started_at = None
+                if hasattr(original_stub, "pending_user_source"):
+                    original_stub.pending_user_source = None
             except Exception:
                 pass
             return False
@@ -2278,6 +2280,8 @@ def _clear_stale_stream_state(session) -> bool:
                             original_stub.pending_attachments = []
                         if hasattr(original_stub, "pending_started_at"):
                             original_stub.pending_started_at = None
+                        if hasattr(original_stub, "pending_user_source"):
+                            original_stub.pending_user_source = None
                     except Exception:
                         pass
                 return True
@@ -2291,6 +2295,8 @@ def _clear_stale_stream_state(session) -> bool:
             session.pending_attachments = []
         if hasattr(session, "pending_started_at"):
             session.pending_started_at = None
+        if hasattr(session, "pending_user_source"):
+            session.pending_user_source = None
         try:
             # Runtime cleanup is not user activity; do not bubble old sessions
             # to the top of the sidebar just because a stale stream flag was
@@ -2312,6 +2318,8 @@ def _clear_stale_stream_state(session) -> bool:
                 original_stub.pending_attachments = []
             if hasattr(original_stub, "pending_started_at"):
                 original_stub.pending_started_at = None
+            if hasattr(original_stub, "pending_user_source"):
+                original_stub.pending_user_source = None
         except Exception:
             pass
     return True
@@ -7728,6 +7736,7 @@ def handle_get(handler, parsed) -> bool:
                 "pending_user_message": getattr(s, "pending_user_message", None),
                 "pending_attachments": getattr(s, "pending_attachments", []) if load_messages else [],
                 "pending_started_at": getattr(s, "pending_started_at", None),
+                "pending_user_source": getattr(s, "pending_user_source", None),
                 "context_length": _persisted_cl,
                 "threshold_tokens": _threshold_tokens,
                 "last_prompt_tokens": getattr(s, "last_prompt_tokens", 0) or 0,
@@ -13945,7 +13954,7 @@ def _handle_background(handler, body):
     return j(handler, {"task_id": task_id, "stream_id": stream_id, "session_id": bg.session_id})
 
 
-def _checkpoint_user_message_for_eager_session_save(s, msg: str, attachments, started_at: float | None) -> None:
+def _checkpoint_user_message_for_eager_session_save(s, msg: str, attachments, started_at: float | None, source: str = "webui") -> None:
     """Materialize the current user turn for eager first-turn persistence.
 
     The streaming thread still receives ``pending_user_message`` so existing
@@ -13963,6 +13972,8 @@ def _checkpoint_user_message_for_eager_session_save(s, msg: str, attachments, st
             if latest_text == msg_text:
                 return
     user_msg = {"role": "user", "content": msg}
+    if source and source != "webui":
+        user_msg["_source"] = source
     if isinstance(started_at, (int, float)) and started_at > 0:
         user_msg["timestamp"] = int(started_at)
     if attachments:
@@ -14000,6 +14011,7 @@ def _prepare_chat_start_session_for_stream(
     model_provider,
     stream_id: str,
     started_at: float | None = None,
+    source: str = "webui",
 ):
     """Persist chat-start state according to webui.session_save_mode.
 
@@ -14017,6 +14029,7 @@ def _prepare_chat_start_session_for_stream(
     s.pending_user_message = msg
     s.pending_attachments = attachments
     s.pending_started_at = started_at if started_at is not None else time.time()
+    s.pending_user_source = source
     current_title = getattr(s, "title", None)
     if _is_default_or_empty_session_title(current_title):
         provisional_title = _provisional_title_from_prompt(msg, current_title or "Untitled")
@@ -14028,6 +14041,7 @@ def _prepare_chat_start_session_for_stream(
             msg,
             attachments,
             s.pending_started_at,
+            source=source,
         )
     s.save()
 
@@ -14134,6 +14148,7 @@ def _start_chat_stream_for_session(
     normalized_model: bool = False,
     diag=None,
     goal_related: bool = False,
+    source: str = "webui",
 ):
     """Persist pending state, register an SSE channel, and start an agent turn."""
     attachments = attachments or []
@@ -14204,6 +14219,7 @@ def _start_chat_stream_for_session(
                     model=model,
                     model_provider=model_provider,
                     stream_id=stream_id,
+                    source=source,
                 )
                 break
         if needs_stale_cleanup:
@@ -14380,6 +14396,7 @@ def _start_run(
                 model_provider=request.provider or model_provider,
                 normalized_model=normalized_model,
                 diag=diag,
+                source=request.source or source,
             )
 
         def _legacy_adapter_factory():
@@ -14418,6 +14435,7 @@ def _start_run(
         model_provider=model_provider,
         normalized_model=normalized_model,
         diag=diag,
+        source=source,
     )
 
 
@@ -15027,6 +15045,7 @@ def _handle_chat_sync(handler, body):
             _previous_context_messages,
             _restore_display_reasoning_metadata(_previous_messages, _result_messages),
             msg,
+            source=getattr(s, "pending_user_source", None) or "webui",
         )
         # Only auto-generate title when still default; preserves user renames
         if s.title == "Untitled":
@@ -16828,6 +16847,7 @@ def _handle_session_compress(handler, body):
             s.pending_user_message = None
             s.pending_attachments = []
             s.pending_started_at = None
+            s.pending_user_source = None
             visible_after = visible_messages_for_anchor(compressed, auto_compression=False)
             s.compression_anchor_visible_idx = max(0, len(visible_after) - 1) if visible_after else None
             s.compression_anchor_message_key = _anchor_message_key(visible_after[-1]) if visible_after else None
