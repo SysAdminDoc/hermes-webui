@@ -327,11 +327,22 @@ class TestIsolatedRuntimePinning:
         monkeypatch.setattr(_profiles_mod, "_INITIAL_HERMES_HOME", str(isolated_default))
         monkeypatch.setattr(_profiles_mod, "_get_profile_skills_stats", lambda _path: (0, 0))
 
-        with mock.patch("hermes_cli.profiles.list_profiles", return_value=[
+        # Inject a STUB hermes_cli.profiles into sys.modules rather than
+        # mock.patch("hermes_cli.profiles.list_profiles", ...): that string
+        # target forces a real import of hermes_cli, which is NOT installed in
+        # CI (the bundled agent isn't on the WebUI test path) -> ModuleNotFoundError.
+        # list_profiles_api() does `from hermes_cli.profiles import list_profiles`
+        # internally, so a stub module satisfies it at the WebUI boundary. (#4454 CI)
+        stub_profiles = types.ModuleType("hermes_cli.profiles")
+        stub_profiles.list_profiles = lambda: [
             _Info("default", temp_hermes_home, True),
             _Info("default", isolated_default, False),
-        ]):
-            rows = list_profiles_api()
+        ]
+        stub_pkg = sys.modules.get("hermes_cli") or types.ModuleType("hermes_cli")
+        monkeypatch.setitem(sys.modules, "hermes_cli", stub_pkg)
+        monkeypatch.setitem(sys.modules, "hermes_cli.profiles", stub_profiles)
+
+        rows = list_profiles_api()
 
         assert len(rows) == 1
         assert Path(rows[0]["path"]) == isolated_default
