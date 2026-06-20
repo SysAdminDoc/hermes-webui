@@ -3196,6 +3196,7 @@ def _catalog_has_provider(
         provider_raw in raw_provider_ids
         or (provider_normalized and provider_normalized in raw_provider_ids)
         or (provider_normalized and provider_normalized in normalized_provider_ids)
+
     )
 
 
