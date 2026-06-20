@@ -9238,15 +9238,15 @@ function _renderLiveAnchorActivitySceneSnapshotForStream(streamId, scene, sessio
   return renderLiveAnchorActivityScene(streamId,scene,{...(opts||{}),sessionId});
 }
 if(typeof window!=='undefined'){
-  window._renderLiveAnchorActivitySceneForStream=function(streamId, sessionId, opts){
-    return _renderLiveAnchorActivitySceneForStream(streamId, sessionId, opts);
-  };
-  window._renderLiveAnchorActivitySceneSnapshotForStream=function(streamId, scene, sessionId, opts){
-    return _renderLiveAnchorActivitySceneSnapshotForStream(streamId, scene, sessionId, opts);
-  };
-  window._projectLiveAnchorActivitySceneForStream=function(streamId, mode){
-    return _projectLiveAnchorActivitySceneForStream(streamId, mode);
-  };
+  // Direct assignment, NOT a same-name wrapper: these are top-level `function`
+  // declarations, which in a classic script are already window properties.
+  // Re-exporting via `window.X = function(){ return X() }` reassigns that same
+  // global property to the wrapper, so the inner call resolves to the wrapper
+  // itself → infinite recursion (RangeError: Maximum call stack size exceeded)
+  // on every live render / reattach / snapshot-restore path (#2715/#2771 class).
+  window._renderLiveAnchorActivitySceneForStream=_renderLiveAnchorActivitySceneForStream;
+  window._renderLiveAnchorActivitySceneSnapshotForStream=_renderLiveAnchorActivitySceneSnapshotForStream;
+  window._projectLiveAnchorActivitySceneForStream=_projectLiveAnchorActivitySceneForStream;
   window.isLiveAnchorActivitySceneOwner=isLiveAnchorActivitySceneOwner;
 }
 function _renderSettledAnchorSceneForMessage(message, segment, rawIdx){
