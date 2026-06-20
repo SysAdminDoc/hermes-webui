@@ -4601,15 +4601,44 @@ def _load_models_cache_from_disk() -> dict | None:
         if not _is_loadable_disk_cache(cache):
             return None
         # Strip the disk-only metadata before returning, so the in-memory
-        # cache shape stays exactly what the rest of the code expects.
+        # cache shape stays exactly what the rest of the code expects. The
+        # disk save path does not persist `aliases`, so reconstruct them from
+        # current config to keep the /api/models.aliases contract intact (a
+        # disk-cache hit must not silently drop `/model <alias>` resolution).
         return {
             "active_provider": cache["active_provider"],
             "default_model": cache["default_model"],
             "configured_model_badges": cache["configured_model_badges"],
             "groups": cache["groups"],
+            "aliases": (
+                cache["aliases"]
+                if isinstance(cache.get("aliases"), dict)
+                else _model_aliases_from_config()
+            ),
         }
     except Exception:
         return None
+
+
+def _model_aliases_from_config() -> dict[str, str]:
+    """Build the normalized model-alias map from current config.
+
+    Mirrors the alias construction used by the live and static catalog paths so
+    the `/api/models.aliases` contract is consistent across every catalog source
+    (live, static, and the stale-disk fallback, which can't read aliases from a
+    disk cache that never persisted them).
+    """
+    try:
+        raw_aliases = cfg.get("model", {}).get("aliases", {})
+        if isinstance(raw_aliases, dict):
+            return {
+                str(k).strip(): str(v).strip()
+                for k, v in raw_aliases.items()
+                if k and v
+            }
+    except Exception:
+        pass
+    return {}
 
 
 def _load_stale_models_cache_from_disk() -> dict | None:
@@ -4636,12 +4665,20 @@ def _load_stale_models_cache_from_disk() -> dict | None:
         if cache.get("_schema_version") != _MODELS_CACHE_SCHEMA_VERSION:
             return None
         aliases = cache.get("aliases")
+        if not isinstance(aliases, dict):
+            # The disk cache save path does not persist `aliases`, so a cache
+            # read back from disk lacks them. Defaulting to {} would silently
+            # break `/model <alias>` slash-command resolution (static/commands.js
+            # resolves slash aliases only from /api/models.aliases) for the
+            # duration of the over-budget stale fallback. Reconstruct from
+            # current config, mirroring the live/static catalog alias build.
+            aliases = _model_aliases_from_config()
         return {
             "active_provider": cache["active_provider"],
             "default_model": cache["default_model"],
             "configured_model_badges": cache["configured_model_badges"],
             "groups": cache["groups"],
-            "aliases": aliases if isinstance(aliases, dict) else {},
+            "aliases": aliases,
         }
     except Exception:
         return None

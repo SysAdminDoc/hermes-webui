@@ -401,6 +401,27 @@ def test_load_stale_models_cache_from_disk_rejects_cross_schema(
     assert cfg._load_stale_models_cache_from_disk() is None
 
 
+def test_load_stale_models_cache_reconstructs_aliases_from_config(
+    monkeypatch,
+    isolate_models_catalog_state,
+):
+    """When the disk cache lacks aliases (the save path never persisted them),
+    the stale loader must reconstruct them from current config so /model <alias>
+    slash-command resolution keeps working during the over-budget fallback."""
+    payload = _build_stale_disk_cache_payload()
+    payload.pop("aliases", None)
+    models_cache_path = isolate_models_catalog_state["models_cache_path"]
+    monkeypatch.setattr(cfg, "_get_models_cache_path", lambda: models_cache_path)
+    models_cache_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(
+        cfg, "cfg", {"model": {"aliases": {"fast": "ollama-cloud/chat-1"}}}, raising=False
+    )
+
+    stale = cfg._load_stale_models_cache_from_disk()
+    assert stale is not None
+    assert stale["aliases"] == {"fast": "ollama-cloud/chat-1"}
+
+
 def test_default_group_survives_only_as_emergency_last_resort(
     monkeypatch,
     isolate_models_catalog_state,
