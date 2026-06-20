@@ -12,54 +12,41 @@ from api.gateway_chat import _gateway_runs_approval_event
 REPO_ROOT = Path(__file__).parent.parent
 GATEWAY_CHAT_SRC = (REPO_ROOT / "api" / "gateway_chat.py").read_text(encoding="utf-8")
 
+_LEGACY_MARKER = 'url = f"{base_url}/v1/chat/completions"'
+_NEXT_FUNC_RE = "\ndef "
+
 
 def _extract_legacy_sse_loop():
-    """Extract the legacy /v1/chat/completions SSE parsing loop body."""
-    marker = 'url = f"{base_url}/v1/chat/completions"'
-    start = GATEWAY_CHAT_SRC.find(marker)
+    """Extract the legacy /v1/chat/completions SSE relay function body."""
+    start = GATEWAY_CHAT_SRC.find(_LEGACY_MARKER)
     assert start >= 0, "Legacy chat/completions path not found in gateway_chat.py"
-    loop_marker = "with urllib.request.urlopen(req, timeout="
-    loop_start = GATEWAY_CHAT_SRC.find(loop_marker, start)
-    assert loop_start >= 0, "Legacy SSE loop not found"
-    brace = GATEWAY_CHAT_SRC.find(":", loop_start)
-    depth = 1
-    i = brace + 1
-    while i < len(GATEWAY_CHAT_SRC) and depth:
-        ch = GATEWAY_CHAT_SRC[i]
-        if ch in "([{":
-            depth += 1
-        elif ch in ")]}":
-            depth -= 1
-        elif ch == "\n":
-            rest = GATEWAY_CHAT_SRC[i + 1:]
-            indent = len(rest) - len(rest.lstrip())
-            if indent <= 12 and rest.lstrip() and not rest.lstrip().startswith("#"):
-                pass
-        i += 1
-    return GATEWAY_CHAT_SRC[start:i]
+    end = GATEWAY_CHAT_SRC.find(_NEXT_FUNC_RE, start)
+    if end < 0:
+        end = len(GATEWAY_CHAT_SRC)
+    return GATEWAY_CHAT_SRC[start:end]
 
 
-def test_legacy_loop_checks_approval_request_sse_event():
-    """Legacy SSE loop must handle `event: approval.request`."""
+def test_legacy_loop_checks_approval_request_event():
+    """Legacy SSE loop must handle `approval.request` events."""
     loop = _extract_legacy_sse_loop()
     assert '"approval.request"' in loop, (
-        "Legacy SSE loop must check for approval.request SSE event name"
+        "Legacy SSE loop must check for approval.request event name"
     )
 
 
-def test_legacy_loop_checks_hermes_approval_request_sse_event():
-    """Legacy SSE loop must handle `event: hermes.approval.request`."""
+def test_legacy_loop_checks_hermes_approval_request_event():
+    """Legacy SSE loop must handle `hermes.approval.request` events."""
     loop = _extract_legacy_sse_loop()
     assert '"hermes.approval.request"' in loop, (
-        "Legacy SSE loop must check for hermes.approval.request SSE event name"
+        "Legacy SSE loop must check for hermes.approval.request event name"
     )
 
 
-def test_legacy_loop_checks_inline_json_approval_event():
-    """Legacy SSE loop must derive event type from JSON payload for inline approval."""
+def test_legacy_loop_derives_event_from_payload():
+    """Legacy SSE loop must derive event type from JSON payload fields."""
     loop = _extract_legacy_sse_loop()
     assert 'payload.get("event")' in loop or "payload.get('event')" in loop, (
-        "Legacy SSE loop must check payload JSON 'event' field for inline approval"
+        "Legacy SSE loop must check payload JSON 'event' field"
     )
 
 
@@ -92,7 +79,7 @@ def test_legacy_loop_resets_sse_event_after_approval():
     loop = _extract_legacy_sse_loop()
     approval_idx = loop.find('"hermes.approval.request"')
     assert approval_idx >= 0
-    block_after = loop[approval_idx:approval_idx + 800]
+    block_after = loop[approval_idx:approval_idx + 900]
     assert 'sse_event = "message"' in block_after, (
         "Must reset sse_event to 'message' after approval handling to prevent bleed"
     )

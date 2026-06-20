@@ -702,18 +702,7 @@ def _run_gateway_chat_streaming(
                             put_gateway_event("reasoning", {"text": reason_delta})
                         sse_event = "message"
                         continue
-                    if sse_event in {"hermes.approval.request", "approval.request"}:
-                        approval_data = _gateway_runs_approval_event(payload)
-                        if approval_data:
-                            put_gateway_event("approval", approval_data)
-                            try:
-                                from api.route_approvals import submit_gateway_pending_mirror
-                                submit_gateway_pending_mirror(session_id, approval_data)
-                            except Exception:
-                                pass
-                        sse_event = "message"
-                        continue
-                    _payload_event = str(payload.get("event") or payload.get("type") or "").strip()
+                    _payload_event = str(payload.get("event") or payload.get("type") or sse_event).strip()
                     if _payload_event in {"hermes.approval.request", "approval.request"}:
                         approval_data = _gateway_runs_approval_event(payload)
                         if approval_data:
@@ -722,7 +711,7 @@ def _run_gateway_chat_streaming(
                                 from api.route_approvals import submit_gateway_pending_mirror
                                 submit_gateway_pending_mirror(session_id, approval_data)
                             except Exception:
-                                pass
+                                logger.debug("submit_gateway_pending_mirror failed", exc_info=True)
                         sse_event = "message"
                         continue
                     last_payload = payload
