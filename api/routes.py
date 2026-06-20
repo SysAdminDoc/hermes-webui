@@ -3540,6 +3540,13 @@ def _handle_session_anchor_scene(handler, body):
         return bad(handler, "Session not found", 404)
     except PermissionError:
         return bad(handler, "Read-only imported sessions cannot persist anchor scenes", 403)
+    # Active-profile visibility guard (parity with GET /api/session, routes.py:~8922).
+    # _get_or_materialize_session loads by id with no profile scoping, so without
+    # this an authenticated request under profile A could persist anchor scenes
+    # onto a session owned by profile B (cross-profile write). Reject as 404 —
+    # same shape the read path uses — and leave anchor_activity_scenes untouched.
+    if not _session_visible_to_active_profile(getattr(s, "profile", None) or None, handler):
+        return bad(handler, "Session not found", 404)
     with _get_session_agent_lock(sid):
         idx, message = _find_anchor_scene_message(
             getattr(s, "messages", None) or [],

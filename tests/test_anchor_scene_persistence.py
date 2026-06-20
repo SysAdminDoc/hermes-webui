@@ -102,6 +102,91 @@ def test_anchor_scene_persistence_round_trip_outside_provider_messages(tmp_path,
     assert hydrated[1]["_anchor_activity_scene"]["activity_rows"][0]["tool_call_id"] == "call-1"
 
 
+def test_anchor_scene_persistence_rejects_cross_profile_write(tmp_path, monkeypatch):
+    """#4411 security: /api/session/anchor-scene must not persist a scene onto a
+    session that isn't visible to the active request profile. _get_or_materialize_session
+    loads by id with no profile scoping, so the handler must apply the same
+    _session_visible_to_active_profile guard GET /api/session uses — returning 404
+    and leaving anchor_activity_scenes untouched (no cross-profile write)."""
+    from api import models, routes
+    from api.models import Session
+
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir()
+    monkeypatch.setattr(models, "SESSION_DIR", session_dir)
+    monkeypatch.setattr(models, "SESSION_INDEX_FILE", session_dir / "_index.json")
+    monkeypatch.setattr(models, "SESSIONS", OrderedDict())
+    monkeypatch.setattr(routes, "SESSION_DIR", session_dir)
+    monkeypatch.setattr(routes, "SESSIONS", models.SESSIONS)
+
+    session = Session(
+        session_id="foreignprofile1",
+        title="Owned by profile B",
+        messages=[
+            {"role": "user", "content": "question"},
+            {"role": "assistant", "content": "final answer", "timestamp": 10.0},
+        ],
+    )
+    session.profile = "profile-b"
+    session.save(skip_index=True)
+
+    scene = {
+        "version": "activity_scene_v1",
+        "mode": "compact_worklog",
+        "activity_rows": [
+            {
+                "row_id": "tool-1",
+                "role": "tool",
+                "tool_call_id": "call-1",
+                "tool": {"id": "call-1", "name": "terminal", "args": {"command": "git status"}},
+            }
+        ],
+        "final_answer": "final answer",
+    }
+    request_body = {
+        "session_id": "foreignprofile1",
+        "stream_id": "stream-1",
+        "message_index": 1,
+        "message_ref": "ref",
+        "scene": scene,
+    }
+
+    captured = {}
+    monkeypatch.setattr(routes, "_check_csrf", lambda handler: True)
+    monkeypatch.setattr(routes, "read_body", lambda handler: request_body)
+    # Request runs under a profile that CANNOT see profile-b's session.
+    monkeypatch.setattr(
+        routes,
+        "_session_visible_to_active_profile",
+        lambda session_profile, handler=None: session_profile not in ("profile-b",),
+    )
+    monkeypatch.setattr(
+        routes,
+        "bad",
+        lambda handler, msg, status=400, extra_headers=None: captured.update(
+            error=msg, status=status
+        ) or True,
+    )
+    monkeypatch.setattr(
+        routes,
+        "j",
+        lambda handler, payload, status=200, extra_headers=None: captured.update(
+            payload=payload, status=status
+        ) or True,
+    )
+
+    assert routes.handle_post(
+        SimpleNamespace(command="POST"),
+        SimpleNamespace(path="/api/session/anchor-scene"),
+    ) is True
+    assert captured.get("status") == 404
+    assert "payload" not in captured  # success j() never called
+    raw = json.loads((session_dir / "foreignprofile1.json").read_text(encoding="utf-8"))
+    assert not raw.get("anchor_activity_scenes"), (
+        "cross-profile request must NOT persist anchor_activity_scenes"
+    )
+
+
 def test_anchor_scene_hydration_rejects_stale_index_fallback_when_final_answer_mismatches():
     from api import routes
 
