@@ -19203,7 +19203,7 @@ const LOCALES = {
     checkpoint_diff_no_changes: 'Nie znaleziono różnic między tym punktem kontrolnym a obecnym obszarem roboczym.',
     checkpoint_diff_files_changed: (n) => n === 1 ? '1 plik zmieniony' : `${n} zmienionych plików`,
   },
-    vi: {
+  vi: {
     offline_title: 'Mất kết nối',
     offline_browser_detail: 'Trình duyệt báo rằng thiết bị này đang ngoại tuyến.',
     offline_network_detail: 'Không thể kết nối tới Hermes từ trình duyệt lúc này.',
