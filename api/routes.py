@@ -3490,11 +3490,25 @@ def _hydrate_anchor_activity_scenes(messages, records, *, message_offset=0, tool
         if idx is not None:
             by_index[idx] = record
     out = list(messages)
+    # Read-side ref-ambiguity guard (parity with the write-side
+    # _find_anchor_scene_message, which returns None when a ref matches >1
+    # message). If two assistant messages ever share a ref (byte-identical
+    # whitespace-normalized content + identical _ts), attaching the same scene
+    # to both would render duplicate worklog groups. Count ref occurrences and
+    # fall through to the index-based match (which is positional, unambiguous)
+    # for any ref that resolves to more than one assistant message.
+    _ref_counts: dict[str, int] = {}
+    for _m in messages:
+        if isinstance(_m, dict) and _m.get("role") == "assistant":
+            _r = _assistant_anchor_scene_message_ref(_m)
+            if _r:
+                _ref_counts[_r] = _ref_counts.get(_r, 0) + 1
     for local_idx, message in enumerate(messages):
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
         absolute_idx = int(message_offset or 0) + local_idx
-        record = by_ref.get(_assistant_anchor_scene_message_ref(message))
+        _msg_ref = _assistant_anchor_scene_message_ref(message)
+        record = by_ref.get(_msg_ref) if _ref_counts.get(_msg_ref, 0) <= 1 else None
         if not record:
             candidate = by_index.get(absolute_idx)
             if candidate and _anchor_scene_candidate_matches_scene(message, candidate.get("scene") or {}):

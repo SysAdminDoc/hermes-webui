@@ -187,6 +187,39 @@ def test_anchor_scene_persistence_rejects_cross_profile_write(tmp_path, monkeypa
     )
 
 
+def test_anchor_scene_hydration_skips_ambiguous_ref_match(monkeypatch):
+    """#4411 defense-in-depth: when two assistant messages share a ref (byte-identical
+    content + identical _ts), the read-side hydration must NOT attach the same scene to
+    both (which would render duplicate worklog groups) — mirroring the write-side
+    _find_anchor_scene_message ambiguity guard. The ambiguous ref falls through to the
+    positional index match instead."""
+    from api import routes
+
+    # Two assistant messages that normalize to the SAME ref.
+    messages = [
+        {"role": "assistant", "content": "dup answer", "timestamp": 5.0},
+        {"role": "assistant", "content": "dup answer", "timestamp": 5.0},
+    ]
+    ref = routes._assistant_anchor_scene_message_ref(messages[0])
+    assert ref == routes._assistant_anchor_scene_message_ref(messages[1]), "refs must collide for this test"
+
+    # A single record keyed by that ambiguous ref, index-targeted at message 0.
+    records = {
+        ref: {
+            "version": "anchor_activity_scene_record_v1",
+            "message_index": 0,
+            "message_ref": ref,
+            "scene": {"version": "activity_scene_v1", "activity_rows": [], "final_answer": "dup answer"},
+        }
+    }
+    out = routes._hydrate_anchor_activity_scenes(messages, records, message_offset=0)
+    attached = [("_anchor_activity_scene" in m) for m in out]
+    # The ambiguous ref must NOT fan the scene out to BOTH messages.
+    assert attached.count(True) <= 1, (
+        f"ambiguous ref must not double-attach the scene; got {attached}"
+    )
+
+
 def test_anchor_scene_hydration_rejects_stale_index_fallback_when_final_answer_mismatches():
     from api import routes
 
