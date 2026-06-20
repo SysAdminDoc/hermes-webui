@@ -120,7 +120,7 @@ def test_active_request_env_noop_for_default_profile(monkeypatch):
 
 
 def test_active_request_env_applies_named_profile_env(monkeypatch, tmp_path):
-    """A named profile's .env is applied inside the block and restored after."""
+    """A named profile's .env is bound to thread-local state, process env untouched."""
     base = tmp_path / ".hermes"
     (base / "profiles" / "work").mkdir(parents=True)
     (base / "profiles" / "work" / ".env").write_text(
@@ -130,14 +130,17 @@ def test_active_request_env_applies_named_profile_env(monkeypatch, tmp_path):
     monkeypatch.delenv("ISSUE_3957_PROBE", raising=False)
 
     # Simulate the per-request cookie context (issue #798).
+    monkeypatch.setenv("ISSUE_3957_PROBE", "from-process-env")
     profiles.set_request_profile("work")
     try:
         assert profiles.get_active_profile_name() == "work"
-        assert os.environ.get("ISSUE_3957_PROBE") is None
+        assert config._thread_local_env_value("ISSUE_3957_PROBE") == "from-process-env"
         with profiles.profile_env_for_active_request("test"):
-            assert os.environ.get("ISSUE_3957_PROBE") == "from-work-profile"
+            assert config._thread_local_env_value("ISSUE_3957_PROBE") == "from-work-profile"
+            assert os.environ.get("ISSUE_3957_PROBE") == "from-process-env"
         # Restored after the block exits.
-        assert os.environ.get("ISSUE_3957_PROBE") is None
+        assert config._thread_local_env_value("ISSUE_3957_PROBE") == "from-process-env"
+        assert os.environ.get("ISSUE_3957_PROBE") == "from-process-env"
     finally:
         profiles.clear_request_profile()
 
@@ -151,18 +154,79 @@ def test_active_request_env_restores_on_exception(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
     monkeypatch.delenv("ISSUE_3957_PROBE", raising=False)
+    monkeypatch.setenv("ISSUE_3957_PROBE", "from-process-env")
 
     profiles.set_request_profile("work")
     try:
         with_raised = False
         try:
             with profiles.profile_env_for_active_request("test"):
-                assert os.environ.get("ISSUE_3957_PROBE") == "from-work-profile"
+                assert config._thread_local_env_value("ISSUE_3957_PROBE") == "from-work-profile"
+                assert os.environ.get("ISSUE_3957_PROBE") == "from-process-env"
                 raise ValueError("boom")
         except ValueError:
             with_raised = True
         assert with_raised
-        assert os.environ.get("ISSUE_3957_PROBE") is None
+        assert config._thread_local_env_value("ISSUE_3957_PROBE") == "from-process-env"
+        assert os.environ.get("ISSUE_3957_PROBE") == "from-process-env"
+    finally:
+        profiles.clear_request_profile()
+
+
+def test_active_request_scope_prefers_profile_key_over_process_env_for_custom_provider(
+    monkeypatch,
+    tmp_path,
+):
+    """Profile-scope thread env resolves custom-provider env vars before process env."""
+    base = tmp_path / ".hermes"
+    (base / "profiles" / "work").mkdir(parents=True)
+    (base / "profiles" / "work" / ".env").write_text(
+        "ISSUE_3957_CUSTOM_KEY=from-work-profile\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+    monkeypatch.setenv("ISSUE_3957_CUSTOM_KEY", "from-process-env")
+    monkeypatch.setattr(
+        config,
+        "get_config",
+        lambda: {
+            "custom_providers": [
+                {"name": "Team", "api_key": "${ISSUE_3957_CUSTOM_KEY}"}
+            ]
+        },
+    )
+
+    profiles.set_request_profile("work")
+    try:
+        assert config.resolve_custom_provider_connection("custom:team") == (
+            "from-process-env",
+            None,
+        )
+        with profiles.profile_env_for_active_request("test"):
+            assert config.resolve_custom_provider_connection("custom:team") == (
+                "from-work-profile",
+                None,
+            )
+            assert os.environ.get("ISSUE_3957_CUSTOM_KEY") == "from-process-env"
+        assert config._thread_local_env_value("ISSUE_3957_CUSTOM_KEY") == (
+            "from-process-env"
+        )
+    finally:
+        profiles.clear_request_profile()
+
+
+def test_active_request_scope_sets_context_local_hermes_home(monkeypatch, tmp_path):
+    """Request scope keeps agent-side Hermes-home readers on the active profile."""
+    from hermes_constants import get_hermes_home
+
+    base = tmp_path / ".hermes"
+    work_home = base / "profiles" / "work"
+    work_home.mkdir(parents=True)
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+
+    profiles.set_request_profile("work")
+    try:
+        with profiles.profile_env_for_active_request("test"):
+            assert get_hermes_home() == work_home
     finally:
         profiles.clear_request_profile()
 
@@ -248,4 +312,37 @@ def test_detached_worker_scope_binds_profile_on_new_thread(monkeypatch, tmp_path
     assert out["inside_env"] == "worker-env"
     assert out["after_name"] == "models_cache.json"  # restored
     assert out["after_env"] is None
+
+
+def test_detached_worker_prefers_profile_key_for_custom_provider(monkeypatch, tmp_path):
+    """Detached worker scope resolves custom-provider env from thread profile, not process env."""
+    import threading
+
+    base = tmp_path / ".hermes"
+    (base / "profiles" / "work").mkdir(parents=True)
+    (base / "profiles" / "work" / ".env").write_text(
+        "ISSUE_3957_CUSTOM_KEY=from-worker-profile\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+    monkeypatch.setenv("ISSUE_3957_CUSTOM_KEY", "from-process-env")
+    monkeypatch.setattr(
+        config,
+        "get_config",
+        lambda: {
+            "custom_providers": [
+                {"name": "team", "api_key": "${ISSUE_3957_CUSTOM_KEY}"}
+            ]
+        },
+    )
+
+    out = {}
+
+    def worker():
+        with profiles.profile_scope_for_detached_worker("work", "test-worker"):
+            out["value"] = config.resolve_custom_provider_connection("custom:team")[0]
+
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join()
+    assert out["value"] == "from-worker-profile"
 

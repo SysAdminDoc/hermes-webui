@@ -1288,13 +1288,13 @@ def _legacy_custom_api_key_env_name(provider_id: object) -> str:
 def _lookup_custom_api_key_env(provider_id: object) -> str | None:
     """Look up sanitized custom-provider env first, then legacy broken shape."""
     env_name = _api_key_env_name(provider_id)
-    api_key = os.getenv(env_name, "").strip()
+    api_key = _thread_local_env_value(env_name).strip()
     if api_key:
         return api_key
 
     legacy_env_name = _legacy_custom_api_key_env_name(provider_id)
     if legacy_env_name and legacy_env_name != env_name:
-        legacy_key = os.getenv(legacy_env_name, "").strip()
+        legacy_key = _thread_local_env_value(legacy_env_name).strip()
         if legacy_key:
             if legacy_env_name not in _LEGACY_CUSTOM_API_KEY_ENV_WARNED:
                 _LEGACY_CUSTOM_API_KEY_ENV_WARNED.add(legacy_env_name)
@@ -2408,13 +2408,13 @@ def resolve_custom_provider_connection(provider_id: str) -> tuple[str | None, st
         if raw_api_key is not None:
             key_text = str(raw_api_key).strip()
             if key_text.startswith("${") and key_text.endswith("}") and len(key_text) > 3:
-                api_key = os.getenv(key_text[2:-1], "").strip() or None
+                api_key = _thread_local_env_value(key_text[2:-1]).strip() or None
             elif key_text:
                 api_key = key_text
         if not api_key:
             key_env = str(raw_key_env or "").strip()
             if key_env:
-                api_key = os.getenv(key_env, "").strip() or None
+                api_key = _thread_local_env_value(key_env).strip() or None
         if not api_key and provider_hint:
             api_key = _lookup_custom_api_key_env(provider_hint)
         return api_key
@@ -5234,7 +5234,7 @@ def get_available_models(*, prefer_cache: bool = False) -> dict:
                 "AWS_ACCESS_KEY_ID",
                 "AWS_SECRET_ACCESS_KEY",
             ):
-                val = os.getenv(k)
+                val = _thread_local_env_value(k)
                 if val:
                     all_env[k] = val
             if all_env.get("ANTHROPIC_API_KEY"):
@@ -5557,7 +5557,7 @@ def get_available_models(*, prefer_cache: bool = False) -> dict:
                     "API_KEY",
                 )
                 for key in api_key_vars:
-                    api_key = (all_env.get(key) or os.getenv(key) or "").strip()
+                    api_key = (all_env.get(key) or _thread_local_env_value(key) or "").strip()
                     if api_key:
                         break
 
@@ -5599,7 +5599,7 @@ def get_available_models(*, prefer_cache: bool = False) -> dict:
                 if not _cp_api_key:
                     _cp_key_env = str(_cp.get("key_env") or "").strip()
                     if _cp_key_env:
-                        _cp_api_key = str(os.getenv(_cp_key_env) or "").strip()
+                        _cp_api_key = _thread_local_env_value(_cp_key_env).strip()
                 # Fallback: check credential pool for both api_key and base_url
                 if (not _cp_api_key or not _cp_base_url) and _slug:
                     try:
@@ -6891,6 +6891,22 @@ def _evict_session_agent(session_id: str) -> None:
 
 # ── Thread-local env context ─────────────────────────────────────────────────
 _thread_ctx = threading.local()
+
+
+def _thread_local_env_value(name: str, default: str = "") -> str:
+    """Return thread-local profile env first, then process env, for provider reads."""
+    env_name = str(name or "").strip()
+    if not env_name:
+        return default or ""
+
+    thread_env = getattr(_thread_ctx, "env", {})
+    if isinstance(thread_env, dict) and env_name in thread_env:
+        thread_value = thread_env.get(env_name)
+        if thread_value is None:
+            return default
+        return str(thread_value)
+
+    return str(os.getenv(env_name, default or ""))
 
 
 def _set_thread_env(**kwargs):

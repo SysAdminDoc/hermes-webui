@@ -905,36 +905,63 @@ def profile_env_for_active_request(
     purpose: str = "provider/model read",
     logger_override: Optional[logging.Logger] = None,
 ):
-    """Apply the active per-request profile's env around a read-only API call (#3957).
+    """Apply the active per-request profile's env to thread-local state only (#3957).
 
     WebUI profile switching is per-client/cookie scoped (issue #798): a browser
     on a named profile sets a ``hermes_profile`` cookie, which ``server.py``
-    turns into a thread-local via ``set_request_profile()``.  But the per-client
-    switch deliberately does NOT reload the profile's ``.env`` into
-    ``os.environ`` (that would mutate process-global state shared with other
-    clients).  So read-only endpoints that resolve provider credentials through
-    ``os.environ`` / ``HERMES_HOME`` — ``/api/providers`` (``get_auth_status``
-    probes) and ``/api/models`` (``provider_model_ids`` / custom-key lookup) —
-    resolve against the *default* profile's credentials instead of the active
-    one.  Symptoms: Settings → Providers times out and the model picker shows
-    only the default profile's models.
+    turns into a thread-local via ``set_request_profile()``.  This wrapper keeps
+    provider-credential reads isolated to the request profile and does not touch
+    process-wide environment for read-only endpoints.
 
-    This mirrors what streaming already does for the duration of an agent run
-    (``profile_env_for_background_worker``): it temporarily applies the active
-    profile's ``.env`` + terminal config for the duration of the wrapped read,
-    then restores the previous env under ``_ENV_LOCK``.
+    A thread-local read-only scope is used for ``/api/providers`` and
+    ``/api/models`` flows that now resolve credentials through thread-local
+    environment first. It also sets a context-local Hermes-home override so
+    agent-side auth-store reads stay on the active profile without mutating
+    process-global ``os.environ``.
 
-    No-ops (zero overhead, byte-identical behavior) for the default/root profile
-    — the overwhelmingly common single-profile deployment is unaffected.
+    No-ops for the default/root profile, which is the common single-profile
+    deployment case.
     """
     profile = (get_active_profile_name() or "").strip()
     if not profile or _is_root_profile(profile):
         yield
         return
-    with profile_env_for_background_worker(
-        profile, purpose, logger_override=logger_override
-    ):
+    try:
+        from api.config import _clear_thread_env, _set_thread_env, _thread_ctx
+        from hermes_constants import (
+            reset_hermes_home_override,
+            set_hermes_home_override,
+        )
+        profile_home_path = Path(get_hermes_home_for_profile(profile))
+        runtime_env = get_profile_runtime_env(profile_home_path)
+        safe_runtime_env = filter_runtime_env_for_gateway_parity(runtime_env)
+    except Exception:
+        log = logger_override or logger
+        log.debug(
+            "Failed to resolve profile env for active request profile %s in %s; "
+            "falling back to current env",
+            profile,
+            purpose,
+            exc_info=True,
+        )
         yield
+        return
+
+    thread_env = dict(safe_runtime_env)
+    thread_env["HERMES_HOME"] = str(profile_home_path)
+    previous_thread_env = getattr(_thread_ctx, "env", {}).copy()
+    home_override_token = None
+    try:
+        _set_thread_env(**thread_env)
+        home_override_token = set_hermes_home_override(profile_home_path)
+        yield
+    finally:
+        if home_override_token is not None:
+            reset_hermes_home_override(home_override_token)
+        if previous_thread_env:
+            _set_thread_env(**previous_thread_env)
+        else:
+            _clear_thread_env()
 
 
 @contextmanager
