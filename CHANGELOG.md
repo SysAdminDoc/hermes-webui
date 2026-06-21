@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.553] — 2026-06-21 — Release TL (extensions diagnostics panel in Settings)
+
+### Added
+
+- **A read-only "Extensions" diagnostics pane in Settings (#4569 follow-up).** Backed by the `/api/extensions/status` endpoint, it shows whether the extension runtime/manifest loaded, the final same-origin asset URLs that get injected, and any sanitized warnings (stable codes and coarse sources only — never the configured filesystem path, raw environment values, or rejected URL strings). Includes an up-front trust-model note that extensions run in the WebUI browser origin. Read-only and observational. Thanks @santastabber.
+
 ## [v0.51.552] — 2026-06-21 — Release TK (extension sidecar CSP documentation)
 
 ### Changed
