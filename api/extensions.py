@@ -253,6 +253,12 @@ def _read_manifest_urls(root: Path) -> Tuple[List[str], List[str]]:
     except json.JSONDecodeError:
         _log.warning("Configured extension manifest is not valid JSON")
         return [], []
+    except RecursionError:
+        # A <=64KB but deeply-nested manifest makes json.loads exceed the
+        # interpreter recursion limit. Without this, the RecursionError escapes
+        # into the app-shell route and every page load 503s. Fail safe.
+        _log.warning("Configured extension manifest is too deeply nested")
+        return [], []
     except (OSError, UnicodeDecodeError):
         _log.warning("Configured extension manifest could not be read")
         return [], []

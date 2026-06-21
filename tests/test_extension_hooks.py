@@ -228,6 +228,29 @@ def test_extension_manifest_reuses_url_safety_rules(tmp_path, monkeypatch):
     }
 
 
+def test_extension_manifest_deeply_nested_json_fails_safe(tmp_path, monkeypatch):
+    """A <=64KB but deeply-nested manifest makes json.loads raise RecursionError.
+    It must fail safe (empty lists) — NOT escape and 503 every page load."""
+    monkeypatch.delenv("HERMES_WEBUI_EXTENSION_SCRIPT_URLS", raising=False)
+    monkeypatch.delenv("HERMES_WEBUI_EXTENSION_STYLESHEET_URLS", raising=False)
+    root = tmp_path / "extensions"
+    root.mkdir()
+    # ~6000 nested arrays: well under 64KB but blows the recursion limit in json.loads.
+    depth = 6000
+    payload = "[" * depth + "]" * depth
+    assert len(payload.encode("utf-8")) < 64 * 1024
+    (root / "deep.json").write_text(payload, encoding="utf-8")
+    monkeypatch.setenv("HERMES_WEBUI_EXTENSION_DIR", str(root))
+    monkeypatch.setenv("HERMES_WEBUI_EXTENSION_MANIFEST", "deep.json")
+
+    from api.extensions import get_extension_config
+
+    # Must not raise; must fall back to no manifest assets.
+    cfg = get_extension_config()
+    assert cfg["script_urls"] == []
+    assert cfg["stylesheet_urls"] == []
+
+
 def test_extension_manifest_path_must_stay_inside_extension_root(tmp_path, monkeypatch):
     monkeypatch.delenv("HERMES_WEBUI_EXTENSION_STYLESHEET_URLS", raising=False)
     root = tmp_path / "extensions"
