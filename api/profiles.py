@@ -933,6 +933,9 @@ def profile_env_for_background_worker(
             _scope_token = set_secret_scope(thread_env)
             _has_scope = True
         except ImportError:
+            import sys as _sys
+            _sys.modules.pop('agent', None)
+            _sys.modules.pop('agent.secret_scope', None)
             _scope_token = None
             _has_scope = False
         with _ENV_LOCK:
@@ -1049,6 +1052,9 @@ def profile_env_for_active_request_readonly(
             _scope_token = set_secret_scope(thread_env)
             _has_scope = True
         except ImportError:
+            import sys as _sys
+            _sys.modules.pop('agent', None)
+            _sys.modules.pop('agent.secret_scope', None)
             _scope_token = None
             _has_scope = False
         if set_hermes_home_override is not None:
