@@ -598,6 +598,8 @@ def test_active_request_scope_installs_secret_scope(monkeypatch, tmp_path):
     fake_secret_scope = types.ModuleType("agent.secret_scope")
     fake_secret_scope.set_secret_scope = fake_set_secret_scope
     fake_secret_scope.reset_secret_scope = fake_reset_secret_scope
+    prev_agent = sys.modules.get("agent")
+    prev_ss = sys.modules.get("agent.secret_scope")
     sys.modules["agent.secret_scope"] = fake_secret_scope
     sys.modules["agent"] = types.ModuleType("agent")
 
@@ -607,8 +609,15 @@ def test_active_request_scope_installs_secret_scope(monkeypatch, tmp_path):
             pass
     finally:
         profiles.clear_request_profile()
-        del sys.modules["agent.secret_scope"]
-        del sys.modules["agent"]
+        if prev_ss is not None:
+            sys.modules["agent.secret_scope"] = prev_ss
+        else:
+            sys.modules.pop("agent.secret_scope", None)
+        if prev_agent is not None:
+            sys.modules["agent"] = prev_agent
+        else:
+            sys.modules.pop("agent", None)
+        profiles._secret_scope_available = None
 
     # Verify the scope was set with profile env only
     assert "set_scope" in call_log
@@ -642,6 +651,8 @@ def test_detached_worker_scope_installs_secret_scope(monkeypatch, tmp_path):
     fake_secret_scope = types.ModuleType("agent.secret_scope")
     fake_secret_scope.set_secret_scope = fake_set_secret_scope
     fake_secret_scope.reset_secret_scope = fake_reset_secret_scope
+    prev_agent = sys.modules.get("agent")
+    prev_ss = sys.modules.get("agent.secret_scope")
     sys.modules["agent.secret_scope"] = fake_secret_scope
     sys.modules["agent"] = types.ModuleType("agent")
 
@@ -660,8 +671,15 @@ def test_detached_worker_scope_installs_secret_scope(monkeypatch, tmp_path):
             thread.join()
     finally:
         profiles.clear_request_profile()
-        del sys.modules["agent.secret_scope"]
-        del sys.modules["agent"]
+        if prev_ss is not None:
+            sys.modules["agent.secret_scope"] = prev_ss
+        else:
+            sys.modules.pop("agent.secret_scope", None)
+        if prev_agent is not None:
+            sys.modules["agent"] = prev_agent
+        else:
+            sys.modules.pop("agent", None)
+        profiles._secret_scope_available = None
 
     # Verify the scope was set with profile env only
     assert "set_scope" in call_log
