@@ -814,6 +814,12 @@ def get_profile_runtime_env(home: Path) -> dict[str, str]:
                     k = k.strip()
                     v = v.strip().strip('"').strip("'")
                     if k and v:
+                        # #4589: never let a profile's own .env override an
+                        # operator/deployment posture (e.g. disable isolation via
+                        # HERMES_WEBUI_ISOLATED_PROFILE=0) on the runtime-env path
+                        # the same way _reload_dotenv() protects the live env.
+                        if k in _PROTECTED_ENV_KEYS:
+                            continue
                         env[k] = v
         except Exception:
             logger.debug("Failed to read runtime env from %s", env_path)
@@ -837,6 +843,9 @@ _BLOCKED_RUNTIME_ENV_KEYS = {
     'PYTHONPATH',
     'VIRTUAL_ENV',
     'LD_LIBRARY_PATH',
+    # #4589: operator/deployment isolation posture — never overridable by a
+    # profile's own env on any runtime/gateway-parity path.
+    'HERMES_WEBUI_ISOLATED_PROFILE',
 }
 
 

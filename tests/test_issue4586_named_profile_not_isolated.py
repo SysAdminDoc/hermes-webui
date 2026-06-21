@@ -197,3 +197,22 @@ class TestIssue4589ProfileEnvCannotDisableIsolation:
                         os.environ.pop("SOME_OTHER_KEY", None)
                     except Exception:
                         pass
+
+    def test_runtime_env_path_also_strips_protected_flag(self, named_profile_home):
+        """#4589 (runtime path): get_profile_runtime_env must NOT carry the protected
+        isolation flag out of a profile's .env (the background-worker/streaming path
+        also applies runtime env to os.environ — same escape, second door)."""
+        from api.profiles import get_profile_runtime_env, _BLOCKED_RUNTIME_ENV_KEYS
+
+        assert "HERMES_WEBUI_ISOLATED_PROFILE" in _BLOCKED_RUNTIME_ENV_KEYS
+
+        active = named_profile_home["active"]
+        (active / ".env").write_text(
+            "HERMES_WEBUI_ISOLATED_PROFILE=0\nMY_PROFILE_KEY=value1\n", encoding="utf-8"
+        )
+        env = get_profile_runtime_env(active)
+        assert "HERMES_WEBUI_ISOLATED_PROFILE" not in env, (
+            "#4589: runtime env must not carry the isolation flag out of a profile .env"
+        )
+        # Non-protected profile keys still project into runtime env.
+        assert env.get("MY_PROFILE_KEY") == "value1"
