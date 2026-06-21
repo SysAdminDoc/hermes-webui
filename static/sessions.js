@@ -1106,10 +1106,11 @@ async function loadSession(sid){
   // #2980: if this (current) load resolved a hidden pre-compression snapshot,
   // follow the backend's continuation hint to the visible continuation so a
   // mobile reload mid-compression doesn't strand the user on a hidden snapshot.
+  // Do NOT write URL/localStorage here — let the re-entrant loadSession update
+  // them only once the continuation actually loads, so a rejected/deleted/
+  // cross-profile continuation can't poison restore state with an unusable id.
   const continuationSid=(data.session&&data.session.continuation_session_id)||'';
   if(continuationSid&&continuationSid!==sid&&!opts.skipContinuationResolve){
-    try{localStorage.setItem('hermes-webui-session',continuationSid);}catch(_){}
-    _setActiveSessionUrl(continuationSid);
     _loadingSessionId=null;
     return loadSession(continuationSid,{...opts,skipLineageResolve:true,skipContinuationResolve:true,force:true});
   }

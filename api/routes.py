@@ -6330,6 +6330,13 @@ def _pre_compression_continuation_session_id(session) -> str | None:
     sid = _safe_first(getattr(session, "session_id", None))
     if not sid:
         return None
+    # #2980 hardening: the resolved continuation is written to the client's
+    # URL/localStorage, so it must stay within the requested snapshot's own
+    # profile. Children are matched only by parent_session_id below; a
+    # crafted/corrupt foreign-profile sidecar whose parent_session_id collided
+    # with this snapshot's id would otherwise leak cross-profile. Pin the
+    # snapshot's profile and reject any child that isn't profile-matched.
+    snapshot_profile = getattr(session, "profile", None)
 
     def _child_rows() -> list:
         rows = []
@@ -6366,6 +6373,9 @@ def _pre_compression_continuation_session_id(session) -> str | None:
         child_sid = _safe_first(getattr(child, "session_id", None))
         if not parent_sid or not child_sid or child_sid == sid:
             continue
+        # Cross-profile guard: only follow continuations within the snapshot's profile.
+        if not _profiles_match(getattr(child, "profile", None), snapshot_profile):
+            continue
         children_by_parent.setdefault(parent_sid, []).append(child)
 
     candidates = []
@@ -6397,7 +6407,11 @@ def _pre_compression_continuation_session_id(session) -> str | None:
             ) or 0
         ),
     )
-    return getattr(latest, "session_id", None) or None
+    latest_sid = getattr(latest, "session_id", None) or None
+    # Only hand the client a well-formed session id (it gets written to URL/localStorage).
+    if latest_sid and not is_safe_session_id(latest_sid):
+        return None
+    return latest_sid
 from api.workspace import (
     load_workspaces,
     save_workspaces,
