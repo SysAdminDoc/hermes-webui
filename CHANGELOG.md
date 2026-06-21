@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.560] — 2026-06-21 — Release TS (recovered run-journal output reaches the model)
+
+### Fixed
+
+- **Assistant output recovered from the run journal is now included in the model's context, not just the visible transcript.** When a turn's output was restored from the run journal after an interruption, it was added to the on-screen conversation but not to the model-facing context, so the model could "forget" what it had just produced. Recovered rows are now backfilled into the model context (with a guard against duplicating a row that's already there). Thanks @allenliang2022.
+
 ## [v0.51.559] — 2026-06-21 — Release TR (cron model picker copy polish)
 
 ### Changed
