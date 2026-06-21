@@ -1397,7 +1397,14 @@ def _account_usage_subprocess_env(home: Path, provider: str, api_key: str | None
     except Exception:
         _thread_ctx = None
     if bool(getattr(_thread_ctx, "block_process_env_fallback", False)):
-        for env_name in _PROVIDER_CREDENTIAL_ENV_VARS:
+        _strip = set(_PROVIDER_CREDENTIAL_ENV_VARS)
+        _strip.update({"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"})
+        try:
+            from api.profiles import _profile_secret_env_names, get_active_hermes_home
+            _strip.update(_profile_secret_env_names(get_active_hermes_home()))
+        except Exception:
+            pass
+        for env_name in _strip:
             env.pop(env_name, None)
     env["HERMES_HOME"] = str(Path(home))
 

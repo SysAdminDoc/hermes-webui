@@ -923,9 +923,18 @@ def profile_env_for_background_worker(
     previous_block_process_env = bool(
         getattr(_thread_ctx, "block_process_env_fallback", False)
     )
+    _scope_token = None
+    _has_scope = False
     try:
         _set_thread_env(**thread_env)
         _thread_ctx.block_process_env_fallback = True
+        try:
+            from agent.secret_scope import reset_secret_scope, set_secret_scope
+            _scope_token = set_secret_scope(thread_env)
+            _has_scope = True
+        except ImportError:
+            _scope_token = None
+            _has_scope = False
         with _ENV_LOCK:
             old_runtime_env = _apply_profile_env_to_process(
                 os.environ,
@@ -948,6 +957,11 @@ def profile_env_for_background_worker(
                 )
         yield
     finally:
+        if _has_scope:
+            try:
+                reset_secret_scope(_scope_token)
+            except Exception:
+                pass
         _thread_ctx.block_process_env_fallback = previous_block_process_env
         if previous_thread_env:
             _set_thread_env(**previous_thread_env)
@@ -1025,13 +1039,27 @@ def profile_env_for_active_request_readonly(
         getattr(_thread_ctx, "block_process_env_fallback", False)
     )
     home_override_token = None
+    _scope_token = None
+    _has_scope = False
     try:
         _set_thread_env(**thread_env)
         _thread_ctx.block_process_env_fallback = True
+        try:
+            from agent.secret_scope import reset_secret_scope, set_secret_scope
+            _scope_token = set_secret_scope(thread_env)
+            _has_scope = True
+        except ImportError:
+            _scope_token = None
+            _has_scope = False
         if set_hermes_home_override is not None:
             home_override_token = set_hermes_home_override(profile_home_path)
         yield
     finally:
+        if _has_scope:
+            try:
+                reset_secret_scope(_scope_token)
+            except Exception:
+                pass
         if home_override_token is not None and reset_hermes_home_override is not None:
             try:
                 reset_hermes_home_override(home_override_token)

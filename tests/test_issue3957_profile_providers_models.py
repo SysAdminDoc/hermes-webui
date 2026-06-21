@@ -574,3 +574,153 @@ def test_account_usage_subprocess_env_blocks_process_default_key(monkeypatch, tm
     assert env["HERMES_HOME"] == str(work_home)
     assert "OPENAI_API_KEY" not in env
 
+
+def test_active_request_scope_installs_secret_scope(monkeypatch, tmp_path):
+    """Inside readonly scope, agent.secret_scope sees profile env, not process env."""
+    import types
+
+    base = tmp_path / ".hermes"
+    work_home = base / "profiles" / "work"
+    work_home.mkdir(parents=True)
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "process-default-key")
+
+    # Inject fake agent.secret_scope that records calls
+    call_log = {}
+
+    def fake_set_secret_scope(scope_dict):
+        call_log["set_scope"] = dict(scope_dict)
+        return "fake_token"
+
+    def fake_reset_secret_scope(token):
+        call_log["reset_called"] = True
+
+    fake_secret_scope = types.ModuleType("agent.secret_scope")
+    fake_secret_scope.set_secret_scope = fake_set_secret_scope
+    fake_secret_scope.reset_secret_scope = fake_reset_secret_scope
+    sys.modules["agent.secret_scope"] = fake_secret_scope
+    sys.modules["agent"] = types.ModuleType("agent")
+
+    profiles.set_request_profile("work")
+    try:
+        with profiles.profile_env_for_active_request_readonly("test"):
+            pass
+    finally:
+        profiles.clear_request_profile()
+        del sys.modules["agent.secret_scope"]
+        del sys.modules["agent"]
+
+    # Verify the scope was set with profile env only
+    assert "set_scope" in call_log
+    assert "OPENROUTER_API_KEY" not in call_log["set_scope"]
+    assert "HERMES_HOME" in call_log["set_scope"]
+    # Verify reset was called
+    assert call_log.get("reset_called") is True
+
+
+def test_detached_worker_scope_installs_secret_scope(monkeypatch, tmp_path):
+    """Inside detached worker scope, agent.secret_scope sees profile env, not process env."""
+    import threading
+    import types
+
+    base = tmp_path / ".hermes"
+    work_home = base / "profiles" / "work"
+    work_home.mkdir(parents=True)
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "process-default-key")
+
+    # Inject fake agent.secret_scope that records calls
+    call_log = {}
+
+    def fake_set_secret_scope(scope_dict):
+        call_log["set_scope"] = dict(scope_dict)
+        return "fake_token"
+
+    def fake_reset_secret_scope(token):
+        call_log["reset_called"] = True
+
+    fake_secret_scope = types.ModuleType("agent.secret_scope")
+    fake_secret_scope.set_secret_scope = fake_set_secret_scope
+    fake_secret_scope.reset_secret_scope = fake_reset_secret_scope
+    sys.modules["agent.secret_scope"] = fake_secret_scope
+    sys.modules["agent"] = types.ModuleType("agent")
+
+    result = {"scope_was_set": False}
+
+    def worker_body():
+        result["scope_was_set"] = "set_scope" in call_log
+
+    # Capture the profile on the main thread
+    profiles.set_request_profile("work")
+    captured_profile = profiles.get_active_profile_name()
+    try:
+        with profiles.profile_scope_for_detached_worker(captured_profile):
+            thread = threading.Thread(target=worker_body)
+            thread.start()
+            thread.join()
+    finally:
+        profiles.clear_request_profile()
+        del sys.modules["agent.secret_scope"]
+        del sys.modules["agent"]
+
+    # Verify the scope was set with profile env only
+    assert "set_scope" in call_log
+    assert "OPENROUTER_API_KEY" not in call_log["set_scope"]
+    assert "HERMES_HOME" in call_log["set_scope"]
+    # Verify reset was called
+    assert call_log.get("reset_called") is True
+
+
+def test_account_usage_subprocess_env_strips_bedrock_keys(monkeypatch, tmp_path):
+    """Quota probes must not inherit AWS/Bedrock keys when block_process_env_fallback is set."""
+    from api.providers import _account_usage_subprocess_env
+
+    base = tmp_path / ".hermes"
+    work_home = base / "profiles" / "work"
+    work_home.mkdir(parents=True)
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "aws-key-id")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
+
+    profiles.set_request_profile("work")
+    try:
+        with profiles.profile_env_for_active_request_readonly("quota probe"):
+            env = _account_usage_subprocess_env(work_home, "bedrock", None)
+    finally:
+        profiles.clear_request_profile()
+
+    assert env["HERMES_HOME"] == str(work_home)
+    assert "AWS_ACCESS_KEY_ID" not in env
+    assert "AWS_SECRET_ACCESS_KEY" not in env
+
+
+def test_account_usage_subprocess_env_strips_custom_key_env(monkeypatch, tmp_path):
+    """Quota probes must strip custom provider key_env when block_process_env_fallback is set."""
+    from api.providers import _account_usage_subprocess_env
+
+    base = tmp_path / ".hermes"
+    work_home = base / "profiles" / "work"
+    work_home.mkdir(parents=True)
+
+    # Create a config.yaml with a custom provider that has key_env
+    config_yaml = work_home / "config.yaml"
+    config_yaml.write_text(
+        """
+custom_providers:
+  - key_env: MY_CUSTOM_API_KEY
+"""
+    )
+
+    monkeypatch.setattr(profiles, "_DEFAULT_HERMES_HOME", base)
+    monkeypatch.setenv("MY_CUSTOM_API_KEY", "custom-secret")
+
+    profiles.set_request_profile("work")
+    try:
+        with profiles.profile_env_for_active_request_readonly("quota probe"):
+            env = _account_usage_subprocess_env(work_home, "openai", None)
+    finally:
+        profiles.clear_request_profile()
+
+    assert env["HERMES_HOME"] == str(work_home)
+    assert "MY_CUSTOM_API_KEY" not in env
+
