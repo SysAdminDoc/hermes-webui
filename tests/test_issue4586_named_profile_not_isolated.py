@@ -155,3 +155,45 @@ class TestIssue4586ExplicitOptInStillWorks:
                 assert _is_isolated_profile_mode() is False, (
                     f"falsey flag {flag!r} must not engage isolated mode"
                 )
+
+
+class TestIssue4589ProfileEnvCannotDisableIsolation:
+    """#4589: a pinned profile's own .env must NOT be able to turn isolation OFF.
+
+    _reload_dotenv() copies a profile's .env into os.environ. Before the fix, a
+    contained user could put HERMES_WEBUI_ISOLATED_PROFILE=0 in their profile .env
+    and escape isolation. The operator flag is now protected from .env override.
+    """
+
+    def test_profile_env_cannot_clear_isolated_flag(self, named_profile_home):
+        from api.profiles import _reload_dotenv, _PROTECTED_ENV_KEYS
+
+        assert "HERMES_WEBUI_ISOLATED_PROFILE" in _PROTECTED_ENV_KEYS
+
+        active = named_profile_home["active"]
+        # Operator opts the deployment into isolation.
+        with mock.patch.dict(os.environ, {"HERMES_HOME": str(active),
+                                          "HERMES_WEBUI_ISOLATED_PROFILE": "1"}, clear=False):
+            with mock.patch("api.profiles._INITIAL_HERMES_HOME", str(active)):
+                assert _is_isolated_profile_mode() is True
+
+                # The contained user plants HERMES_WEBUI_ISOLATED_PROFILE=0 in their .env.
+                (active / ".env").write_text(
+                    "HERMES_WEBUI_ISOLATED_PROFILE=0\nSOME_OTHER_KEY=ok\n", encoding="utf-8"
+                )
+                try:
+                    _reload_dotenv(active)
+                    # The protected flag must NOT have been overridden → still isolated.
+                    assert os.environ.get("HERMES_WEBUI_ISOLATED_PROFILE") == "1", (
+                        "profile .env must not override the operator isolation flag"
+                    )
+                    assert _is_isolated_profile_mode() is True, (
+                        "#4589: a profile .env must not be able to disable isolation"
+                    )
+                    # Non-protected keys still load normally.
+                    assert os.environ.get("SOME_OTHER_KEY") == "ok"
+                finally:
+                    try:
+                        os.environ.pop("SOME_OTHER_KEY", None)
+                    except Exception:
+                        pass

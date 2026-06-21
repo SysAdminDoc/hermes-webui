@@ -125,9 +125,15 @@ def _unwrap_profile_home_to_base(home: Path) -> Path:
     return home
 
 
+# Env keys a pinned profile's .env may NOT override via _reload_dotenv() — these
+# are operator/deployment-level postures, not per-profile toggles. Letting a
+# profile .env set HERMES_WEBUI_ISOLATED_PROFILE=0 would let a contained user
+# escape isolation (#4589).
+_PROTECTED_ENV_KEYS = frozenset({'HERMES_WEBUI_ISOLATED_PROFILE'})
+
+
 def _isolated_profile_opt_in() -> bool:
     """Return True only when isolated single-profile mode is EXPLICITLY enabled.
-
     Isolated mode is an intentional multi-user deployment posture (each user is
     pinned to one profile and cross-profile operations are rejected). It must be
     opted into with ``HERMES_WEBUI_ISOLATED_PROFILE`` — it is NEVER inferred from
@@ -138,6 +144,14 @@ def _isolated_profile_opt_in() -> bool:
     profile switching for ordinary single-user deployments (#4586).
 
     Accepts the usual truthy values; default (unset/empty/falsey) is OFF.
+
+    Security: this reads the operator-set env var live, but a pinned profile's
+    ``.env`` can NEVER override it — ``_reload_dotenv()`` explicitly refuses to
+    copy ``HERMES_WEBUI_ISOLATED_PROFILE`` from a profile ``.env`` into
+    ``os.environ`` (see ``_PROTECTED_ENV_KEYS``). Otherwise a contained user could
+    set ``HERMES_WEBUI_ISOLATED_PROFILE=0`` in their own profile ``.env`` and
+    silently escape isolation (#4589). The opt-in is an operator/deployment
+    posture, never a per-profile-file toggle.
     """
     return os.getenv('HERMES_WEBUI_ISOLATED_PROFILE', '').strip().lower() in (
         '1', 'true', 'yes', 'on',
@@ -1061,6 +1075,16 @@ def _reload_dotenv(home: Path):
                 k = k.strip()
                 v = v.strip().strip('"').strip("'")
                 if k and v:
+                    # Operator/deployment-level keys are never overridable by a
+                    # profile's own .env (#4589 — prevents a contained user from
+                    # disabling their isolation via HERMES_WEBUI_ISOLATED_PROFILE=0).
+                    if k in _PROTECTED_ENV_KEYS:
+                        logger.warning(
+                            "Ignoring protected key %s in profile .env %s; "
+                            "operator/deployment env takes precedence",
+                            k, env_path,
+                        )
+                        continue
                     os.environ[k] = v
                     loaded_keys.add(k)
         _loaded_profile_env_keys = loaded_keys
