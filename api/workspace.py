@@ -1461,7 +1461,13 @@ def _escape_virtual_path(root: str, rel: str) -> str:
 def _escape_surface_target(workspace: Path, rel: str) -> tuple[Path, Path]:
     workspace_root = workspace.resolve()
     surface_rel = _normalize_workspace_rel_path(rel)
-    surface_path = workspace / surface_rel
+    surface_posix = PurePosixPath(surface_rel)
+    parent_rel = str(surface_posix.parent)
+    if parent_rel in ("", "."):
+        parent_path = workspace_root
+    else:
+        parent_path = safe_resolve_ws(workspace_root, parent_rel)
+    surface_path = parent_path / surface_posix.name
     if not surface_path.is_symlink():
         raise ValueError(f"Path is not an escape-target symlink: {rel}")
     target = surface_path.resolve()
@@ -1483,6 +1489,10 @@ def _escape_authorized_root(target: Path) -> tuple[Path, str]:
     if resolved_target.is_dir():
         return resolved_target, "."
     return resolved_target.parent, resolved_target.name
+
+
+class EscapeAuthorizationExpiredError(ValueError):
+    pass
 
 
 def _escape_prune_tokens(now: float | None = None) -> None:
@@ -1531,25 +1541,21 @@ def _escape_authorization_record(workspace: Path, session_id: str, token: str) -
         _escape_prune_tokens(now)
         record = dict(_ESCAPE_AUTH_TOKENS.get(token) or {})
     if not record:
-        raise ValueError("Escape authorization expired")
+        raise EscapeAuthorizationExpiredError("Escape authorization expired")
     if str(record.get("session_id") or "") != str(session_id or ""):
-        raise ValueError("Escape authorization expired")
+        raise EscapeAuthorizationExpiredError("Escape authorization expired")
     if str(record.get("workspace_root") or "") != workspace_root:
-        raise ValueError("Escape authorization expired")
-    if now >= float(record.get("expires_at") or 0.0):
-        with _ESCAPE_AUTH_LOCK:
-            _ESCAPE_AUTH_TOKENS.pop(token, None)
-        raise ValueError("Escape authorization expired")
+        raise EscapeAuthorizationExpiredError("Escape authorization expired")
     surface_path = _normalize_workspace_rel_path(record.get("surface_path") or ".")
     surface_target = str(record.get("surface_target") or "")
     try:
         _surface, current_target = _escape_surface_target(Path(workspace_root), surface_path)
     except ValueError:
-        raise ValueError("Escape authorization expired") from None
+        raise EscapeAuthorizationExpiredError("Escape authorization expired") from None
     if str(current_target.resolve()) != surface_target:
-        raise ValueError("Escape authorization expired")
+        raise EscapeAuthorizationExpiredError("Escape authorization expired")
     if not current_target.exists() or _is_blocked_system_path(current_target):
-        raise ValueError("Escape authorization expired")
+        raise EscapeAuthorizationExpiredError("Escape authorization expired")
     return record
 
 

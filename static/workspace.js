@@ -697,7 +697,7 @@ async function loadDir(path, opts={}){
     if(!path||path==='.') _refreshGitBadge();
   }catch(e){
     const grant = _workspaceEscapeGrantForPath(path);
-    if(grant && (e && (e.status === 403 || e.status === 404))){
+    if(grant && e && e.status===403){
       _clearWorkspaceEscapeGrant(grant.path);
       showToast(t('external_link_grant_expired') || t('file_open_failed'), 5000, 'error');
       return;
@@ -1095,7 +1095,7 @@ async function openFile(path, opts={}){
       renderCodePreviewContent(path, data.content);
   }catch(e){
       const grant = _workspaceEscapeGrantForPath(path);
-      if(grant && (e && (e.status === 403 || e.status === 404))){
+      if(grant && e && e.status===403){
         _clearWorkspaceEscapeGrant(grant.path);
         showToast(t('external_link_grant_expired') || t('file_open_failed'), 5000, 'error');
         return;

@@ -176,6 +176,12 @@ class TestIssue4582EscapeNavigationLive:
         auth, status = _post_json("/api/escape/authorize", {"session_id": sid, "path": "escape"})
         assert status == 200, auth
 
+        nested_auth, nested_status = _post_json(
+            "/api/escape/authorize",
+            {"session_id": sid, "path": "escape/nested-escape"},
+        )
+        assert nested_status in (403, 404), nested_auth
+
         listed = _get_json(
             f"/api/escape/list?session_id={sid}&token={auth['token']}&path=escape"
         )

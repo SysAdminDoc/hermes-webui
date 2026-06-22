@@ -6614,6 +6614,7 @@ from api.workspace import (
     set_last_workspace,
     git_info_for_workspace,
     authorize_escape_target,
+    EscapeAuthorizationExpiredError,
     list_dir,
     list_authorized_escape_dir,
     dir_signature,
@@ -9825,9 +9826,6 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/list":
         return _handle_list_dir(handler, parsed)
 
-    if parsed.path == "/api/escape/authorize":
-        return _handle_escape_authorize(handler, parsed)
-
     if parsed.path == "/api/escape/list":
         return _handle_escape_list_dir(handler, parsed)
 
@@ -12995,10 +12993,10 @@ def _handle_escape_list_dir(handler, parsed):
         return j(handler, payload)
     except FileNotFoundError as exc:
         return bad(handler, _sanitize_error(exc), 404)
+    except EscapeAuthorizationExpiredError as exc:
+        return bad(handler, _sanitize_error(exc), 403)
     except ValueError as exc:
-        msg = _sanitize_error(exc)
-        status = 403 if "expired" in msg.lower() else 404
-        return bad(handler, msg, status)
+        return bad(handler, _sanitize_error(exc), 404)
 
 
 def _handle_escape_file_read(handler, parsed):
@@ -13018,10 +13016,10 @@ def _handle_escape_file_read(handler, parsed):
         return j(handler, read_authorized_escape_file_content(Path(s.workspace), sid, token, rel))
     except FileNotFoundError as exc:
         return bad(handler, _sanitize_error(exc), 404)
+    except EscapeAuthorizationExpiredError as exc:
+        return bad(handler, _sanitize_error(exc), 403)
     except ValueError as exc:
-        msg = _sanitize_error(exc)
-        status = 403 if "expired" in msg.lower() else 404
-        return bad(handler, msg, status)
+        return bad(handler, _sanitize_error(exc), 404)
 
 
 def _handle_escape_file_raw(handler, parsed):
@@ -13042,10 +13040,10 @@ def _handle_escape_file_raw(handler, parsed):
         anchor_root, target = raw_authorized_escape_target(Path(s.workspace), sid, token, rel)
     except FileNotFoundError:
         return j(handler, {"error": "not found"}, status=404)
+    except EscapeAuthorizationExpiredError as exc:
+        return bad(handler, _sanitize_error(exc), 403)
     except ValueError as exc:
-        msg = _sanitize_error(exc)
-        status = 403 if "expired" in msg.lower() else 404
-        return bad(handler, msg, status)
+        return bad(handler, _sanitize_error(exc), 404)
     if not target.exists() or not target.is_file():
         return j(handler, {"error": "not found"}, status=404)
     ext = target.suffix.lower()
