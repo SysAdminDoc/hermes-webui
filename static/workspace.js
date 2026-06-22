@@ -252,16 +252,17 @@ async function authorizeWorkspaceEscapeNavigation(item){
   if(!S.session || !item || !item.path) return null;
   const normalizedPath = _normalizeWorkspaceRelPath(item.path);
   const exactGrant = _workspaceEscapeExactGrant(normalizedPath);
-  if(exactGrant) return exactGrant;
-  const ok = await showConfirmDialog({
-    title: item.name || normalizedPath,
-    message: t('external_link_open_confirm'),
-    confirmLabel: t('dialog_confirm_btn'),
-    danger: false,
-    hideCancel: true,
-    focusCancel: false,
-  });
-  if(!ok) return null;
+  if(!exactGrant){
+    const ok = await showConfirmDialog({
+      title: item.name || normalizedPath,
+      message: t('external_link_open_confirm'),
+      confirmLabel: t('dialog_confirm_btn'),
+      danger: false,
+      hideCancel: true,
+      focusCancel: false,
+    });
+    if(!ok) return null;
+  }
   try{
     const data = await api('/api/escape/authorize', {
       method: 'POST',

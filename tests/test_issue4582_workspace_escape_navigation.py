@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import urllib.error
 import urllib.request
+import urllib.parse
 
 import pytest
 
@@ -30,11 +31,16 @@ def _get_bytes(path: str) -> bytes:
         return response.read()
 
 
-def _post_json(path: str, body: dict | None = None) -> tuple[dict, int]:
+def _browser_headers() -> dict[str, str]:
+    parsed = urllib.parse.urlparse(BASE)
+    return {"Origin": f"{parsed.scheme}://{parsed.netloc}"}
+
+
+def _post_json(path: str, body: dict | None = None, headers: dict[str, str] | None = None) -> tuple[dict, int]:
     req = urllib.request.Request(
         BASE + path,
         data=json.dumps(body or {}).encode(),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **(headers or {})},
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -89,9 +95,16 @@ class TestIssue4582EscapeNavigationLive:
         escape_row = {entry["name"]: entry for entry in root_listing["entries"]}["escape-file.txt"]
         assert escape_row["target_outside_workspace"] is True
 
+        denied, denied_status = _post_json(
+            "/api/escape/authorize",
+            {"session_id": sid, "path": "escape-file.txt"},
+        )
+        assert denied_status == 403, denied
+
         auth, status = _post_json(
             "/api/escape/authorize",
             {"session_id": sid, "path": "escape-file.txt"},
+            headers=_browser_headers(),
         )
         assert status == 200, auth
         assert auth["path"] == "escape-file.txt"
@@ -131,7 +144,14 @@ class TestIssue4582EscapeNavigationLive:
         escape_row = {entry["name"]: entry for entry in root_listing["entries"]}["escape"]
         assert escape_row["target_outside_workspace"] is True
 
-        auth, status = _post_json("/api/escape/authorize", {"session_id": sid, "path": "escape"})
+        denied, denied_status = _post_json("/api/escape/authorize", {"session_id": sid, "path": "escape"})
+        assert denied_status == 403, denied
+
+        auth, status = _post_json(
+            "/api/escape/authorize",
+            {"session_id": sid, "path": "escape"},
+            headers=_browser_headers(),
+        )
         assert status == 200, auth
         assert auth["path"] == "escape"
         assert auth["is_dir"] is True
@@ -173,12 +193,17 @@ class TestIssue4582EscapeNavigationLive:
         (workspace / "escape").symlink_to(outside)
 
         sid = _make_session(workspace)
-        auth, status = _post_json("/api/escape/authorize", {"session_id": sid, "path": "escape"})
+        auth, status = _post_json(
+            "/api/escape/authorize",
+            {"session_id": sid, "path": "escape"},
+            headers=_browser_headers(),
+        )
         assert status == 200, auth
 
         nested_auth, nested_status = _post_json(
             "/api/escape/authorize",
             {"session_id": sid, "path": "escape/nested-escape"},
+            headers=_browser_headers(),
         )
         assert nested_status in (403, 404), nested_auth
 
@@ -276,6 +301,75 @@ const apiFns = runner(S, showConfirmDialog, api, showToast, t, URLSearchParams);
         assert result["grantLookup"]["token"] == "tok-123"
         assert result["readOnly"] is True
         assert result["confirmCalls"][0]["message"] == "external_link_open_confirm"
+        assert result["apiCalls"] == [
+            {
+                "path": "/api/escape/authorize",
+                "method": "POST",
+                "body": "{\"session_id\":\"sess-1\",\"path\":\"escape\"}",
+            }
+        ]
+        assert result["toasts"][0][0] == "external_link_read_only"
+
+    def test_exact_grant_click_reauthorizes_without_reprompt(self):
+        helper_block = _workspace_escape_helper_block()
+        js = (
+            "const helperBlock = "
+            + json.dumps(helper_block)
+            + ";\n"
+            + r"""
+const S = {
+  session: { session_id: 'sess-1' },
+  currentDir: '.',
+  _escapeGrants: {
+    escape: {
+      sessionId: 'sess-1',
+      path: 'escape',
+      token: 'tok-old',
+      expiresAt: Date.now() + 60_000,
+      isDir: true,
+    },
+  },
+};
+const confirmCalls = [];
+const apiCalls = [];
+const toasts = [];
+const showConfirmDialog = async (opts) => { confirmCalls.push(opts); return true; };
+const api = async (path, opts) => {
+  apiCalls.push({ path, method: opts && opts.method, body: opts && opts.body });
+  return {
+    token: 'tok-new',
+    path: 'escape',
+    expires_at: 4102444800,
+    is_dir: true,
+    read_only: true,
+  };
+};
+const showToast = (...args) => { toasts.push(args); };
+const t = (key) => key;
+const runner = new Function(
+  'S', 'showConfirmDialog', 'api', 'showToast', 't', 'URLSearchParams',
+  helperBlock + '; return { authorizeWorkspaceEscapeNavigation, _workspaceEscapeExactGrant };'
+);
+const apiFns = runner(S, showConfirmDialog, api, showToast, t, URLSearchParams);
+(async () => {
+  const grant = await apiFns.authorizeWorkspaceEscapeNavigation({ path: 'escape', name: 'escape' });
+  console.log(JSON.stringify({
+    grant,
+    stored: apiFns._workspaceEscapeExactGrant('escape'),
+    confirmCalls,
+    apiCalls,
+    toasts,
+  }));
+})().catch((err) => {
+  console.error(err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});
+"""
+        )
+        result = _run_node(js)
+        assert result["grant"]["token"] == "tok-new"
+        assert result["stored"]["token"] == "tok-new"
+        assert result["confirmCalls"] == []
         assert result["apiCalls"] == [
             {
                 "path": "/api/escape/authorize",

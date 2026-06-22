@@ -15,6 +15,7 @@ recursion.  Covers:
 import json
 import os
 import pathlib
+import urllib.parse
 import urllib.request
 import urllib.error
 import tempfile
@@ -33,8 +34,12 @@ def get(path):
 def post(path, body=None):
     url = BASE + path
     data = json.dumps(body or {}).encode()
+    headers = {"Content-Type": "application/json"}
+    if path == "/api/escape/authorize":
+        parsed = urllib.parse.urlparse(BASE)
+        headers["Origin"] = f"{parsed.scheme}://{parsed.netloc}"
     req = urllib.request.Request(url, data=data,
-          headers={"Content-Type": "application/json"})
+          headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return json.loads(r.read()), r.status

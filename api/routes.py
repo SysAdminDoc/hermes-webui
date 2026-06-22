@@ -12949,6 +12949,10 @@ def _read_json_request_body(handler, *, max_bytes: int = 4096) -> dict:
 def _handle_escape_authorize(handler, parsed, body: dict | None = None):
     if handler.command != "POST":
         return bad(handler, "method not allowed", 405)
+    if not _is_browser_unsafe_request(handler):
+        return bad(handler, "browser confirmation required", 403)
+    if not _check_csrf(handler):
+        return bad(handler, _csrf_rejection_error(handler), 403)
     if body is None:
         try:
             body = _read_json_request_body(handler)
