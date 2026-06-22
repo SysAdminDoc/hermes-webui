@@ -252,6 +252,33 @@ if _AGENT_DIR is not None:
 else:
     _HERMES_FOUND = False
 
+# ── Thread-local env context ─────────────────────────────────────────────────
+# Defined BEFORE the config-file section because _expand_env_vars() (below) calls
+# _thread_local_env_value() and the import-time reload_config() runs during module
+# load — a forward reference here would NameError on any startup config.yaml that
+# uses a ${VAR} reference. Depends only on os + threading (both imported above).
+_thread_ctx = threading.local()
+
+
+def _thread_local_env_value(name: str, default: str = "") -> str:
+    """Return thread-local profile env first, then process env, for provider reads."""
+    env_name = str(name or "").strip()
+    if not env_name:
+        return default or ""
+
+    thread_env = getattr(_thread_ctx, "env", {})
+    if isinstance(thread_env, dict) and env_name in thread_env:
+        thread_value = thread_env.get(env_name)
+        if thread_value is None:
+            return default or ""
+        return str(thread_value)
+
+    if bool(getattr(_thread_ctx, "block_process_env_fallback", False)):
+        return default or ""
+
+    return str(os.getenv(env_name, default or ""))
+
+
 # ── Config file (reloadable -- supports profile switching) ──────────────────
 
 def _expand_env_vars(obj):
@@ -463,7 +490,29 @@ def reload_config() -> None:
             if config_path.exists():
                 loaded = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
-                    _cfg_cache.update(_expand_env_vars(loaded))
+                    # The process-global _cfg_cache must reflect PROCESS-env
+                    # expansion, never a profile-scoped block_process_env_fallback
+                    # view — otherwise a reload that fires while a readonly/worker
+                    # scope is active (profile alternation resolves _get_config_path
+                    # to the named profile, #798 TLS) would bake under-expanded
+                    # literal ${VAR}s into the shared cache and starve concurrent
+                    # readers of the module-level `cfg` alias. Expansion re-runs
+                    # per-read elsewhere; here we pin the cache to the unscoped view.
+                    _prev_block = getattr(_thread_ctx, "block_process_env_fallback", False)
+                    _prev_env = getattr(_thread_ctx, "env", None)
+                    try:
+                        _thread_ctx.block_process_env_fallback = False
+                        _thread_ctx.env = {}
+                        _cfg_cache.update(_expand_env_vars(loaded))
+                    finally:
+                        _thread_ctx.block_process_env_fallback = _prev_block
+                        if _prev_env is None:
+                            try:
+                                del _thread_ctx.env
+                            except AttributeError:
+                                pass
+                        else:
+                            _thread_ctx.env = _prev_env
                     try:
                         _cfg_mtime = Path(config_path).stat().st_mtime
                     except OSError:
@@ -7184,26 +7233,9 @@ def _evict_session_agent(session_id: str) -> None:
             logger.debug("Failed to close _session_db on eviction for %s", session_id, exc_info=True)
 
 # ── Thread-local env context ─────────────────────────────────────────────────
-_thread_ctx = threading.local()
-
-
-def _thread_local_env_value(name: str, default: str = "") -> str:
-    """Return thread-local profile env first, then process env, for provider reads."""
-    env_name = str(name or "").strip()
-    if not env_name:
-        return default or ""
-
-    thread_env = getattr(_thread_ctx, "env", {})
-    if isinstance(thread_env, dict) and env_name in thread_env:
-        thread_value = thread_env.get(env_name)
-        if thread_value is None:
-            return default or ""
-        return str(thread_value)
-
-    if bool(getattr(_thread_ctx, "block_process_env_fallback", False)):
-        return default or ""
-
-    return str(os.getenv(env_name, default or ""))
+# (_thread_ctx + _thread_local_env_value are defined near the top of this module,
+# above the config-file section, so _expand_env_vars can reference them at the
+# import-time reload_config() without a forward-reference NameError.)
 
 
 def _set_thread_env(**kwargs):
