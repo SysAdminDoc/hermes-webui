@@ -5917,6 +5917,16 @@ async function switchToProfile(name) {
   if (_chipLabel) _chipLabel.textContent = name;
   if (_titlebarLabel) _titlebarLabel.textContent = name;
 
+  // ── Clear stale content + show loading skeletons immediately (#4662) ───────
+  // The conversation list and workspace tree still show the PREVIOUS profile's
+  // content until their fetches resolve (~1s). Replace them with skeletons the
+  // instant the switch begins so the user never stares at the wrong profile's
+  // data, and gets consistent loading feedback across the whole surface — not
+  // just the spinning chip. The real renders below overwrite these.
+  if (typeof showSessionListSkeleton === 'function') showSessionListSkeleton();
+  const _workspaceVisibleAtStart = typeof _workspacePanelMode !== 'undefined' && _workspacePanelMode !== 'closed';
+  if (_workspaceVisibleAtStart && typeof showWorkspaceTreeSkeleton === 'function') showWorkspaceTreeSkeleton();
+
   // Determine whether the current session has any messages.
   // A session with messages is "in progress" and belongs to the current profile —
   // we must not retag it.  We'll start a fresh session for the new profile instead.
@@ -6041,16 +6051,20 @@ async function switchToProfile(name) {
       await renderSessionList();
       showToast(t('profile_switched_new_conversation', name));
     } else {
-      // No messages yet — just refresh the list and topbar in place
-      await renderSessionList();
+      // No messages yet — refresh the list and workspace tree in place. These
+      // two fetches (/api/sessions and /api/list) are independent, so kick them
+      // off together rather than serially: the slow session-list fetch should
+      // not also delay the workspace tree resolving. The _switchGen guard below
+      // still discards everything if a newer switch superseded us. (#4662)
+      const workspaceVisible = typeof _workspacePanelMode !== 'undefined' && _workspacePanelMode !== 'closed';
+      const listLoad = renderSessionList();
+      const dirLoad = (S.session && S.session.workspace) ? loadDir('.') : null;
+      await listLoad;
       if (_switchGen !== _profileSwitchGeneration) return;
       syncTopbar();
       // Refresh workspace file tree so the right panel shows the new
       // profile's workspace, not the previous one (#1214).
-      if (S.session && S.session.workspace) {
-        const dirLoad = loadDir('.');
-        if (typeof _workspacePanelMode !== 'undefined' && _workspacePanelMode !== 'closed') await dirLoad;
-      }
+      if (dirLoad && workspaceVisible) await dirLoad;
       showToast(t('profile_switched', name));
     }
 
@@ -6062,6 +6076,17 @@ async function switchToProfile(name) {
     if (_switchGen === _profileSwitchGeneration && _chipLabel) _chipLabel.textContent = _prevProfileName;
     if (_switchGen === _profileSwitchGeneration && _titlebarLabel) _titlebarLabel.textContent = _prevProfileName;
     if (_switchGen === _profileSwitchGeneration) showToast(t('switch_failed') + e.message);
+    // The switch failed, so we're still on the previous profile and its caches
+    // are intact — restore the real list/tree so the loading skeletons we showed
+    // up front don't strand. (#4662)
+    if (_switchGen === _profileSwitchGeneration) {
+      if (typeof _sessionListSkeletonActive === 'undefined' || _sessionListSkeletonActive) {
+        if (typeof renderSessionListFromCache === 'function') renderSessionListFromCache();
+      }
+      if (_workspaceVisibleAtStart && S.session && S.session.workspace && typeof loadDir === 'function') {
+        loadDir('.');
+      }
+    }
   } finally {
     // Always remove loading indicator regardless of success or failure
     if (_switchGen === _profileSwitchGeneration && _chip) { _chip.classList.remove('switching'); _chip.disabled = false; }

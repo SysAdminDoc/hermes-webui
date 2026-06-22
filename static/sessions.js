@@ -3493,6 +3493,58 @@ function animateNextSessionListRefresh(options={}){
   if(options&&options.enterAll) _sessionListEnterAllAnimationPending = true;
 }
 
+// ── Loading skeletons (#4662 Phase 1) ───────────────────────────────────────
+// Tracks whether the session list is currently showing a skeleton so a
+// resolving render knows to replace it (and so we don't stack skeletons).
+let _sessionListSkeletonActive = false;
+
+// Skeleton structure mirrors a real sidebar: a couple of group headers
+// (Pinned / Today / Last week) with single-line rows under each. Title widths
+// vary so it reads as real conversations. `stamp:false` omits the timestamp bar
+// on the occasional row (a real list mixes rows with/without a visible time).
+const _SESSION_SKELETON_GROUPS = [
+  {rows: [{title: 70}]},
+  {rows: [{title: 84}, {title: 58}, {title: 76}]},
+  {rows: [{title: 64}, {title: 90}, {title: 52}, {title: 72}]},
+];
+
+// Render a skeleton placeholder into #sessionList that mirrors the real row
+// anatomy (group labels + single-line title bars with a short timestamp bar).
+// Called the instant a profile switch begins so the user never sees the
+// previous profile's conversations.
+function showSessionListSkeleton(){
+  const list = $('sessionList');
+  if(!list) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'skeleton-list';
+  wrap.setAttribute('aria-hidden', 'true');
+  for(const group of _SESSION_SKELETON_GROUPS){
+    const label = document.createElement('div');
+    label.className = 'skeleton-group-label';
+    wrap.appendChild(label);
+    for(const spec of group.rows){
+      const row = document.createElement('div');
+      row.className = 'skeleton-row';
+      const title = document.createElement('div');
+      title.className = 'skeleton-bar skeleton-title';
+      title.style.width = spec.title + '%';
+      const stamp = document.createElement('div');
+      stamp.className = 'skeleton-bar skeleton-stamp';
+      row.appendChild(title);
+      row.appendChild(stamp);
+      wrap.appendChild(row);
+    }
+  }
+  list.innerHTML = '';
+  list.appendChild(wrap);
+  list.scrollTop = 0;
+  _sessionListSkeletonActive = true;
+}
+
+function _clearSessionListSkeletonFlag(){
+  _sessionListSkeletonActive = false;
+}
+
 function _isOptimisticFirstTurnSessionRow(s){
   if(!s||!s.session_id||s.archived) return false;
   const messageCount=Number(s.message_count||0);
@@ -5384,6 +5436,8 @@ function renderSessionListFromCache(){
   const committedSwipeReflowDelay=Math.max(0,committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);
   const listScrollTopBeforeRender=list.scrollTop||0;
   list.innerHTML='';
+  // A real render has arrived — the skeleton (if any) is now replaced. (#4662)
+  _sessionListSkeletonActive=false;
   // Batch select bar (when in select mode)
   if(_sessionSelectMode){
     const selectBar=document.createElement('div');selectBar.className='session-select-bar';
