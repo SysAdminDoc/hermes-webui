@@ -1478,6 +1478,13 @@ def _escape_surface_target(workspace: Path, rel: str) -> tuple[Path, Path]:
     return surface_path, target
 
 
+def _escape_authorized_root(target: Path) -> tuple[Path, str]:
+    resolved_target = target.resolve()
+    if resolved_target.is_dir():
+        return resolved_target, "."
+    return resolved_target.parent, resolved_target.name
+
+
 def _escape_prune_tokens(now: float | None = None) -> None:
     cutoff = time.time() if now is None else now
     expired = [token for token, record in _ESCAPE_AUTH_TOKENS.items() if float(record.get("expires_at") or 0.0) <= cutoff]
@@ -1489,13 +1496,15 @@ def authorize_escape_target(workspace: Path, session_id: str, rel: str) -> dict:
     """Mint a short-lived browser-only grant for one surfaced escape-target symlink."""
     workspace_root = workspace.resolve()
     _surface_path, target = _escape_surface_target(workspace_root, rel)
+    external_root, external_entry_rel = _escape_authorized_root(target)
     token = secrets.token_urlsafe(24)
     expires_at = time.time() + _ESCAPE_AUTH_TTL_SECONDS
     record = {
         "session_id": str(session_id or ""),
         "workspace_root": str(workspace_root),
         "surface_path": _normalize_workspace_rel_path(rel),
-        "external_root": str(target),
+        "external_root": str(external_root),
+        "external_entry_rel": external_entry_rel,
         "surface_target": str(target),
         "expires_at": expires_at,
     }
@@ -1532,14 +1541,14 @@ def _escape_authorization_record(workspace: Path, session_id: str, token: str) -
             _ESCAPE_AUTH_TOKENS.pop(token, None)
         raise ValueError("Escape authorization expired")
     surface_path = _normalize_workspace_rel_path(record.get("surface_path") or ".")
-    external_root = Path(str(record.get("external_root") or ""))
+    surface_target = str(record.get("surface_target") or "")
     try:
-        _surface, surface_target = _escape_surface_target(Path(workspace_root), surface_path)
+        _surface, current_target = _escape_surface_target(Path(workspace_root), surface_path)
     except ValueError:
+        raise ValueError("Escape authorization expired") from None
+    if str(current_target.resolve()) != surface_target:
         raise ValueError("Escape authorization expired")
-    if str(surface_target.resolve()) != str(external_root.resolve()):
-        raise ValueError("Escape authorization expired")
-    if not surface_target.exists() or _is_blocked_system_path(surface_target):
+    if not current_target.exists() or _is_blocked_system_path(current_target):
         raise ValueError("Escape authorization expired")
     return record
 
@@ -1549,12 +1558,19 @@ def resolve_authorized_escape_request(workspace: Path, session_id: str, token: s
     surface_path = _normalize_workspace_rel_path(record["surface_path"])
     request_path = _normalize_workspace_rel_path(rel)
     try:
-        external_rel = str(PurePosixPath(request_path).relative_to(PurePosixPath(surface_path)))
+        requested_rel = str(PurePosixPath(request_path).relative_to(PurePosixPath(surface_path)))
     except ValueError:
-        raise ValueError(f"Path traversal blocked: {rel}")
-    if not external_rel:
-        external_rel = "."
+        raise ValueError(f"Path traversal blocked: {rel}") from None
+    if not requested_rel:
+        requested_rel = "."
     external_root = Path(str(record["external_root"]))
+    external_entry_rel = _normalize_workspace_rel_path(record.get("external_entry_rel") or ".")
+    if external_entry_rel == ".":
+        external_rel = requested_rel
+    elif requested_rel == ".":
+        external_rel = external_entry_rel
+    else:
+        external_rel = str(PurePosixPath(external_entry_rel) / PurePosixPath(requested_rel))
     target = external_root / external_rel
     return {
         "record": record,

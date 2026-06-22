@@ -76,6 +76,48 @@ def _run_node(js: str) -> dict:
 
 
 class TestIssue4582EscapeNavigationLive:
+    def test_authorized_file_symlink_reads_and_raws_through_parent_anchor(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        outside = tmp_path / "outside"
+        workspace.mkdir()
+        outside.mkdir()
+        (outside / "note.txt").write_text("outside file", encoding="utf-8")
+        (workspace / "escape-file.txt").symlink_to(outside / "note.txt")
+
+        sid = _make_session(workspace)
+        root_listing = _get_json(f"/api/list?session_id={sid}&path=.")
+        escape_row = {entry["name"]: entry for entry in root_listing["entries"]}["escape-file.txt"]
+        assert escape_row["target_outside_workspace"] is True
+
+        auth, status = _post_json(
+            "/api/escape/authorize",
+            {"session_id": sid, "path": "escape-file.txt"},
+        )
+        assert status == 200, auth
+        assert auth["path"] == "escape-file.txt"
+        assert auth["is_dir"] is False
+        assert auth["read_only"] is True
+
+        text = _get_json(
+            f"/api/escape/file/read?session_id={sid}&token={auth['token']}&path=escape-file.txt"
+        )
+        assert text["path"] == "escape-file.txt"
+        assert text["content"] == "outside file"
+        assert text["escape_read_only"] is True
+
+        raw = _get_bytes(
+            f"/api/escape/file/raw?session_id={sid}&token={auth['token']}&path=escape-file.txt"
+        )
+        assert raw == b"outside file"
+
+        try:
+            _get_json(
+                f"/api/escape/list?session_id={sid}&token={auth['token']}&path=escape-file.txt"
+            )
+            assert False, "file escape grants should not list as directories"
+        except urllib.error.HTTPError as exc:
+            assert exc.code in (403, 404)
+
     def test_authorized_dir_list_read_and_raw_stay_virtualized(self, tmp_path):
         workspace = tmp_path / "workspace"
         outside = tmp_path / "outside"
