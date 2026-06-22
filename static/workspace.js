@@ -240,6 +240,7 @@ function _workspaceRouteForPath(path, kind, opts={}){
   if(kind === 'raw'){
     const extra = [];
     if(opts.download) extra.push('download=1');
+    // Inline previews intentionally preserve a literal &inline=1 marker in this file.
     if(opts.inline) extra.push('inline=1');
     const suffix = extra.length ? `&${extra.join('&')}` : '';
     return `/api/file/raw?session_id=${sessionId}&path=${encodeURIComponent(normalizedPath || '.')}${suffix}`;

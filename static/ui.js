@@ -14685,17 +14685,23 @@ function _renderTreeItems(container, entries, depth){
     // Tooltip only on FILES — dblclick renames them. On directories, dblclick
     // navigates into the folder; rename lives in the right-click context menu
     // (the "Double-click to rename" hint here would be misleading). #1710.
-    const nameIsReadOnlyEscape=typeof isReadOnlyEscape!=='undefined'
-      ? isReadOnlyEscape
-      : (typeof _workspaceEscapeGrantForPath==='function' ? !!_workspaceEscapeGrantForPath(item.path) : false);
     if(isLk && item.target)
       nameEl.title = t('symlink_link_to').replace('{target}', () => elideMiddle(item.target));
     else if(isExternalLink)
-      nameEl.title = nameIsReadOnlyEscape ? t('external_link_read_only') : t('external_link_open_confirm');
-    else if(nameIsReadOnlyEscape)
+      nameEl.title = (typeof isReadOnlyEscape!=='undefined'
+        ? isReadOnlyEscape
+        : (typeof _workspaceEscapeGrantForPath==='function' ? !!_workspaceEscapeGrantForPath(item.path) : false))
+        ? t('external_link_read_only')
+        : t('external_link_open_confirm');
+    else if(typeof isReadOnlyEscape!=='undefined'
+      ? isReadOnlyEscape
+      : (typeof _workspaceEscapeGrantForPath==='function' ? !!_workspaceEscapeGrantForPath(item.path) : false))
       nameEl.title = t('external_link_read_only');
     else if(!isDirLike)
       nameEl.title = t('double_click_rename');
+    const nameIsReadOnlyEscape=typeof isReadOnlyEscape!=='undefined'
+      ? isReadOnlyEscape
+      : (typeof _workspaceEscapeGrantForPath==='function' ? !!_workspaceEscapeGrantForPath(item.path) : false);
     // Single-click opens (file) or expand-toggles (dir) but is debounced 300ms so a
     // double-click can cancel it and trigger rename instead. Without the debounce, the
     // click bubbles to el.onclick before dblclick can fire — that's #1698. Without the
