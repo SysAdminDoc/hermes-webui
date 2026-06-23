@@ -85,7 +85,7 @@ def test_live_anchor_worklog_rebuild_guards_height_for_unpinned_reader():
     compact = _compact(guard)
 
     assert "constbeforeBottomDistance=Math.max(0,messagesEl.scrollHeight-messagesEl.scrollTop-messagesEl.clientHeight);" in compact
-    assert "beforeBottomDistance>250&&(_messageUserUnpinned||messagesEl.scrollTop>0)" in compact
+    assert "beforeBottomDistance>250&&(_messageUserUnpinned||_scrollPinned===false)" in compact
     assert "scrollSnapshot.pinned=false;" in compact
     assert "scrollSnapshot.userUnpinned=true;" in compact
     assert "scrollSnapshot.bottom=beforeBottomDistance;" in compact

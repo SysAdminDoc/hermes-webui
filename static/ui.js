@@ -9595,7 +9595,12 @@ function _prepareLiveAnchorScrollRebuildGuard(scrollSnapshot){
   const messagesEl=$('messages');
   if(!messagesEl||!scrollSnapshot) return {readerAwayFromBottom:false,release:null};
   const beforeBottomDistance=Math.max(0,messagesEl.scrollHeight-messagesEl.scrollTop-messagesEl.clientHeight);
-  const readerAwayFromBottom=beforeBottomDistance>250&&(_messageUserUnpinned||messagesEl.scrollTop>0);
+  // Only treat the reader as away if they were ALREADY in a non-follow state.
+  // A pinned follower can transiently have bottomDistance>250 mid-render (the
+  // assistant body grows before the anchor scene re-renders), so keying on a
+  // raw scrollTop>0 here would mis-classify a pinned reader as unpinned and kill
+  // auto-follow. Require an explicit unpin/non-pinned signal instead.
+  const readerAwayFromBottom=beforeBottomDistance>250&&(_messageUserUnpinned||_scrollPinned===false);
   if(!readerAwayFromBottom) return {readerAwayFromBottom:false,release:null};
   scrollSnapshot.pinned=false;
   scrollSnapshot.userUnpinned=true;

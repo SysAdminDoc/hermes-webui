@@ -112,8 +112,8 @@ def test_live_anchor_rebuild_guard_holds_height_and_marks_reader_unpinned():
 
     script = f"""
 const assert = require('assert');
-let _messageUserUnpinned = false;
-let _scrollPinned = true;
+let _messageUserUnpinned = true;
+let _scrollPinned = false;
 let _nearBottomCount = 2;
 const messages = {{
   scrollTop: 2000,
@@ -161,6 +161,50 @@ assert.strictEqual(inner.style.minHeight, '');
 nestedGuard.release();
 assert.strictEqual(inner.style.minHeight, '');
 assert.strictEqual(Object.prototype.hasOwnProperty.call(inner.dataset, 'liveAnchorScrollGuardPreviousMinHeight'), false);
+"""
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+
+
+def test_live_anchor_rebuild_guard_keeps_pinned_follower_pinned_on_large_growth():
+    """A PINNED follower must NOT be reclassified as unpinned when a large live
+    render transiently pushes bottomDistance>250. Regression guard: the predicate
+    must require an explicit non-follow signal (_messageUserUnpinned / _scrollPinned
+    === false), not a raw scrollTop>0, or pinned live streams stop auto-following."""
+
+    script = f"""
+const assert = require('assert');
+let _messageUserUnpinned = false;
+let _scrollPinned = true;
+let _nearBottomCount = 2;
+const messages = {{
+  scrollTop: 4400,
+  scrollHeight: 5500,
+  clientHeight: 600,
+}};
+const inner = {{ style: {{ minHeight: '' }}, dataset: {{}} }};
+function $(id) {{
+  if (id === 'messages') return messages;
+  if (id === 'msgInner') return inner;
+  return null;
+}}
+{_function_body(UI_JS, "_prepareLiveAnchorScrollRebuildGuard")}
+const snapshot = {{
+  top: 4400,
+  bottom: 0,
+  scrollHeight: 5500,
+  pinned: true,
+  userUnpinned: false,
+}};
+const guard = _prepareLiveAnchorScrollRebuildGuard(snapshot);
+// bottomDistance = 5500 - 4400 - 600 = 500 (>250), but the reader is pinned and
+// has not manually unpinned -> must stay pinned, follow-scroll must NOT be skipped.
+assert.strictEqual(guard.readerAwayFromBottom, false);
+assert.strictEqual(guard.release, null);
+assert.strictEqual(_messageUserUnpinned, false);
+assert.strictEqual(_scrollPinned, true);
+assert.strictEqual(snapshot.pinned, true);
+assert.strictEqual(snapshot.userUnpinned, false);
+assert.strictEqual(inner.style.minHeight, '');
 """
     subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
 
