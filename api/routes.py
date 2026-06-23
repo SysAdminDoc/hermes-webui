@@ -2125,8 +2125,19 @@ def _build_session_list_cache_payload(
 def _session_list_payload_to_response(payload: dict) -> dict:
     safe_merged = []
     runtime_rows = _session_list_cache_overlay_runtime_rows(payload.get("sessions", []) or [])
+    # Read the redaction setting ONCE for the whole response and thread it through
+    # every row, instead of letting each row's _redact_text() re-read settings.json
+    # from disk (per title). The _sidebar_session_response_item -> _redact_text(_enabled=...)
+    # plumbing already exists; this wires the caller so the sidebar list path gets the
+    # same read-once optimization redact_session_data() already uses. On a large list
+    # this was the multi-second response_write stage in /api/sessions diagnostics. (#4662 Phase 3)
+    try:
+        from api.config import load_settings
+        _redact_enabled = bool(load_settings().get("api_redact_enabled", True))
+    except Exception:
+        _redact_enabled = True  # fail safe: redact when settings are unreadable
     for s in runtime_rows:
-        item = _sidebar_session_response_item(s) if isinstance(s, dict) else {}
+        item = _sidebar_session_response_item(s, redact_enabled=_redact_enabled) if isinstance(s, dict) else {}
         safe_merged.append(item)
     return {
         "sessions": safe_merged,
