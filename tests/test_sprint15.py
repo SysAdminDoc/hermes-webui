@@ -29,6 +29,15 @@ def make_session(created_list):
     return sid, d["session"]
 
 
+def _make_session_visible(sid):
+    from api.models import Session
+
+    session = Session.load(sid)
+    assert session is not None
+    session.messages = [{"role": "user", "content": "visible row", "timestamp": 1.0}]
+    session.save()
+
+
 def make_project(created_list, name="Test Project", color=None):
     body = {"name": name}
     if color:
@@ -196,8 +205,9 @@ def test_session_project_in_list():
     try:
         pid, _ = make_project(pids, "Listed")
         sid, _ = make_session(sids)
-        # Give it a title so it shows in list (non-empty Untitled sessions are hidden)
+        # Give it one real message so the default sidebar route keeps it visible.
         post("/api/session/rename", {"session_id": sid, "title": "Project Test Session"})
+        _make_session_visible(sid)
         post("/api/session/move", {"session_id": sid, "project_id": pid})
         dl, _ = get("/api/sessions")
         match = [s for s in dl["sessions"] if s["session_id"] == sid]
