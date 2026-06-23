@@ -1644,9 +1644,14 @@ function _requestedSessionSidebarSource() {
   return window._showCliSessions ? _sessionSourceFilter : 'webui';
 }
 
+function _sessionListExcludeHiddenEnabled() {
+  return _activeProject===null || _activeProject===NO_PROJECT_FILTER;
+}
+
 function _sessionListQueryString() {
   const qs = new URLSearchParams();
   qs.set('sidebar_source', _requestedSessionSidebarSource());
+  if(_sessionListExcludeHiddenEnabled()) qs.set('exclude_hidden','1');
   if(_showAllProfiles) qs.set('all_profiles','1');
   if(_showArchived) qs.set('include_archived','1');
   return `?${qs.toString()}`;
@@ -1656,6 +1661,14 @@ function _sessionSourceTabCount(filter, renderedWebuiSessionCount, renderedCliSe
   const serverCount = filter === 'cli' ? _serverCliSessionCount : _serverWebuiSessionCount;
   if (Number.isFinite(serverCount)) return serverCount;
   return filter === 'cli' ? renderedCliSessionCount : renderedWebuiSessionCount;
+}
+
+function _setActiveProjectFilter(projectId) {
+  const next = projectId === NO_PROJECT_FILTER ? NO_PROJECT_FILTER : (projectId || null);
+  if (_activeProject === next) return;
+  _activeProject = next;
+  renderSessionListFromCache();
+  void renderSessionList({deferWhileInteracting:false});
 }
 
 function _setSessionSourceFilter(filter) {
@@ -3080,7 +3093,7 @@ function _renderBatchActionBar(){
       if(S.session&&ids.includes(S.session.session_id)){
         S.session=null;S.messages=[];S.entries=[];localStorage.removeItem('hermes-webui-session');
         if(typeof _hydrateTodosFromSession==='function') _hydrateTodosFromSession(null);
-        const remaining=await api('/api/sessions');
+        const remaining=await api('/api/sessions'+_sessionListQueryString());
         if(remaining.sessions&&remaining.sessions.length){await loadSession(remaining.sessions[0].session_id);}
         else{$('msgInner').innerHTML='';$('emptyState').style.display='';}
       }
@@ -3880,6 +3893,7 @@ function _applySessionListPayload(sessData, projData){
       : (S.activeProfile || 'default'),
     allProfiles: !!_showAllProfiles,
     sidebarSource: _requestedSessionSidebarSource(),
+    excludeHidden: _sessionListExcludeHiddenEnabled(),
   };
   _syncSessionAttentionSoundState(_allSessions);
   _pruneLineageReportCacheToVisibleSessions(_allSessions);
@@ -3985,11 +3999,13 @@ async function _runRenderSessionListRefresh(opts, _gen){
       profile: S.activeProfile || 'default',
       allProfiles: !!_showAllProfiles,
       sidebarSource: _requestedSessionSidebarSource(),
+      excludeHidden: _sessionListExcludeHiddenEnabled(),
     };
     const _scopeMatches = _allSessionsScope
       && _allSessionsScope.profile === _curScope.profile
       && _allSessionsScope.allProfiles === _curScope.allProfiles
-      && _allSessionsScope.sidebarSource === _curScope.sidebarSource;
+      && _allSessionsScope.sidebarSource === _curScope.sidebarSource
+      && _allSessionsScope.excludeHidden === _curScope.excludeHidden;
     // #4671: the /api/sessions fetch failed — clear the skeleton flag so this error
     // render (matched cache, or empty rows for a mismatched scope) replaces the
     // up-front profile-switch skeleton instead of stranding it.
@@ -5746,7 +5762,7 @@ function renderSessionListFromCache(){
     const allChip=document.createElement('span');
     allChip.className='project-chip'+(!_activeProject?' active':'');
     allChip.textContent='All';
-    allChip.onclick=()=>{_activeProject=null;renderSessionListFromCache();};
+    allChip.onclick=()=>{_setActiveProjectFilter(null);};
     bar.appendChild(allChip);
     // "Unassigned" chip — only when there are sessions with no project to
     // filter to. Hidden in the common case where every session is already
@@ -5756,7 +5772,7 @@ function renderSessionListFromCache(){
       noneChip.className='project-chip no-project'+(_activeProject===NO_PROJECT_FILTER?' active':'');
       noneChip.textContent='Unassigned';
       noneChip.title='Show conversations not yet assigned to a project';
-      noneChip.onclick=()=>{_activeProject=NO_PROJECT_FILTER;renderSessionListFromCache();};
+      noneChip.onclick=()=>{_setActiveProjectFilter(NO_PROJECT_FILTER);};
       bar.appendChild(noneChip);
     }
     // Project chips
@@ -5775,7 +5791,7 @@ function renderSessionListFromCache(){
       let _pClickTimer=null;
       chip.onclick=(e)=>{
         clearTimeout(_pClickTimer);
-        _pClickTimer=setTimeout(()=>{_pClickTimer=null;_activeProject=p.project_id;renderSessionListFromCache();},220);
+        _pClickTimer=setTimeout(()=>{_pClickTimer=null;_setActiveProjectFilter(p.project_id);},220);
       };
       chip.ondblclick=(e)=>{e.stopPropagation();clearTimeout(_pClickTimer);_pClickTimer=null;_startProjectRename(p,chip);};
       chip.oncontextmenu=(e)=>{e.preventDefault();_showProjectContextMenu(e,p,chip);};
@@ -7105,7 +7121,7 @@ async function deleteSession(sid, beforeDelete=null){
     if(typeof _hydrateTodosFromSession==='function') _hydrateTodosFromSession(null);
     localStorage.removeItem('hermes-webui-session');
     // load the most recent remaining session, or show blank if none left
-    const remaining=await api('/api/sessions');
+    const remaining=await api('/api/sessions'+_sessionListQueryString());
     if(remaining.sessions&&remaining.sessions.length){
       await loadSession(remaining.sessions[0].session_id);
     }else{
