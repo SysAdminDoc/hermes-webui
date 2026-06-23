@@ -9079,6 +9079,7 @@ function _syncWorklogReasonFromAnchor(group, anchor, displayTextOverride){
   if(anchor){
     anchor.classList.add('assistant-segment-worklog-source');
     anchor.setAttribute('aria-hidden','true');
+    anchor.hidden=true;
   }
 }
 function ensureLiveWorklogContainer(blocks, opts){
@@ -9142,6 +9143,7 @@ function _appendWorklogReason(list, anchor){
   if(anchor){
     anchor.classList.add('assistant-segment-worklog-source');
     anchor.setAttribute('aria-hidden','true');
+    anchor.hidden=true;
   }
   return reason;
 }
@@ -9263,8 +9265,11 @@ function _appendWorklogStep(group, anchor, cards, thinkingText, opts){
 function _anchorSceneRowsForRendering(scene, opts){
   const rows=Array.isArray(scene&&scene.activity_rows)?scene.activity_rows:[];
   const settled=!!(opts&&opts.settled);
+  const live=!settled;
   const out=[];
   const byKey=new Map();
+  const liveProseTextKeys=new Map();
+  const proseTextKey=(value)=>String(value||'').replace(/\s+/g,' ').trim();
   const keyFor=(row)=>{
     if(!row) return '';
     if(row.role==='tool') return `tool:${_anchorSceneToolRowLogicalKey(row)||row.row_id||row.event_id||row.local_id||out.length}`;
@@ -9286,8 +9291,23 @@ function _anchorSceneRowsForRendering(scene, opts){
     const key=keyFor(row);
     if(byKey.has(key)){
       const index=byKey.get(key);
+      if(live&&row.role==='prose'){
+        const textKey=proseTextKey(text);
+        const duplicateIndex=textKey?liveProseTextKeys.get(textKey):undefined;
+        if(duplicateIndex!==undefined&&duplicateIndex!==index) continue;
+        const previousTextKey=proseTextKey(out[index]&&out[index].text);
+        if(previousTextKey&&previousTextKey!==textKey&&liveProseTextKeys.get(previousTextKey)===index){
+          liveProseTextKeys.delete(previousTextKey);
+        }
+        if(textKey) liveProseTextKeys.set(textKey,index);
+      }
       out[index]=row.role==='tool'?_anchorSceneMergeToolRows(out[index],row):row;
     }else{
+      if(live&&row.role==='prose'){
+        const textKey=proseTextKey(text);
+        if(textKey&&liveProseTextKeys.has(textKey)) continue;
+        if(textKey) liveProseTextKeys.set(textKey,out.length);
+      }
       byKey.set(key,out.length);
       out.push(row);
     }
@@ -9600,6 +9620,7 @@ function renderLiveAnchorActivityScene(streamId, scene, opts){
   blocks.querySelectorAll('[data-live-assistant="1"]').forEach(el=>{
     el.classList.add('assistant-segment-worklog-source');
     el.setAttribute('aria-hidden','true');
+    el.hidden=true;
   });
   const group=_anchorSceneWorklogGroup(blocks,{
     live:true,
@@ -9664,6 +9685,7 @@ function _renderSettledAnchorSceneTransparentForMessage(message, segment, rawIdx
     if(Number.isFinite(idx)&&idx<rawIdx){
       node.classList.add('assistant-segment-worklog-source');
       node.setAttribute('aria-hidden','true');
+      node.hidden=true;
     }
   });
   let wrote=false;
@@ -9696,6 +9718,7 @@ function _renderSettledAnchorSceneForMessage(message, segment, rawIdx){
     if(Number.isFinite(idx)&&idx<rawIdx){
       node.classList.add('assistant-segment-worklog-source');
       node.setAttribute('aria-hidden','true');
+      node.hidden=true;
     }
   });
   blocks.querySelectorAll('.tool-worklog-group:not([data-anchor-scene-owner="1"]),.tool-call-group:not([data-anchor-scene-owner="1"]),.agent-activity-thinking:not([data-anchor-scene-row="1"]),.wl-reason').forEach(el=>el.remove());
@@ -11411,6 +11434,7 @@ function renderMessages(options){
     if(messageBelongsInWorklog){
       seg.classList.add('assistant-segment-worklog-source');
       seg.setAttribute('aria-hidden','true');
+      seg.hidden=true;
     }
     if(m._live){
       currentAssistantTurn.id='liveAssistantTurn';
@@ -12148,6 +12172,7 @@ function renderMessages(options){
           if(!(seg.textContent||'').trim()) continue;
           seg.classList.remove('assistant-segment-worklog-source');
           seg.removeAttribute('aria-hidden');
+          seg.hidden=false;
         }
       }
     }
