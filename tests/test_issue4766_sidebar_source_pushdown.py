@@ -386,6 +386,9 @@ console.log(JSON.stringify({{ oldPayload, newPayload }}));
 def test_source_filtered_cache_preserves_hidden_bucket_runtime_state():
     src = SESSIONS_JS.read_text(encoding="utf-8")
     is_cli_fn = _extract_function(src, "_isCliSession")
+    remember_source_fn = _extract_function(src, "_rememberSessionListSource")
+    remember_streaming_fn = _extract_function(src, "_rememberRenderedStreamingState")
+    remember_snapshot_fn = _extract_function(src, "_rememberRenderedSessionSnapshot")
     purge_fn = _extract_function(src, "_purgeStaleInflightEntries")
     mark_fn = _extract_function(src, "_markPollingCompletionUnreadTransitions")
     script = f"""
@@ -399,24 +402,12 @@ global._allSessions = [{{
   last_message_at: 10,
 }}];
 global._allSessionsScope = {{ sidebarSource: 'cli' }};
-global._sessionListSourceById = new Map([
-  ['webui-live', 'webui'],
-  ['cli-stale', 'cli'],
-]);
-global._sessionStreamingById = new Map([
-  ['webui-live', true],
-  ['cli-stale', true],
-]);
-global._sessionListSnapshotById = new Map([
-  ['webui-live', {{ message_count: 1, last_message_at: 1 }}],
-  ['cli-stale', {{ message_count: 2, last_message_at: 2 }}],
-]);
+global._sessionListSourceById = new Map([['webui-live', 'webui']]);
+global._sessionStreamingById = new Map([['webui-live', true]]);
+global._sessionListSnapshotById = new Map([['webui-live', {{ message_count: 1, last_message_at: 1 }}]]);
 global._sendInProgress = false;
 global._sendInProgressSid = null;
-global.INFLIGHT = {{
-  'webui-live': {{ lastAssistantText: 'working' }},
-  'cli-stale': {{ lastAssistantText: 'stale' }},
-}};
+global.INFLIGHT = {{ 'webui-live': {{ lastAssistantText: 'working' }} }};
 const cleared = [];
 global.clearInflightState = sid => cleared.push(sid);
 global._isSessionEffectivelyStreaming = s => Boolean(s.is_streaming);
@@ -428,8 +419,23 @@ global._setSessionViewedCount = () => {{}};
 global._rememberObservedStreamingSession = () => {{}};
 global._forgetObservedStreamingSession = () => {{}};
 {is_cli_fn}
+{remember_source_fn}
+{remember_streaming_fn}
+{remember_snapshot_fn}
 {purge_fn}
 {mark_fn}
+const cliStale = {{
+  session_id: 'cli-stale',
+  source_tag: 'cli',
+  raw_source: 'cli',
+  session_source: 'cli',
+  is_streaming: false,
+  message_count: 2,
+  last_message_at: 2,
+}};
+_rememberRenderedStreamingState(cliStale, true);
+_rememberRenderedSessionSnapshot(cliStale);
+INFLIGHT['cli-stale'] = {{ lastAssistantText: 'stale' }};
 _purgeStaleInflightEntries();
 _markPollingCompletionUnreadTransitions(global._allSessions);
 console.log(JSON.stringify({{
@@ -475,10 +481,100 @@ def test_session_list_response_omits_bucket_counts_when_missing(monkeypatch):
     assert body["sessions"][0]["session_id"] == "webui-1"
 
 
-def test_scope_mismatch_error_path_clears_server_tab_counts():
+@pytest.mark.skipif(NODE is None, reason="node not on PATH")
+def test_scope_mismatch_error_path_respects_sidebar_source():
     src = SESSIONS_JS.read_text(encoding="utf-8")
+    clear_fn = _extract_function(src, "_clearSessionSourceTabCounts")
+    requested_source_fn = _extract_function(src, "_requestedSessionSidebarSource")
+    query_fn = _extract_function(src, "_sessionListQueryString")
+    refresh_fn = _extract_function(src, "_runRenderSessionListRefresh").replace(
+        "function _runRenderSessionListRefresh",
+        "async function _runRenderSessionListRefresh",
+        1,
+    )
+    script = f"""
+global.window = {{ _showCliSessions: true }};
+global._showAllProfiles = false;
+global._showArchived = false;
+global._sessionListHasLoadedOnce = true;
+global._SESSION_LIST_BOOT_TIMEOUT_MS = 90000;
+global._renderSessionListGen = 1;
+global._profileSwitchListEmbargo = false;
+global._pendingSessionListPayload = null;
+global._allProjects = [];
+global._contentSearchResults = ['stale'];
+global.S = {{ activeProfile: 'default' }};
+global.$ = () => ({{ value: '' }});
+global._isSessionListUserInteracting = () => false;
+global._schedulePendingSessionListApply = () => {{}};
+global._showSessionListLoadError = error => {{
+  global._lastError = error.message;
+}};
+const renders = [];
+global.renderSessionListFromCache = () => {{
+  renders.push({{
+    sessions: Array.isArray(global._allSessions) ? global._allSessions.map(s => s.session_id) : null,
+    scope: global._allSessionsScope ? {{ ...global._allSessionsScope }} : null,
+    webui: global._serverWebuiSessionCount,
+    cli: global._serverCliSessionCount,
+    skeleton: global._sessionListSkeletonActive,
+  }});
+}};
+global.api = () => Promise.reject(new Error('boom'));
+{clear_fn}
+{requested_source_fn}
+{query_fn}
+{refresh_fn}
+async function runCase(requestedSource, cachedSource) {{
+  global._sessionSourceFilter = requestedSource;
+  global._allSessions = [{{ session_id: cachedSource + '-1' }}];
+  global._allSessionsScope = {{
+    profile: 'default',
+    allProfiles: false,
+    sidebarSource: cachedSource,
+  }};
+  global._serverWebuiSessionCount = 11;
+  global._serverCliSessionCount = 5;
+  global._sessionListSkeletonActive = true;
+  global._lastError = null;
+  renders.length = 0;
+  await _runRenderSessionListRefresh({{}}, 1);
+  return {{
+    sessions: Array.isArray(global._allSessions) ? global._allSessions.map(s => s.session_id) : null,
+    scope: global._allSessionsScope ? {{ ...global._allSessionsScope }} : null,
+    webui: global._serverWebuiSessionCount,
+    cli: global._serverCliSessionCount,
+    skeleton: global._sessionListSkeletonActive,
+    error: global._lastError,
+    render: renders[0] || null,
+  }};
+}}
+(async () => {{
+  const mismatch = await runCase('cli', 'webui');
+  const match = await runCase('webui', 'webui');
+  console.log(JSON.stringify({{ mismatch, match }}));
+}})().catch(error => {{
+  console.error(error);
+  process.exit(1);
+}});
+"""
+    body = _run_node(script)
 
-    assert "_clearSessionSourceTabCounts();" in src
+    assert body["mismatch"]["sessions"] == []
+    assert body["mismatch"]["scope"] is None
+    assert body["mismatch"]["webui"] is None
+    assert body["mismatch"]["cli"] is None
+    assert body["mismatch"]["skeleton"] is False
+    assert body["mismatch"]["render"]["sessions"] == []
+    assert body["match"]["sessions"] == ["webui-1"]
+    assert body["match"]["scope"] == {
+        "profile": "default",
+        "allProfiles": False,
+        "sidebarSource": "webui",
+    }
+    assert body["match"]["webui"] == 11
+    assert body["match"]["cli"] == 5
+    assert body["match"]["render"]["sessions"] == ["webui-1"]
 
 
 def test_payload_row_count_regression(monkeypatch):
