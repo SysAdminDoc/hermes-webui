@@ -76,3 +76,43 @@ def test_reload_config_expands_env_vars(tmp_path, monkeypatch):
     cfg.reload_config()
     key = ((cfg.get_config().get("providers") or {}).get("openai") or {}).get("api_key")
     assert key == "expanded-value-xyz", f"env var not expanded after reload: {key!r}"
+
+
+def test_reload_config_empty_dict_config_does_not_spin(tmp_path, monkeypatch):
+    """An empty ``{}`` config must still stamp _cfg_mtime, or get_config()'s
+    `current_mtime != _cfg_mtime` stale check fires forever and re-enters
+    reload_config() under _cfg_lock on every call. The cache-update is correctly
+    skipped for {} (no-op), but the mtime stamp must not be. (Opus gate finding —
+    a {} config is reachable on the profile-switch hot path via a freshly
+    created/reset profile, and this also fixes the pre-existing empty/None-config
+    spin on master.)
+    """
+    import api.config as cfg
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(cfg, "_get_config_path", lambda: config_path)
+    with cfg._yaml_file_cache_lock:
+        cfg._yaml_file_cache.clear()
+
+    cfg.reload_config()
+    # _cfg_mtime must equal the file's real mtime, not 0.0.
+    assert cfg._cfg_mtime == config_path.stat().st_mtime, (
+        f"_cfg_mtime not stamped for empty-dict config (got {cfg._cfg_mtime!r}); "
+        "get_config() would spin reload_config() forever"
+    )
+
+    # And get_config() must NOT re-enter reload_config() on subsequent calls.
+    reloads = {"n": 0}
+    real_reload = cfg.reload_config
+
+    def _counting_reload():
+        reloads["n"] += 1
+        return real_reload()
+
+    monkeypatch.setattr(cfg, "reload_config", _counting_reload)
+    cfg.get_config()
+    cfg.get_config()
+    cfg.get_config()
+    assert reloads["n"] == 0, f"get_config() re-entered reload_config() {reloads['n']}x on a stable {{}} config (spin)"
+

@@ -494,30 +494,40 @@ def reload_config() -> None:
                 # view (below) — never the helper's per-call expansion — for the
                 # #798 TLS reason documented in the pin block.
                 loaded = _load_yaml_config_file_raw(config_path)
-                if isinstance(loaded, dict) and loaded:
-                    # The process-global _cfg_cache must reflect PROCESS-env
-                    # expansion, never a profile-scoped block_process_env_fallback
-                    # view — otherwise a reload that fires while a readonly/worker
-                    # scope is active (profile alternation resolves _get_config_path
-                    # to the named profile, #798 TLS) would bake under-expanded
-                    # literal ${VAR}s into the shared cache and starve concurrent
-                    # readers of the module-level `cfg` alias. Expansion re-runs
-                    # per-read elsewhere; here we pin the cache to the unscoped view.
-                    _prev_block = getattr(_thread_ctx, "block_process_env_fallback", False)
-                    _prev_env = getattr(_thread_ctx, "env", None)
-                    try:
-                        _thread_ctx.block_process_env_fallback = False
-                        _thread_ctx.env = {}
-                        _cfg_cache.update(_expand_env_vars(loaded))
-                    finally:
-                        _thread_ctx.block_process_env_fallback = _prev_block
-                        if _prev_env is None:
-                            try:
-                                del _thread_ctx.env
-                            except AttributeError:
-                                pass
-                        else:
-                            _thread_ctx.env = _prev_env
+                if isinstance(loaded, dict):
+                    if loaded:
+                        # The process-global _cfg_cache must reflect PROCESS-env
+                        # expansion, never a profile-scoped block_process_env_fallback
+                        # view — otherwise a reload that fires while a readonly/worker
+                        # scope is active (profile alternation resolves _get_config_path
+                        # to the named profile, #798 TLS) would bake under-expanded
+                        # literal ${VAR}s into the shared cache and starve concurrent
+                        # readers of the module-level `cfg` alias. Expansion re-runs
+                        # per-read elsewhere; here we pin the cache to the unscoped view.
+                        _prev_block = getattr(_thread_ctx, "block_process_env_fallback", False)
+                        _prev_env = getattr(_thread_ctx, "env", None)
+                        try:
+                            _thread_ctx.block_process_env_fallback = False
+                            _thread_ctx.env = {}
+                            _cfg_cache.update(_expand_env_vars(loaded))
+                        finally:
+                            _thread_ctx.block_process_env_fallback = _prev_block
+                            if _prev_env is None:
+                                try:
+                                    del _thread_ctx.env
+                                except AttributeError:
+                                    pass
+                            else:
+                                _thread_ctx.env = _prev_env
+                    # Stamp _cfg_mtime whenever the file parsed to a dict — INCLUDING
+                    # an empty {} config. The cache-update above is skipped for {} (it's
+                    # a no-op), but _cfg_mtime MUST still be set or get_config()'s
+                    # `current_mtime != _cfg_mtime` stale check fires on every call and
+                    # spins reload_config() under _cfg_lock forever (a `{}` config from a
+                    # freshly created/reset profile is reachable on the switch hot path).
+                    # This matches master's pre-#4662 behavior (it entered the block for
+                    # {} and set the mtime); the inner `if loaded:` only gates the no-op
+                    # cache update, not the mtime stamp.
                     try:
                         _cfg_mtime = Path(config_path).stat().st_mtime
                     except OSError:
