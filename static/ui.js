@@ -9682,7 +9682,10 @@ function renderLiveAnchorActivityScene(streamId, scene, opts){
   if(scrollRebuildGuard&&scrollRebuildGuard.release){
     requestAnimationFrame(()=>{
       scrollRebuildGuard.release();
-      _restoreMessageScrollSnapshotSameFrame(scrollSnapshot);
+      // Only re-restore the unpinned snapshot if the reader is STILL unpinned at
+      // rAF time. If they re-pinned between guard-engage and this frame, the
+      // stale re-restore would yank them back off the bottom (Opus gate finding).
+      if(_messageUserUnpinned) _restoreMessageScrollSnapshotSameFrame(scrollSnapshot);
     });
   }
   if(!scrollRebuildGuard.readerAwayFromBottom&&typeof scrollIfPinned==='function') scrollIfPinned();
