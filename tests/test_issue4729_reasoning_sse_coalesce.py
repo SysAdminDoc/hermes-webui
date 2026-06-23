@@ -63,9 +63,44 @@ def test_reasoning_tail_flushed_on_phase_end():
     # When the reasoning phase ends (text is None), any remaining buffered text must be
     # flushed so the last partial (<100ms) window isn't lost.
     none_branch = body[body.index("if text is None:"): body.index("if text is None:") + 400]
-    assert "_reasoning_buffer[0]" in none_branch and "put('reasoning'" in none_branch, (
+    assert "_flush_reasoning_buffer()" in none_branch, (
         "on_reasoning(text=None) must flush any remaining coalesced buffer (the tail)"
     )
+
+
+def test_reasoning_buffer_flushed_at_every_boundary():
+    # #4729 (Codex re-gate): on_reasoning(None) is effectively dead — the agent never
+    # calls reasoning_callback(None) — so the buffered tail must be flushed at the REAL
+    # boundaries that close/reorder the live reasoning stream, or it's silently lost:
+    #   - a shared _flush_reasoning_buffer() helper
+    #   - on_token (visible output starting)
+    #   - on_tool (tool boundary)
+    #   - after agent.run_conversation() returns (terminal catch-all: a turn can end on
+    #     reasoning with no trailing token/tool)
+    assert "def _flush_reasoning_buffer():" in STREAMING, "must have a shared flush helper"
+    # helper emits the buffer chunk then clears it (since-last-flush delta semantics)
+    helper = STREAMING[STREAMING.index("def _flush_reasoning_buffer():"):]
+    helper = helper[: helper.index("\n\n")]
+    assert "put('reasoning', {'text': _reasoning_buffer[0]})" in helper and "_reasoning_buffer[0] = ''" in helper, (
+        "the flush helper must emit the buffered chunk then clear it"
+    )
+    # on_token flushes before emitting visible output
+    on_token = STREAMING[STREAMING.index("def on_token(text):"): STREAMING.index("def on_reasoning(text):")]
+    assert "_flush_reasoning_buffer()" in on_token, (
+        "on_token must flush the reasoning tail before visible output (the reasoning→answer transition)"
+    )
+    # on_tool flushes before the tool event
+    on_tool = STREAMING[STREAMING.index("def on_tool(*cb_args"): STREAMING.index("def on_tool(*cb_args") + 600]
+    assert "_flush_reasoning_buffer()" in on_tool, (
+        "on_tool must flush the reasoning tail before the tool event (reasoning→tool transition)"
+    )
+    # terminal catch-all: flush right after the agent run returns
+    assert "persist_user_message=msg_text,\n            )\n            # #4729" in STREAMING and \
+        STREAMING.count("_flush_reasoning_buffer()") >= 4, (
+        "must flush after agent.run_conversation() returns (a turn can end on reasoning "
+        "with no trailing token/tool boundary)"
+    )
+
 
 
 def test_frontend_appends_reasoning_deltas():
