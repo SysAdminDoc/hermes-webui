@@ -822,7 +822,8 @@ function _restoreMessageViewportAnchor(anchor, rawIdxDelta){
   const targetTop=Number(anchor.topOffset)||0;
   _programmaticScroll=true;_programmaticScrollSetAt=performance.now();
   container.scrollTop+=(rect.top-containerRect.top)-targetTop;
-  _deferClearProgrammaticScroll();
+  if(typeof _deferClearProgrammaticScroll==='function') _deferClearProgrammaticScroll();
+  else requestAnimationFrame(()=>{ setTimeout(()=>{ _programmaticScroll=false; },0); });
   return true;
 }
 let _messageViewportAnchorRemounting=false;
@@ -10921,7 +10922,8 @@ function _restoreMessageScrollSnapshot(snapshot){
     }
   }
   if(!restoredViaAnchor){
-    _deferClearProgrammaticScroll();
+    if(typeof _deferClearProgrammaticScroll==='function') _deferClearProgrammaticScroll();
+    else requestAnimationFrame(()=>{ setTimeout(()=>{ _programmaticScroll=false; },0); });
   }
 }
 function _restoreMessageScrollSnapshotSameFrame(snapshot){
@@ -10934,23 +10936,6 @@ function _restoreMessageScrollSnapshotSameFrame(snapshot){
     restoredViaAnchor=(typeof _restoreMessageViewportAnchor==='function')
       ? _restoreMessageViewportAnchor(snapshot.anchor,0)
       : false;
-  }
-  if(!restoredViaAnchor&&snapshot.anchor&&snapshot.anchor.rawIdx!=null&&
-     !el.querySelector(`[data-msg-idx="${snapshot.anchor.rawIdx}"]`)&&
-     typeof _getVisibleMessagesWithIdx==='function'&&
-     typeof _messageVisibleIndexForRawIdx==='function'&&
-     typeof _messageVirtualScrollTopForVisibleIdx==='function'){
-    const visWithIdx=_getVisibleMessagesWithIdx();
-    const visIdx=_messageVisibleIndexForRawIdx(snapshot.anchor.rawIdx,visWithIdx);
-    if(visIdx>=0){
-      _programmaticScroll=true;_programmaticScrollSetAt=performance.now();
-      el.scrollTop=_messageVirtualScrollTopForVisibleIdx(visWithIdx,visIdx,el);
-      _messageVirtualWindowKey='';
-      renderMessages({preserveScroll:true});
-      restoredViaAnchor=(typeof _restoreMessageViewportAnchor==='function')
-        ? _restoreMessageViewportAnchor(snapshot.anchor,0)
-        : false;
-    }
   }
   if(!restoredViaAnchor){
     const maxTop=Math.max(0,el.scrollHeight-el.clientHeight);
@@ -10972,7 +10957,8 @@ function _restoreMessageScrollSnapshotSameFrame(snapshot){
     _nearBottomCount=0;
   }
   if(!restoredViaAnchor){
-    _deferClearProgrammaticScroll();
+    if(typeof _deferClearProgrammaticScroll==='function') _deferClearProgrammaticScroll();
+    else requestAnimationFrame(()=>{ setTimeout(()=>{ _programmaticScroll=false; },0); });
   }
 }
 function _renderMessagesWithScrollSnapshot(options){
