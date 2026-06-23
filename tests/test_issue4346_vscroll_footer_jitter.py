@@ -1783,6 +1783,9 @@ console.log(JSON.stringify({
             _extract_func_script(JS)
             + """
 const fn = extractFunc('renderMessages');
+const resetAttrsStart = src.indexOf('const _recycleResetAttrs=');
+const resetAttrsEnd = src.indexOf('let _scrollbarDragActive=false;', resetAttrsStart);
+const resetAttrs = src.slice(resetAttrsStart, resetAttrsEnd);
 const assistantStart = fn.indexOf('if(!currentAssistantTurn){');
 const assistantEnd = fn.indexOf('const seg=document.createElement', assistantStart);
 const assistantBranch = fn.slice(assistantStart, assistantEnd);
@@ -1796,7 +1799,7 @@ console.log(JSON.stringify({
   clears_transparent_collapse: assistantBranch.includes("""
             + recycle_reset_loop_needle
             + """),
-  reset_list_contains_transparent_collapse: fn.includes("""
+  reset_list_contains_transparent_collapse: resetAttrs.includes("""
             + transparent_collapse_attr_needle
             + """),
 }));

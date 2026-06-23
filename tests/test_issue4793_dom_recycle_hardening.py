@@ -61,6 +61,8 @@ function extractBody(startMarker, endMarker, startFrom = 0) {{
 def test_recycled_assistant_turn_reuse_clears_live_anchor_attrs():
     script = _js_prefix() + """
 const recycleChunk = extractBetween("if(!currentAssistantTurn){", "const seg=document.createElement('div');");
+const resetListChunk = extractBetween("const _recycleResetAttrs=[", "let _scrollbarDragActive=false;")
+  .replace("const _recycleResetAttrs=", "var _recycleResetAttrs=");
 const removedAttrs = [];
 const role = {
   replacement: null,
@@ -73,13 +75,7 @@ const recycled = {
   removeAttribute(name) { removedAttrs.push(name); },
   querySelector(selector) { return selector === '.msg-role.assistant' ? role : null; },
 };
-const _recycleResetAttrs = [
-  'data-transparent-turn-collapsed',
-  'data-transparent-turn-toggle-bound',
-  'data-anchor-scene-live-owner',
-  'data-anchor-stream-id',
-  'data-live-assistant-turn',
-];
+eval(resetListChunk);
 const _recycleStash = new Map([[7, recycled]]);
 const _msgNodeRecycleEnabled = true;
 let currentAssistantTurn = null;
@@ -96,6 +92,7 @@ const _formatTurnTps = value => `tps:${value}`;
 eval(recycleChunk);
 console.log(JSON.stringify({
   removedAttrs,
+  resetAttrs: _recycleResetAttrs,
   blocksInnerHTML: blocks.innerHTML,
   roleHtml: role.replacement,
   currentAssistantTurnIsRecycled: currentAssistantTurn === recycled,
@@ -108,6 +105,13 @@ console.log(JSON.stringify({
 """
     result = _run_node(script)
 
+    assert result["resetAttrs"] == [
+        "data-transparent-turn-collapsed",
+        "data-transparent-turn-toggle-bound",
+        "data-anchor-scene-live-owner",
+        "data-anchor-stream-id",
+        "data-live-assistant-turn",
+    ]
     assert result["removedAttrs"] == [
         "data-transparent-turn-collapsed",
         "data-transparent-turn-toggle-bound",
@@ -126,6 +130,8 @@ console.log(JSON.stringify({
 def test_recycled_assistant_turn_reuse_keeps_block_clear_and_role_refresh():
     script = _js_prefix() + """
 const recycleChunk = extractBetween("if(!currentAssistantTurn){", "const seg=document.createElement('div');");
+const resetListChunk = extractBetween("const _recycleResetAttrs=[", "let _scrollbarDragActive=false;")
+  .replace("const _recycleResetAttrs=", "var _recycleResetAttrs=");
 const removedAttrs = [];
 const role = {
   replacement: null,
@@ -138,13 +144,7 @@ const recycled = {
   removeAttribute(name) { removedAttrs.push(name); },
   querySelector(selector) { return selector === '.msg-role.assistant' ? role : null; },
 };
-const _recycleResetAttrs = [
-  'data-transparent-turn-collapsed',
-  'data-transparent-turn-toggle-bound',
-  'data-anchor-scene-live-owner',
-  'data-anchor-stream-id',
-  'data-live-assistant-turn',
-];
+eval(resetListChunk);
 const _recycleStash = new Map([[7, recycled]]);
 const _msgNodeRecycleEnabled = true;
 let currentAssistantTurn = null;
