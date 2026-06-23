@@ -286,6 +286,9 @@ global.localStorage = {{
     this.writes.push([key, value]);
   }},
 }};
+global.renderSessionListFromCache = () => {{
+  renderCalls.push('cache');
+}};
 global.renderSessionList = (opts) => {{
   renderCalls.push(opts);
   return Promise.resolve();
@@ -308,7 +311,7 @@ console.log(JSON.stringify({{
     assert body["selectedSize"] == 0
     assert body["sessionSelectMode"] is False
     assert body["storageWrites"] == [["hermes-session-source-filter", "cli"]]
-    assert body["renderCalls"] == [{"deferWhileInteracting": False}]
+    assert body["renderCalls"] == ["cache", {"deferWhileInteracting": False}]
 
 
 @pytest.mark.skipif(NODE is None, reason="node not on PATH")
