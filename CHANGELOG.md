@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.630] — 2026-06-24 — Release WK (update failures show the real git error, not just "check your connection")
+
+### Fixed
+
+- **When an update can't fetch, the WebUI now shows the actual git error instead of always blaming the network.** The apply-update paths previously discarded git's stderr and hard-coded "Could not reach the remote repository," which hid real, fixable failures (e.g. a locked ref, an auth rejection, a repository-not-found). They now surface the sanitized git diagnostic (`fetch failed: …`) for non-network failures while still showing the friendly connection message for genuine network errors (DNS, connect timeout, TLS, unreachable). The diagnostic is run through the existing secret-stripping redactor — broadened in this change to also redact `client_secret`, `private_token`, `oauth_token`, `app_secret`, and `api_key` query params — so credentials embedded in a remote URL never appear in the error. Thanks @rodboev. (#4862, closes #4694)
+
 ## [v0.51.629] — 2026-06-24 — Release WJ (macOS workspace drag-drop now lands)
 
 ### Fixed
