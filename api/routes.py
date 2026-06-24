@@ -1243,6 +1243,52 @@ def _cron_jobs_for_api(jobs) -> list[dict]:
     return [_cron_job_for_api(job) for job in (jobs or [])]
 
 
+_AGENT_CRON_IMPORT_PATH_LOCK = threading.Lock()
+_AGENT_CRON_IMPORT_PATH_READY: str | None = None
+
+
+def _ensure_agent_cron_import_path() -> None:
+    """Prefer the agent's cron package over unrelated top-level cron packages."""
+    try:
+        from api import config as api_config
+    except Exception:
+        return
+
+    agent_dir = getattr(api_config, "_AGENT_DIR", None)
+    if not agent_dir:
+        return
+    agent_path = str(Path(agent_dir).expanduser().resolve())
+    agent_cron_path = str(Path(agent_path) / "cron")
+
+    global _AGENT_CRON_IMPORT_PATH_READY
+    with _AGENT_CRON_IMPORT_PATH_LOCK:
+        cron_mod = sys.modules.get("cron")
+        cron_file = str(getattr(cron_mod, "__file__", "") or "") if cron_mod else ""
+        cron_is_agent = bool(cron_mod is not None and cron_file.startswith(agent_cron_path + os.sep))
+        if _AGENT_CRON_IMPORT_PATH_READY == agent_path and (cron_mod is None or cron_is_agent):
+            return
+
+        while agent_path in sys.path:
+            sys.path.remove(agent_path)
+        shadow_indexes = [
+            idx
+            for idx, path_entry in enumerate(sys.path)
+            if path_entry
+            and Path(path_entry).resolve() != Path(agent_path)
+            and (Path(path_entry) / "cron" / "__init__.py").exists()
+        ]
+        if shadow_indexes:
+            sys.path.insert(min(shadow_indexes), agent_path)
+        else:
+            sys.path.append(agent_path)
+        _AGENT_CRON_IMPORT_PATH_READY = agent_path
+
+        if cron_mod is not None and not cron_is_agent:
+            for name in list(sys.modules):
+                if name == "cron" or name.startswith("cron."):
+                    sys.modules.pop(name, None)
+
+
 def _available_cron_profile_names() -> set[str]:
     from api.profiles import list_profiles_api
 
@@ -10203,6 +10249,7 @@ def handle_get(handler, parsed) -> bool:
         # Only treat a genuinely-absent cron package as "unavailable"; a
         # ModuleNotFoundError whose missing module is an internal dependency of an
         # existing cron/jobs.py is a real bug and must still surface.
+        _ensure_agent_cron_import_path()
         try:
             from cron.jobs import list_jobs
         except ModuleNotFoundError as exc:
@@ -10218,24 +10265,28 @@ def handle_get(handler, parsed) -> bool:
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_output(handler, parsed)
 
     if parsed.path == "/api/crons/history":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_history(handler, parsed)
 
     if parsed.path == "/api/crons/run":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_run_detail(handler, parsed)
 
     if parsed.path == "/api/crons/recent":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_recent(handler, parsed)
 
     if parsed.path == "/api/crons/status":
@@ -10248,6 +10299,7 @@ def handle_get(handler, parsed) -> bool:
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_delivery_options(handler)
 
     # ── Skills API (GET) ──
@@ -11638,36 +11690,42 @@ def handle_post(handler, parsed) -> bool:
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_create(handler, body)
 
     if parsed.path == "/api/crons/update":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_update(handler, body)
 
     if parsed.path == "/api/crons/delete":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_delete(handler, body)
 
     if parsed.path == "/api/crons/run":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_run(handler, body)
 
     if parsed.path == "/api/crons/pause":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_pause(handler, body)
 
     if parsed.path == "/api/crons/resume":
         from api.profiles import cron_profile_context
 
         with cron_profile_context():
+            _ensure_agent_cron_import_path()
             return _handle_cron_resume(handler, body)
 
     # ── Git workspace ops (POST) ──
