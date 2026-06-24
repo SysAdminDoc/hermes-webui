@@ -1698,20 +1698,17 @@ def _get_profile_skills_stats(profile_dir: Path) -> tuple[int, int]:
     cached = _SKILLS_STATS_CACHE.get(profile_dir)
     if cached is not None:
         enabled, compat, cached_mtime_ns, expiry = cached
-        # Files unchanged (by mtime probe) → serve cached without re-reading any
-        # SKILL.md, and refresh the safety-net TTL. The mtime probe already ran
-        # above, so an out-of-band change is caught here regardless of the TTL —
-        # the TTL only bounds how long we trust an unchanged-mtime reading before
-        # forcing a belt-and-suspenders full recompute.
+        # Fast path: files unchanged (by the cheap probe above) AND still within
+        # the TTL → serve cached without re-reading any SKILL.md. The mtime probe
+        # already ran, so an out-of-band change is caught immediately regardless
+        # of the TTL. On TTL expiry we deliberately fall through to a full
+        # recompute (the TTL is a safety net for mtime-preserving changes that
+        # the probe can't see — e.g. a git checkout that restores the old mtime).
         if current_mtime_ns == cached_mtime_ns and now < expiry:
             return enabled, compat
-        if current_mtime_ns == cached_mtime_ns:
-            # TTL expired but files genuinely unchanged — refresh TTL, no recompute.
-            _SKILLS_STATS_CACHE[profile_dir] = (enabled, compat, cached_mtime_ns, now + _SKILLS_STATS_CACHE_TTL)
-            return enabled, compat
 
-    # Cache miss or mtime changed — snapshot mtime BEFORE compute so any
-    # concurrent SKILL.md write during the compute window causes a mismatch
+    # Cache miss, mtime changed, or TTL expired — snapshot mtime BEFORE compute
+    # so any concurrent SKILL.md write during the compute window causes a mismatch
     # on the next probe instead of silently serving stale data (TOCTOU).
     new_mtime_ns = _skill_tree_max_mtime_ns(skills_dir, config_path)
     res = _compute_profile_skills_stats(profile_dir)

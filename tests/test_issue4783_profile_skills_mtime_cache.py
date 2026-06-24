@@ -148,10 +148,14 @@ class TestWithinTTLZeroIO:
             assert isinstance(result, tuple) and len(result) == 2
 
 
-class TestAfterTTLUnchangedFilesStatOnly:
-    """Proof matrix row 2: after TTL, unchanged mtime → stat only, no recompute."""
+class TestAfterTTLSafetyRecompute:
+    """After the TTL expires, force a full recompute even when the mtime probe
+    sees no change — the TTL is a safety net for mtime-PRESERVING out-of-band
+    changes the probe can't detect (e.g. a git checkout that restores the old
+    mtime). Within the TTL, unchanged mtime still serves cached (zero recompute).
+    """
 
-    def test_unchanged_mtime_refreshes_ttl_no_recompute(self, profiles_mod):
+    def test_ttl_expiry_recomputes_even_when_mtime_unchanged(self, profiles_mod):
         mod, profile_dir = profiles_mod
 
         # Seed cache with an expired entry using a known mtime
@@ -161,19 +165,20 @@ class TestAfterTTLUnchangedFilesStatOnly:
         mod._SKILLS_STATS_CACHE[resolved] = (3, 5, fixed_mtime_ns, past_expiry)
 
         with (
-            patch.object(mod, "_compute_profile_skills_stats") as mock_compute,
-            patch.object(mod, "_skill_tree_max_mtime_ns", return_value=fixed_mtime_ns) as mock_stat,
+            patch.object(mod, "_compute_profile_skills_stats", return_value=(4, 6)) as mock_compute,
+            patch.object(mod, "_skill_tree_max_mtime_ns", return_value=fixed_mtime_ns),
         ):
             result = mod._get_profile_skills_stats(profile_dir)
 
-        mock_stat.assert_called_once()
-        mock_compute.assert_not_called()
-        assert result == (3, 5)
+        # TTL expiry forces a recompute (safety net) even though mtime matched.
+        mock_compute.assert_called_once()
+        assert result == (4, 6)
 
-        # TTL should have been refreshed
+        # Cache refreshed with the recomputed value and a future expiry.
         new_entry = mod._SKILLS_STATS_CACHE.get(resolved)
         assert new_entry is not None
-        assert new_entry[3] > time.time()  # expiry is in the future
+        assert new_entry[0] == 4 and new_entry[1] == 6
+        assert new_entry[3] > time.time()
 
 
 class TestAfterTTLChangedFilesFullRecompute:
