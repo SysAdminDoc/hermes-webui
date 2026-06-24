@@ -289,3 +289,109 @@ def test_webui_session_db_metadata_fields_includes_boundary():
     assert "truncation_boundary" in webui_db._METADATA_FIELDS, (
         "webui_session_db._METADATA_FIELDS missing truncation_boundary"
     )
+
+
+# ─── Route-level CORE-A: default /api/session full reload must not resurrect ──
+
+
+def test_core_a_route_full_session_load_does_not_resurrect_deleted_turns(tmp_path):
+    """The default GET /api/session full reload (no msg_limit) must pass the
+    persisted truncation_boundary through to the append-only merge.
+
+    Regression guard for the call-site gap: merge_session_messages_append_only
+    was fixed to honor truncation_boundary, but the default full-load call site
+    (api/routes.py handle_get '/api/session') still passed only
+    truncation_watermark, so a normal full reload fell back to the old
+    'drop one turn pair' heuristic and resurrected deleted suffix turns when an
+    older message was edited leaving >=2 later turns. This drives the real
+    endpoint end-to-end so the boundary must reach the merge.
+    """
+    import json
+    from io import BytesIO
+    from urllib.parse import urlparse
+
+    import api.routes as routes
+    from api.models import Session
+
+    state = [
+        _msg("user", "original prompt", 100.0),
+        _msg("assistant", "original reply", 101.0),
+        _msg("user", "deleted question 1", 200.0),
+        _msg("assistant", "deleted answer 1", 201.0),
+        _msg("user", "deleted question 2", 300.0),
+        _msg("assistant", "deleted answer 2", 302.0),
+        _msg("user", "edited prompt", 400.0),
+        _msg("assistant", "post-edit reply", 401.0),
+    ]
+
+    class _Handler:
+        def __init__(self):
+            self.status = None
+            self.response_headers = []
+            self.wfile = BytesIO()
+
+        def send_response(self, status):
+            self.status = status
+
+        def send_header(self, k, v):
+            self.response_headers.append((k, v))
+
+        def end_headers(self):
+            pass
+
+        def payload(self):
+            return json.loads(self.wfile.getvalue().decode() or "{}")
+
+    sess_dir = tmp_path / "sessions"
+    sess_dir.mkdir()
+    orig_dir, orig_index = models.SESSION_DIR, models.SESSION_INDEX_FILE
+    models.SESSION_DIR = sess_dir
+    models.SESSION_INDEX_FILE = sess_dir / "_index.json"
+    models.SESSIONS.clear()
+
+    saved = {
+        "get_state_db_session_messages": getattr(routes, "get_state_db_session_messages", None),
+        "_session_visible_to_active_profile": getattr(routes, "_session_visible_to_active_profile", None),
+        "_clear_stale_stream_state": getattr(routes, "_clear_stale_stream_state", None),
+        "_resolve_effective_session_model_for_display": getattr(routes, "_resolve_effective_session_model_for_display", None),
+        "_resolve_effective_session_model_provider_for_display": getattr(routes, "_resolve_effective_session_model_provider_for_display", None),
+    }
+    try:
+        s = Session(
+            session_id="corea_route",
+            messages=[],
+            truncation_watermark=400.0,
+            truncation_boundary=101.0,
+        )
+        s.save()
+        routes.get_state_db_session_messages = lambda sid, profile=None: list(state)
+        routes._session_visible_to_active_profile = lambda profile, handler: True
+        routes._clear_stale_stream_state = lambda s: None
+        routes._resolve_effective_session_model_for_display = lambda s: getattr(s, "model", None)
+        routes._resolve_effective_session_model_provider_for_display = lambda s: getattr(s, "model_provider", None)
+
+        h = _Handler()
+        routes.handle_get(
+            h, urlparse("/api/session?session_id=corea_route&messages=1&resolve_model=0")
+        )
+        contents = [
+            m.get("content")
+            for m in h.payload().get("session", {}).get("messages", [])
+        ]
+
+        assert h.status == 200, f"unexpected status {h.status}"
+        assert "deleted question 1" not in contents, (
+            f"Deleted turn resurrected via /api/session full reload: {contents}"
+        )
+        assert "deleted answer 1" not in contents, (
+            f"Deleted turn resurrected via /api/session full reload: {contents}"
+        )
+        assert "edited prompt" in contents and "post-edit reply" in contents, (
+            f"Post-edit turn missing from full reload: {contents}"
+        )
+    finally:
+        for name, val in saved.items():
+            if val is not None:
+                setattr(routes, name, val)
+        models.SESSION_DIR, models.SESSION_INDEX_FILE = orig_dir, orig_index
+        models.SESSIONS.clear()
