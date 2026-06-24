@@ -299,3 +299,35 @@ def test_order_index_sequential_within_bucket(driver_path):
     rows = out["1"]
     indices = [r["order_index"] for r in rows]
     assert indices == list(range(len(rows))), f"order_index not sequential: {indices}"
+
+
+def test_anonymous_tool_rows_get_distinct_row_ids(driver_path):
+    """Two tools WITHOUT an id at the same message index must not collide on the
+    same row_id (which would let _completeSettledAnchorSceneForTurn dedupe one
+    away). row_id/seq are regenerated from the final per-bucket order index.
+
+    Regression guard for the gate-found SILENT drop: rows are built with
+    orderIndex=0, so the index-derived row_id/seq must be rewritten on emit."""
+    messages = [
+        {"role": "user", "content": "go"},
+        {
+            "role": "assistant",
+            "content": "",
+            # two anonymous tools (no 'id') at the same index, distinct timestamps
+            "tool_calls": [
+                {"name": "terminal", "done": True, "started_at": 100},
+                {"name": "read_file", "done": True, "started_at": 200},
+            ],
+        },
+        {"role": "assistant", "content": "final"},
+    ]
+    payload = {"messages": messages, "turnStart": 0, "lastAsstIndex": 2, "S": {"toolCalls": []}}
+    out = _run(driver_path, payload)
+    rows = out["1"]
+    tool_rows = [r for r in rows if r.get("role") == "tool"]
+    assert len(tool_rows) == 2, f"both anonymous tool rows must survive, got {len(tool_rows)}"
+    row_ids = [r["row_id"] for r in tool_rows]
+    assert len(set(row_ids)) == 2, f"anonymous tool rows collided on row_id: {row_ids}"
+    seqs = [r.get("seq") for r in tool_rows]
+    assert len(set(seqs)) == 2, f"anonymous tool rows collided on seq: {seqs}"
+

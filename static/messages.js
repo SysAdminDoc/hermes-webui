@@ -2602,10 +2602,24 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
         if(aTime!==bTime) return aTime-bTime;
         return a._encounter-b._encounter;
       });
-      // Emit with sequential order_index values, strip temp props
+      // Emit with sequential order_index values, strip temp props.
+      // Rows were built with orderIndex=0, so their row_id/seq still encode 0.
+      // Rewrite order_index AND regenerate the index-derived identity fields
+      // (row_id/seq) from the final per-bucket position, so two anonymous rows
+      // (no tool id) at the same message index don't collide on the same row_id
+      // and get silently deduped by _completeSettledAnchorSceneForTurn().
       for(const row of pool){
         const {_phase,_encounter,...clean}=row;
-        clean.order_index=byIdx.has(idx)?byIdx.get(idx).length:0;
+        const oi=byIdx.has(idx)?byIdx.get(idx).length:0;
+        clean.order_index=oi;
+        clean.seq=oi;
+        if(clean.identity&&typeof clean.identity==='object') clean.identity={...clean.identity,seq:oi};
+        // Tool rows with a tool id carry a tid-based row_id (already unique) —
+        // only regenerate the default index-based row_id form.
+        const indexRowId=`settled:${activeSid||'session'}:${streamId||'stream'}:${clean.role}:${idx}:0`;
+        if(clean.row_id===indexRowId){
+          clean.row_id=`settled:${activeSid||'session'}:${streamId||'stream'}:${clean.role}:${idx}:${oi}`;
+        }
         add(idx,clean);
       }
     }
