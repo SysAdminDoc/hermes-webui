@@ -12520,7 +12520,23 @@ function _redactToolTargetLabel(value){
   return String(value||'')
     .replace(/\bsshpass\s+-p\s+(?:"[^"]*"|'[^']*'|\S+)/gi,'sshpass -p "[redacted]"')
     .replace(/(--password(?:=|\s+))(?:"[^"]*"|'[^']*'|\S+)/gi,'$1[redacted]')
-    .replace(/(password(?:=|\s+))(?:"[^"]*"|'[^']*'|\S+)/gi,'$1[redacted]');
+    .replace(/(password(?:=|\s+))(?:"[^"]*"|'[^']*'|\S+)/gi,'$1[redacted]')
+    // Env-assignment / flag secrets, masked across the full (multi-line) text so
+    // the expanded shell card can't leak a key on a non-first line (#4926). Keys
+    // matched case-insensitively: *(TOKEN|API_KEY|APIKEY|SECRET|PASSWD|PASSWORD|
+    // ACCESS_KEY|PRIVATE_KEY|AUTH|CREDENTIAL|SESSION_KEY|CLIENT_SECRET)*.
+    .replace(/(\b[A-Za-z0-9_]*(?:TOKEN|API[_-]?KEY|SECRET|PASSWD|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIALS?|CLIENT[_-]?SECRET|SESSION[_-]?KEY)[A-Za-z0-9_]*\s*=\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,'$1[redacted]')
+    // AUTH-family env assignment, but only the `=` form (the `Authorization:`
+    // header colon form is handled separately below, and must not be eaten here).
+    .replace(/(\b[A-Za-z0-9_]*AUTH[A-Za-z0-9_]*\s*=\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,'$1[redacted]')
+    // --token / --api-key / --secret style flags.
+    .replace(/(--(?:token|api[_-]?key|secret|access[_-]?key|client[_-]?secret|auth[_-]?token)(?:=|\s+))(?:"[^"]*"|'[^']*'|\S+)/gi,'$1[redacted]')
+    // Authorization: Bearer/Bot/Token <token> (header or curl -H form):
+    // redact everything after the scheme keyword up to the closing quote/space.
+    .replace(/(authorization\s*:?\s*(?:bearer|bot|token)\s+)(?:"[^"]*"|'[^']*'|[^\s'"]+)/gi,'$1[redacted]')
+    .replace(/((?:authorization|x-api-key)\s*:\s+)(?:"[^"]*"|'[^']*'|[^\s'"]{12,})/gi,'$1[redacted]')
+    // Secret-looking URL query params (?token=... &api_key=... &access_token=...).
+    .replace(/([?&](?:token|api[_-]?key|access[_-]?token|secret|sig|signature|key)=)(?:[^&\s"']+)/gi,'$1[redacted]');
 }
 function _shortToolLabel(value, limit){
   const text=String(value||'').replace(/\s+/g,' ').trim();

@@ -26,9 +26,9 @@ NODE = shutil.which("node")
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node not on PATH")
 
-# Extract the three helper functions by name and eval them with light stubs for
-# their dependencies (redaction / entity-decode / action-kind), so the test is
-# resilient to the rest of ui.js not being importable headlessly.
+# Extract the helper functions by name and eval them. We use the REAL
+# _redactToolTargetLabel (not a stub) so the redaction invariant is actually
+# exercised; only _decodeToolLabelEntities / _toolActionKind are stubbed.
 _DRIVER_SRC = r"""
 const fs = require('fs');
 const src = fs.readFileSync(process.argv[2], 'utf8');
@@ -38,10 +38,9 @@ function grab(name){
   if (!m) throw new Error('function not found: ' + name);
   return m[0];
 }
-// Stubs for dependencies of the grabbed functions.
-global._redactToolTargetLabel = (s) => s;
 global._decodeToolLabelEntities = (s) => s;
 global._toolActionKind = (tc) => 'shell';
+eval(grab('_redactToolTargetLabel'));   // REAL redactor
 eval(grab('_toolTargetLabel'));
 eval(grab('_toolFullCommandLabel'));
 eval(grab('_toolDetailLeadText'));
@@ -118,3 +117,38 @@ def test_command_from_top_level_field(driver_path):
     out = _run(driver_path, {"command": "echo one\necho two"})
     assert "echo one" in out["lead"] and "echo two" in out["lead"]
     assert out["lead"].count("\n") == 1
+
+
+def test_secret_on_non_first_line_is_redacted(driver_path):
+    """#4926 security: exposing the full command must NOT leak a secret that
+    sits on a non-first line (the expanded card previously showed line 1 only,
+    so non-first-line secrets were never rendered). The real redactor masks
+    common env / flag / header secret forms across the whole command."""
+    cmd = (
+        "cd /app\n"
+        "export OPENAI_API_KEY=skSECRETvalue12345\n"
+        "export AUTH_TOKEN=tokSECRET987654\n"
+        "curl -H 'Authorization: Bearer bearerSECRETxyz' https://api.example.com\n"
+        "node app.js --client-secret hunterSECRET2"
+    )
+    out = _run(driver_path, {"args": {"command": cmd}})
+    lead = out["lead"]
+    # Structural lines preserved (it's still the full multi-line command).
+    assert "cd /app" in lead and "node app.js" in lead
+    # Secret VALUES must be gone (none of these should survive).
+    for secret in (
+        "skSECRETvalue12345",
+        "tokSECRET987654",
+        "bearerSECRETxyz",
+        "hunterSECRET2",
+    ):
+        assert secret not in lead, f"secret leaked into expanded shell lead: {secret!r}\n{lead}"
+    assert "[redacted]" in lead
+
+
+def test_password_redaction_still_works(driver_path):
+    """The pre-existing password/sshpass redaction is unchanged."""
+    out = _run(driver_path, {"args": {"command": "sshpass -p hunter2 ssh host\nmysql --password=topsecret"}})
+    assert "hunter2" not in out["lead"]
+    assert "topsecret" not in out["lead"]
+    assert "[redacted]" in out["lead"]
