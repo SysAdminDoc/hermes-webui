@@ -3,6 +3,10 @@
 
 ## [Unreleased]
 
+## [v0.51.646] — 2026-06-25 — Release XB (mobile transcript scrolls again)
+
+### Fixed
+
 - **The transcript is no longer stuck at the top and unscrollable on mobile.** On phones (Android and iOS), opening a conversation — and every send/receive after — left the view pinned to the oldest message with no way to scroll down to the latest. Root cause: the mobile `.messages-inner` rule used `overflow-x:hidden`, which (per the CSS spec) silently coerces `overflow-y` to `auto`, turning the inner element into a scroll container. A scroll container's `min-height:auto` resolves to `0`, so the inner — a flex item inside the `.messages` column flexbox — collapsed to the viewport height instead of growing to its content; the transcript then overflowed the (clipped) inner rather than the real scroller, leaving nothing to scroll and pinning `scrollTop` at 0. Switching to `overflow-x:clip` suppresses horizontal overflow exactly as intended without creating a scroll container, so the inner grows to full height and the transcript scrolls normally. Desktop was unaffected. (#4856)
 
 ## [v0.51.645] — 2026-06-25 — Release XA (cron-heavy session lists no longer pin the CPU)
