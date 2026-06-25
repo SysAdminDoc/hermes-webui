@@ -3,6 +3,12 @@
 
 ## [Unreleased]
 
+## [v0.51.647] — 2026-06-25 — Release XC (task detail action buttons reappear on mobile PWA)
+
+### Fixed
+
+- **On mobile (and PWA WebViews), the task / skill / memory / workspace detail action buttons (Run, Pause, Edit, Delete, Save, …) are no longer invisible.** The detail header used a CSS `:has(.main-view-title:empty)` rule to stay hidden until its title was populated, but on some mobile browsers and PWA WebViews that pseudo-class doesn't re-evaluate after the title is set dynamically, so the header — and every action button in it — stayed permanently hidden. The header visibility is now driven explicitly in JavaScript (shown for read/create/edit views, hidden only for the empty state), with read-only Memory sections and the Profiles concept-help view still showing their header/title. Thanks @luandnh. (#4891)
+
 ## [v0.51.646] — 2026-06-25 — Release XB (mobile transcript scrolls again)
 
 ### Fixed
