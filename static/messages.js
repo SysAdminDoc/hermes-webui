@@ -2560,16 +2560,14 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     const payload=(row.payload&&typeof row.payload==='object')?row.payload:(row.payload={});
     let enriched=false;
     const _empty=v=>v===undefined||v===null||v==='';
-    // Body/result fields that buildToolCard reads to render output + detect diffs.
+    // Result body: _anchorSceneToolCallFromRow renders tool.snippet||payload.snippet
+    // (||payload.result||payload.output) as the card output + diff source, so
+    // restore the snippet onto both tool+payload when the settled row has none.
     const liveSnippet=_anchorSceneStringPayload(live.snippet||live.result||live.output);
-    if(liveSnippet&&_empty(tool.snippet)&&_empty(payload.snippet)&&_empty(payload.result)&&_empty(payload.output)){
+    if(liveSnippet&&_empty(tool.snippet)&&_empty(payload.snippet)){
       tool.snippet=liveSnippet; payload.snippet=liveSnippet; enriched=true;
     }
-    const liveResult=_anchorSceneSafePayload(live.result);
-    if(liveResult!==undefined&&liveResult!==null&&_empty(tool.result)){ tool.result=liveResult; }
-    const liveOutput=_anchorSceneSafePayload(live.output);
-    if(liveOutput!==undefined&&liveOutput!==null&&_empty(tool.output)){ tool.output=liveOutput; }
-    // Command (shell detail-lead) + args (diff reconstruction inputs).
+    // Command (shell detail-lead) + args (diff/input reconstruction, the "Full" tab).
     const liveCommand=_anchorSceneStringPayload(live.command||live.raw_command);
     if(liveCommand&&_empty(tool.command)&&_empty(payload.command)){
       tool.command=liveCommand; payload.command=liveCommand; enriched=true;
