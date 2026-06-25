@@ -58,8 +58,9 @@ def test_guard_in_show_approval_card():
     # Guard must appear inside showApprovalCard, after _rememberApprovalPending
     func_start = compact.find("functionshowApprovalCard(")
     assert func_start != -1
-    # Locate the guard after the function start
-    guard = "_isApprovalDismissed(pending.approval_id)"
+    # Locate the guard after the function start (dismissals are namespaced by
+    # session, so the guard passes sid + approval_id).
+    guard = "_isApprovalDismissed(sid,pending.approval_id)"
     guard_idx = compact.find(guard, func_start)
     assert guard_idx != -1, "guard _isApprovalDismissed must appear in showApprovalCard"
     # _rememberApprovalPending must appear before the guard
@@ -72,7 +73,7 @@ def test_guard_in_show_approval_card():
 def test_guard_returns_early():
     # The guard must be a return statement
     compact = _compact(MESSAGES_JS)
-    assert "if(pending&&pending.approval_id&&_isApprovalDismissed(pending.approval_id))return;" in compact
+    assert "if(pending&&pending.approval_id&&_isApprovalDismissed(sid,pending.approval_id))return;" in compact
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ def test_dismiss_approval_card_marks_dismissed():
     assert func_start != -1
     body_end = compact.find("}", func_start)
     body = compact[func_start:body_end + 1]
-    assert "_markApprovalDismissed(_approvalCurrentId)" in body
+    assert "_markApprovalDismissed(sid,_approvalCurrentId)" in body
 
 
 def test_dismiss_approval_card_hides_card():
@@ -138,8 +139,8 @@ def test_respond_approval_unmarks_dismissed():
     func_start = compact.find("asyncfunctionrespondApproval(")
     assert func_start != -1
     # Find the closing brace of the function (scan for matching })
-    assert "_unmarkApprovalDismissed(approvalId)" in compact[func_start:], \
-        "_unmarkApprovalDismissed(approvalId) must be called inside respondApproval"
+    assert "_unmarkApprovalDismissed(sid,approvalId)" in compact[func_start:], \
+        "_unmarkApprovalDismissed(sid,approvalId) must be called inside respondApproval"
 
 
 def test_respond_approval_unmarks_before_clear():
@@ -148,7 +149,7 @@ def test_respond_approval_unmarks_before_clear():
     compact = _compact(MESSAGES_JS)
     func_start = compact.find("asyncfunctionrespondApproval(")
     assert func_start != -1
-    unmark_idx = compact.find("_unmarkApprovalDismissed(approvalId)", func_start)
+    unmark_idx = compact.find("_unmarkApprovalDismissed(sid,approvalId)", func_start)
     clear_idx = compact.find("_approvalCurrentId=null;", func_start)
     assert unmark_idx != -1
     assert clear_idx != -1
@@ -170,10 +171,10 @@ def test_no_pending_branch_unmarks_dismissed():
     # Must use session-scoped lookup, not the global _approvalCurrentId
     assert "_approvalPendingBySession.get(sid)" in nearby, \
         "no-pending poll branch must read session-scoped pending via _approvalPendingBySession.get(sid)"
-    assert "_unmarkApprovalDismissed(_resolvedId)" in nearby, \
+    assert "_unmarkApprovalDismissed(sid,_resolvedId)" in nearby, \
         "no-pending poll branch must unmark the session-scoped resolved ID"
     # Must NOT use the global _approvalCurrentId to unmark (that caused the cross-session bug)
-    assert "_unmarkApprovalDismissed(_approvalCurrentId)" not in nearby, \
+    assert "_unmarkApprovalDismissed(sid,_approvalCurrentId)" not in nearby, \
         "no-pending poll branch must not unmark via the global _approvalCurrentId"
 
 
@@ -248,3 +249,75 @@ def test_dismiss_button_near_collapse_button():
 
 def test_approval_dismiss_css_defined():
     assert ".approval-dismiss" in STYLE_CSS
+
+
+# ---------------------------------------------------------------------------
+# Functional: session-namespaced dismissal (the cross-session collision fix)
+# ---------------------------------------------------------------------------
+
+import json
+import shutil
+import subprocess
+
+NODE = shutil.which("node")
+
+
+def _extract_fn(src: str, name: str) -> str:
+    start = src.index(f"function {name}(")
+    brace = src.index("{", start)
+    depth = 0
+    for i in range(brace, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[start:i + 1]
+    raise AssertionError(f"{name} body not closed")
+
+
+def test_same_approval_id_in_two_sessions_does_not_collide():
+    """The bug Codex found: dismissing approval_id 'X' in session A must NOT hide
+    a still-pending approval_id 'X' in session B (gateway/run sources can reuse
+    externally-supplied IDs across sessions). Drives the real helper functions in
+    node with a mocked localStorage."""
+    if NODE is None:
+        import pytest
+        pytest.skip("node not available")
+    helpers = "\n".join(
+        _extract_fn(MESSAGES_JS, n)
+        for n in ("_approvalDismissKey", "_getDismissedApprovals",
+                  "_isApprovalDismissed", "_markApprovalDismissed", "_unmarkApprovalDismissed")
+    )
+    script = (
+        "const _store = {};\n"
+        "const localStorage = {\n"
+        "  getItem: k => (k in _store ? _store[k] : null),\n"
+        "  setItem: (k, v) => { _store[k] = String(v); },\n"
+        "};\n"
+        "const _DISMISSED_APPROVALS_KEY = 'hermes_dismissed_approvals';\n"
+        + helpers +
+        "\n"
+        "// Dismiss approval 'X' in session A.\n"
+        "_markApprovalDismissed('sessionA', 'X');\n"
+        "const out = {\n"
+        "  a_dismissed: _isApprovalDismissed('sessionA', 'X'),\n"
+        "  b_not_dismissed: _isApprovalDismissed('sessionB', 'X'),\n"
+        "  diff_id_same_session_not_dismissed: _isApprovalDismissed('sessionA', 'Y'),\n"
+        "};\n"
+        "// Responding in session B (unmark) must not clear session A's dismissal.\n"
+        "_unmarkApprovalDismissed('sessionB', 'X');\n"
+        "out.a_still_dismissed_after_b_unmark = _isApprovalDismissed('sessionA', 'X');\n"
+        "process.stdout.write(JSON.stringify(out));\n"
+    )
+    result = subprocess.run([NODE, "-e", script], check=True, capture_output=True, text=True, timeout=15)
+    out = json.loads(result.stdout)
+    assert out["a_dismissed"] is True, "session A's own dismissal must register"
+    assert out["b_not_dismissed"] is False, (
+        "CROSS-SESSION COLLISION: dismissing approval_id 'X' in session A must NOT "
+        "hide the same approval_id 'X' in session B"
+    )
+    assert out["diff_id_same_session_not_dismissed"] is False
+    assert out["a_still_dismissed_after_b_unmark"] is True, (
+        "un-dismissing 'X' in session B must not clear session A's dismissal of 'X'"
+    )
