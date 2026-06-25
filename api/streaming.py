@@ -8775,12 +8775,18 @@ def _run_agent_streaming(
                 meter_stats.setdefault('tps_available', False)
                 meter_stats.setdefault('estimated', False)
                 put('metering', meter_stats)
-            _log_stream_writeback_timings(
-                getattr(s, 'session_id', session_id),
-                stream_id,
-                _writeback_timings,
-                _writeback_started,
-            )
+            try:
+                _log_stream_writeback_timings(
+                    getattr(s, 'session_id', session_id),
+                    stream_id,
+                    _writeback_timings,
+                    _writeback_started,
+                )
+            except Exception:
+                # Diagnostics must never affect the stream lifecycle: a
+                # misbehaving log handler here would otherwise skip the
+                # background-title thread spawn below. (#4923 gate hardening)
+                pass
             if _should_bg_title and _u0 and _a0:
                 threading.Thread(
                     target=_run_background_title_update,
