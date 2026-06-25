@@ -70,3 +70,7 @@ graphify-out/
 node_modules/
 package-lock.json
 docs/ui-ux/review-shots/
+
+# Markdown files local-only (except README)
+*.md
+!README.md
