@@ -4256,8 +4256,11 @@ def _cli_sessions_streaming_freeze_marker():
     a stream starts/stops (so the just-finished turn's rows are picked up promptly).
     A streaming session's own CLI/cron title/count is not what this projection
     returns (the streaming session is overlaid live by the route layer), and any
-    structural mutation invalidates the cache directly via
-    ``clear_cli_sessions_cache``, so nothing user-visible lags under the freeze. (#4842)
+    in-app structural mutation invalidates the cache directly via
+    ``clear_cli_sessions_cache``. Externally-driven changes that don't fire that
+    listener (a scheduled cron completing, an external CLI writing rows) surface
+    within one streaming-TTL window (≤30s) rather than instantly — a bounded,
+    self-healing lag that is the deliberate latency/CPU trade-off of the freeze. (#4842)
     """
     try:
         active = _active_stream_ids()
