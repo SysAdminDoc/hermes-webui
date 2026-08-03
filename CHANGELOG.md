@@ -7,6 +7,12 @@
 
 - **Windows pytest-harness compatibility (#3664).** Hardened the test suite to run on Windows: profile-home fallback paths are path-normalized, strict POSIX file-mode (`0o600`) assertions are gated behind `os.name != "nt"` (Linux still asserts them at full strictness), the conftest cleanup handles Windows process-tree/port teardown and the Py3.12+ `shutil.rmtree` `onexc` shim, and tests that require `fork`/`fcntl` carry `@requires_fork` / `@requires_fcntl` markers (which never skip on Linux). Test-only — no runtime or app behavior change, no Linux CI behavior change. (#4254, #4255, #4256, #4257, #4259, #4263, #4266, #4274)
 
+## [v0.51.667] — 2026-08-03 — Release XW (roadmap drain and release hygiene)
+
+### Changed
+
+- **Reconciled the active roadmap with the shipped codebase.** Completed checklist rows and forward-work items already implemented or closed were removed; timing-, contract-, security-, and infrastructure-gated candidates were moved to the local `Roadmap_Blocked.md` tracker. Runtime version badges remain dynamically sourced from the release tag, so the manifest, README, and Settings/about surface do not carry stale hardcoded copies.
+
 ## [v0.51.446] — 2026-06-15 — Release PG (model picker "show all" for large provider catalogs)
 
 ### Added
