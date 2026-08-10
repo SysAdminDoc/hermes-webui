@@ -8895,3 +8895,163 @@ Critical regressions introduced during the server.py split, caught by users and 
 - **Regression test file added** (`tests/test_regressions.py`): 10 tests, one per introduced bug. These form a permanent regression gate so each class of error can never silently return.
 
 ---
+
+## Roadmap archive — 2026-08-10 — ROADMAP.md
+
+<details>
+<summary>Original roadmap snapshot</summary>
+
+```markdown
+# Hermes Web UI — Roadmap
+
+> Web companion to the Hermes Agent CLI. Same workflows, browser-native.
+>
+> Last updated: v0.51.667 (August 3, 2026) — roadmap reconciled against the live codebase; remaining deferred candidates are tracked in `Roadmap_Blocked.md`.
+> Test source: `pytest tests/ --collect-only -q`
+> Per-version detail: see [CHANGELOG.md](./CHANGELOG.md)
+
+---
+
+## Status snapshot
+
+| Surface | Status |
+|---|---|
+| **Hermes CLI parity** | ✅ Complete — every CLI workflow has a web equivalent |
+| **Streaming + tool transparency** | ✅ Live tool cards, reasoning cards, approval prompts, cancel |
+| **Multi-provider model support** | ✅ Any provider configured in `config.yaml` shows in the picker |
+| **Sessions + projects + search** | ✅ CRUD, content search, projects, tags, archive, fork, import |
+| **Mobile + Docker + auth** | ✅ Hamburger nav, slide-overs, password auth, GHCR images |
+| **Auxiliary surfaces** | ✅ Workspace tree + edit, cron CRUD, skills CRUD, memory write, MCP server UI |
+| **Visual polish** | ✅ Light/dark/system themes × 11 skins (default, ares, mono, slate, poseidon, sisyphus, charizard, sienna, catppuccin, nous, geist-contrast), Mermaid, KaTeX, syntax highlighting |
+| **Native distribution** | ✅ macOS desktop app (universal arm64+x86_64 DMG, signed) — separate repo |
+
+Remaining gaps and forward work live in [Forward Work](#forward-work) below.
+
+---
+
+## Architecture
+
+| Layer | Files | Status |
+|---|---|---|
+| Python server | `server.py` + `api/` modules | Thin HTTP shell + auth middleware over the `api/` business logic (config, sessions, streaming, profiles, routes, onboarding, workspace, updates, upload) |
+| HTML template | `static/index.html` | Served from disk |
+| CSS | `static/style.css` | Themes + skins, mobile responsive, KaTeX, table styles |
+| JavaScript | `static/{ui,sessions,messages,workspace,panels,boot,commands,icons,i18n,login,onboarding}.js` | Vanilla-JS modules served as static files — no bundler |
+| Service worker | `static/sw.js` | Offline shell cache, version-pinned assets |
+| Docker | `Dockerfile`, `docker-compose.yml` | `python:3.12-slim`, multi-arch (amd64+arm64), HEALTHCHECK |
+| CI/CD | `.github/workflows/` | ruff lint + sharded pytest + browser smoke + Docker smoke on every PR; auto-release + GHCR publish on tag push |
+| Test isolation | `tests/_pytest_port.py` | Per-worktree port + state-dir derivation, no collisions |
+
+> Per-file line counts drift every release; see `ARCHITECTURE.md` for the current module map and `git ls-files` for exact sizes.
+
+---
+
+## Feature parity checklist
+
+### Chat and streaming
+
+### Conversation controls
+
+### Sessions
+
+### Workspace and files
+
+### Cron jobs
+
+### Skills
+
+### Memory
+
+### Profiles
+
+### Configuration
+
+### Notifications
+
+### Slash commands
+
+### Security
+
+### Visual / UX
+
+### Voice
+
+### Mobile
+
+### Internationalization
+
+### Gateway integration
+
+### MCP integration
+
+### Distribution
+
+---
+
+## Forward work
+
+### Confirmed candidates (open feature requests with sprint-candidate or active interest)
+
+| Theme | Tracking | Why |
+|---|---|---|
+
+### Backlog (deferred, listed for visibility)
+
+
+### Intentionally not planned
+- Full SwiftUI rewrite of the frontend — the WKWebView shell already gets 95% of native benefit
+- App Store distribution — sandboxing breaks the local server model
+- Real-time multi-user collaboration — single-user assumption throughout
+- Plugin marketplace — Hermes skills cover this surface
+- Anthropic / Claude proprietary features — Projects AI memory, Claude artifacts sync (not reproducible)
+
+---
+
+## Sprint history
+
+Per-version detail lives in [CHANGELOG.md](./CHANGELOG.md). The table below is a high-level chronology of major sprint themes; individual PR / fix detail moved to CHANGELOG to keep this file readable.
+
+| Range | Theme | Highlights |
+|---|---|---|
+| Sprints 1–6 | Foundations + workspace | server / static split, JS module split, workspace CRUD, file editor, message queue + INFLIGHT, isolated test environment |
+| Sprint 7 | Wave 2 core | Cron / skill / memory CRUD, session content search, health endpoint, git init |
+| Sprint 8 | Daily-driver finish line | Edit + regenerate, regenerate last response, clear conversation, Prism.js, queue + INFLIGHT polish |
+| Sprints 9–10 | Codebase health + operational polish | `app.js` → 6 modules, server.py → `api/` modules, tool card UX, background task cancel, regression tests |
+| Sprint 11 | Multi-provider models + streaming | Dynamic model dropdown, smooth scroll pinning, routes extracted to `api/routes.py` |
+| Sprint 12 | Settings + reliability + session QoL | Settings panel, SSE auto-reconnect, pin sessions, JSON import |
+| Sprint 13 | Alerts + polish | Cron alerts, background error banner, session duplicate, browser tab title |
+| Sprint 14 | Visual polish + workspace ops | Mermaid, message timestamps, file rename, folder create, session tags, archive |
+| Sprint 15 | Session projects + code copy | Projects / folders, code copy button, tool card expand / collapse |
+| Sprint 16 | Sidebar visual polish | SVG icons, action dropdown, pin indicator, project border, safe HTML rendering |
+| Sprint 17 | Workspace polish + slash commands | Breadcrumb nav, slash command autocomplete, send key setting (#26) |
+| Sprint 18 | Thinking display + workspace tree | File preview auto-close, thinking / reasoning cards, expandable directory tree (#22) |
+| Sprint 19 | Auth + security hardening | Password auth, login page, security headers, body limit (#23) |
+| Sprint 20 | Voice input + send button | Web Speech API voice, send button polish |
+| Sprint 21 | Mobile responsive + Docker | Hamburger sidebar, mobile nav, slide-over files, Docker support (#21, #7) |
+| Sprint 22 | Multi-profile support | Profile picker, management panel, seamless switching, per-session tracking (#28) |
+| Sprint 23 | Agentic transparency | Token / cost display, subagent cards, skill picker in cron, profile-local storage |
+| Sprint 24 | Web polish | rAF streaming, git detection, collapsible date groups, context ring (#80, #81, #82, #83) |
+| Sprint 25 | macOS desktop application | Native Swift + WKWebView shell, universal DMG, Sparkle 2 auto-update — separate repo |
+| Sprint 26 | Pluggable themes | Light / Slate / Solarized / Monokai / Nord, settings unsaved-changes guard, `/theme` |
+| Sprint 27 | Theme polish | 30+ hardcoded colors → CSS variables, light theme final polish |
+| Sprint 28 | Security hardening | Env race fix, random signing key, upload traversal, PBKDF2 |
+| Sprints 29–32 | Model routing + custom endpoints + reasoning | Model routing by provider prefix, custom endpoint URL fix, OLED theme, top-level reasoning, message_count sync |
+| Sprint 33 | Approval card + Lucide icons | Approval prompt surfaced, emoji → SVG, login CSP fix, update diagnostics |
+| Sprint 34 | v0.50.0 UI overhaul | Composer-centric controls, Control Center modal, workspace state machine, collapsible date groups, rAF throttle, context ring |
+| Sprints 35–37 | Onboarding + i18n + Spanish | First-run wizard, OpenRouter / Anthropic / OpenAI / Custom config, Spanish locale, Docker two-container, mobile Profiles button |
+| Sprints 38–40 | Session + UI polish + Sprint 40 | Five-bug clean-up + sidebar timestamp + test port isolation |
+| Sprints 41–42 | Renderer hardening + KaTeX + handoff | Context ring live usage, renderMd link / image / code stash chain, MEDIA: image rendering, gateway handoff foundation |
+| Sprints 43+ | Continuous contributor sprints | Custom providers, Russian locale, IME fixes, model-switch toast, approval queue multi-slot, profile polish, font-size CSS, contributor wave |
+
+---
+
+## Versioning conventions
+
+- **Patch** (`v0.50.X`) — small batches, contributor PR releases, hotfixes
+- **Minor** (`v0.X.0`) — sprint completion, new feature surface, architecture milestone
+- **Major** (`v1.0.0`) — declared when CLI parity + Claude parity reach steady state and the feature surface stabilizes
+
+Per-version detail and contributor attribution live in [CHANGELOG.md](./CHANGELOG.md).
+```
+
+</details>
