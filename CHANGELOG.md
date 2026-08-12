@@ -6,6 +6,7 @@
 ### Internal
 
 - **Windows pytest-harness compatibility (#3664).** Hardened the test suite to run on Windows: profile-home fallback paths are path-normalized, strict POSIX file-mode (`0o600`) assertions are gated behind `os.name != "nt"` (Linux still asserts them at full strictness), the conftest cleanup handles Windows process-tree/port teardown and the Py3.12+ `shutil.rmtree` `onexc` shim, and tests that require `fork`/`fcntl` carry `@requires_fork` / `@requires_fcntl` markers (which never skip on Linux). Test-only — no runtime or app behavior change, no Linux CI behavior change. (#4254, #4255, #4256, #4257, #4259, #4263, #4266, #4274)
+- **Roadmap triage.** Moved the remaining SwiftUI, App Store, multi-user collaboration, plugin marketplace, and proprietary Claude-feature proposals to the local `Roadmap_Blocked.md` tracker because they require external credentials, vendor capabilities, or product/runtime contracts that are not defined by this self-hosted WebUI repository.
 
 ## [v0.51.667] — 2026-08-03 — Release XW (roadmap drain and release hygiene)
 
